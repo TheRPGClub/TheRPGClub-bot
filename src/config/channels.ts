@@ -9,9 +9,10 @@ export const GAMEDB_UPDATES_CHANNEL_ID = resolveId(
   "GAMEDB_UPDATES_CHANNEL_ID",
   "549603388334014464",
 );
+// The News Channel (spec api#367): members share news here and the bot files it.
 export const GAME_NEWS_CHANNEL_ID = resolveId("GAME_NEWS_CHANNEL_ID", "738040352274907225");
-// News Hub (spec api#355): the game news forum and one thread per News Category. The
-// discussion threads get no IDs, so the bot ignores them.
+// The game news forum and one thread per News Category, where only the bot posts News
+// Copies (src/config/newsHub.ts). The discussion threads are gone and have no IDs.
 export const GAME_NEWS_FORUM_ID = resolveId(
   "GAME_NEWS_FORUM_ID",
   "1569864387429269574",

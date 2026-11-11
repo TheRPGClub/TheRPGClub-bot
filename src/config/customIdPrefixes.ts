@@ -50,3 +50,6 @@ export const ADMIN_ROUND_EDIT_MODAL_PREFIX = "admin-round-edit-modal-v1";
 // Admin legacy voting setup interaction IDs
 export const ADMIN_VOTING_TITLES_PREFIX = "admin-voting-titles-v1";
 export const ADMIN_VOTING_TITLES_MODAL_PREFIX = "admin-voting-titles-modal-v1";
+
+// News Channel "Change news category" picker (custom ID carries channel and message IDs)
+export const NEWS_CATEGORY_PICK_PREFIX = "news-category-pick-v1";

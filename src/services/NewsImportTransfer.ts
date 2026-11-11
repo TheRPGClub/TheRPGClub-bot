@@ -1,3 +1,4 @@
+import { NEWS_IMPORT_COMMAND } from "../config/newsHub.js";
 import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { writeDelimited } from "../functions/DelimitedText.js";
 import {
@@ -9,12 +10,14 @@ import {
 } from "../functions/NewsImportFile.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
-import { NEWS_IMPORT_COMMAND, newsImportRefusal } from "./NewsImport.js";
+import { plural } from "../utilities/TextUtils.js";
+import { newsImportRefusal } from "./NewsImport.js";
+import { NEWS_LIST_PER_MAX } from "./NewsItemApi.js";
 import {
   NEWS_IMPORT_ASSIGN_MAX,
-  NEWS_IMPORT_LIST_PER,
   type INewsImportApi,
   type INewsImportAssignRow,
+  type INewsImportMove,
 } from "./NewsImportApi.js";
 
 // `/news-import download` and `/news-import upload` (spec api#355, bot#1527): staff take the
@@ -58,8 +61,9 @@ const HOW_TO_TEXT = `Fill in the ${code("category")} column with a News Category
   "-# Only the message_id and category columns are read back. If you open the file in a " +
   "spreadsheet, keep message_id as text, or it turns into a rounded number.";
 
-function plural(count: number, one: string, many: string): string {
-  return `**${count}** ${count === 1 ? one : many}`;
+/** The count in bold with its noun, as the replies show counts. */
+function counted(count: number, one: string, many: string): string {
+  return plural(count, one, many, `**${count}**`);
 }
 
 /** Every page of unsorted imported items, oldest first. */
@@ -67,7 +71,8 @@ async function listAll(api: INewsImportApi, actingUserId: string): Promise<INews
   const items: INewsImportListItem[] = [];
   let page: number | null = 1;
   while (page !== null) {
-    const listed = await api.list(actingUserId, page, NEWS_IMPORT_LIST_PER);
+    // The largest page: one read covers most of the unsorted items.
+    const listed = await api.list(actingUserId, page, NEWS_LIST_PER_MAX);
     items.push(...listed.items);
     page = listed.next !== null && listed.next > page ? listed.next : null;
   }
@@ -133,7 +138,7 @@ export async function newsImportDownloadReply(
   const where = files.length === 1
     ? "in the attached file"
     : `in **${files.length}** files (each one can be uploaded on its own)`;
-  const intro = `**News Import download**: ${plural(items.length,
+  const intro = `**News Import download**: ${counted(items.length,
     "unsorted imported News Item", "unsorted imported News Items")}, oldest first, ${where}.\n` +
     HOW_TO_TEXT;
   let sent = 0;
@@ -156,6 +161,13 @@ export interface INewsImportUploadStart {
   file: { name: string; size: number; contentType: string | null };
   /** Downloads the attachment's text. A failure is thrown to the command's error reply. */
   fetchText(): Promise<string>;
+  /**
+   * Moves the News Copies of items whose category the upload changed (spec api#367). It
+   * runs on in the background: moving many copies can outlast the interaction.
+   */
+  moveCopies(moves: readonly INewsImportMove[]): void;
+  /** True while a history copy runs: moved copies wait for it to finish. Absent: never. */
+  historyCopyRunning?: () => boolean;
 }
 
 function isDelimitedFile(file: INewsImportUploadStart["file"]): boolean {
@@ -181,6 +193,7 @@ interface IUploadTotals {
   removed: number;
   unsorted: number;
   problems: INewsImportRowProblem[];
+  moves: INewsImportMove[];
 }
 
 /**
@@ -216,6 +229,7 @@ async function assignAll(
     totals.assigned += result.assigned;
     totals.removed += result.removed;
     totals.unsorted = result.unsorted;
+    totals.moves.push(...result.moved.filter((move) => move.copy));
     for (const rejection of result.rejections) {
       const line = chunk[rejection.index]?.line ?? 0;
       totals.problems.push({ ...rejection, line });
@@ -254,8 +268,10 @@ export async function newsImportUploadReply(
   const upload = readNewsImportUpload(await start.fetchText());
   if (!upload.ok) return reply(`${upload.reason} Start from a file ${download} gave you.`);
 
-  const totals: IUploadTotals = { assigned: 0, removed: 0, unsorted, problems: [] };
+  const totals: IUploadTotals = { assigned: 0, removed: 0, unsorted, problems: [], moves: [] };
   const failure = await assignAll(start, upload.rows, totals);
+  // Rows applied before a failed request changed categories too, so their copies move.
+  if (totals.moves.length) start.moveCopies(totals.moves);
   if (failure) return failure;
   const problems = [...upload.problems, ...totals.problems].sort((a, b) => a.line - b.line);
 
@@ -266,7 +282,16 @@ export async function newsImportUploadReply(
     `- **${problems.length}** rejected`,
   ];
   if (upload.blank) lines.push(`- **${upload.blank}** left blank: still unsorted`);
-  lines.push(`${plural(totals.unsorted, "imported News Item is", "imported News Items are")} ` +
+  if (totals.moves.length && start.historyCopyRunning?.()) {
+    lines.push(`- ${counted(totals.moves.length,
+      "News Copy will move to its new category's thread",
+      "News Copies will move to their new categories' threads")} when the history copy ` +
+      "running now finishes");
+  } else if (totals.moves.length) {
+    lines.push(`- ${counted(totals.moves.length, "News Copy moving to its new category's thread",
+      "News Copies moving to their new categories' threads")}`);
+  }
+  lines.push(`${counted(totals.unsorted, "imported News Item is", "imported News Items are")} ` +
     "still unsorted.");
   if (!problems.length) return reply(lines.join("\n"));
 

@@ -13,6 +13,11 @@ export interface INewsMessage {
   member: { displayName: string } | null;
   /** The text as a reader sees it: mentions and custom emoji resolved. */
   cleanContent: string;
+  /**
+   * The raw text, mentions as `<@id>`. Read only from the bot's own `/news share` posts, to
+   * find who shared them.
+   */
+  content?: string;
   createdAt: Date;
   editedAt: Date | null;
   attachments: ReadonlyMap<string, INewsAttachment>;
@@ -24,6 +29,8 @@ export interface INewsAttachment {
   url: string;
   contentType: string | null;
   name: string;
+  /** Its size in bytes (discord.js always has it), which decides whether a copy uploads it. */
+  size?: number;
 }
 
 export interface INewsEmbed {
@@ -89,7 +96,8 @@ function trimAddress(raw: string): string {
   }
 }
 
-function isWebAddress(text: string): boolean {
+/** An http or https address with a host. */
+export function isWebAddress(text: string): boolean {
   try {
     const { protocol, hostname } = new URL(text);
     return (protocol === "http:" || protocol === "https:") && hostname !== "";
@@ -147,7 +155,7 @@ function linkOf(url: string, preview: INewsEmbed | null): INewsLinkPayload {
 const IMAGE_NAME_PATTERN = /\.(png|jpe?g|gif|webp|avif|bmp)$/i;
 
 /** An image by its media type, or by its file name when Discord gave no type. */
-function isImage(attachment: INewsAttachment): boolean {
+export function isImageAttachment(attachment: INewsAttachment): boolean {
   if (attachment.contentType) return attachment.contentType.startsWith("image/");
   return IMAGE_NAME_PATTERN.test(attachment.name);
 }
@@ -166,9 +174,13 @@ function expiresAt(url: string): string | null {
   return Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : null;
 }
 
+/** The message's images: the attachments a News Item stores and its News Copy uploads again. */
+export function newsImageAttachments(message: INewsMessage): INewsAttachment[] {
+  return [...message.attachments.values()].filter(isImageAttachment);
+}
+
 function imagesOf(message: INewsMessage): INewsImagePayload[] {
-  return [...message.attachments.values()]
-    .filter(isImage)
+  return newsImageAttachments(message)
     .map((image) => ({ url: image.url, expires_at: expiresAt(image.url) }));
 }
 
@@ -217,8 +229,9 @@ function authorName(message: INewsMessage): string {
 /**
  * The News Item a message is, or null when it is not one. `places` maps each channel where
  * news is posted to the News Category its messages take (see {@link NewsPlaces}): live
- * recording and catch-up pass `NEWS_CATEGORY_THREADS`, and the News Import passes the Game
- * News Archive with no category. Pure: a fetched discord.js Message is a valid `message`.
+ * recording passes the News Channel and the News Import its archive, both with no category
+ * (null), which the bot picks or staff assign. Pure: a fetched discord.js Message is a
+ * valid `message`.
  */
 export function newsItemFrom(
   message: INewsMessage,
@@ -240,5 +253,82 @@ export function newsItemFrom(
     edited_at: message.editedAt?.toISOString() ?? null,
     link: url ? linkOf(url, previewOf(url, links.length, message.embeds)) : null,
     images,
+  };
+}
+
+/** Who shared news through the bot, and what they gave it (spec api#367, /news share). */
+export interface INewsShareOrigin {
+  sharer: { id: string; name: string };
+  /** The shared address, as the member gave it. */
+  link: string;
+  comment: string | null;
+}
+
+/**
+ * The News Item of a message the bot posted in the News Channel for a member through
+ * `/news share`. {@link newsItemFrom} refuses it, since a bot posted it: the item is the
+ * member's, with their link and comment, and the preview and images the bot's message has.
+ * Its category is left null for the caller to set.
+ */
+export function sharedNewsItemFrom(
+  message: INewsMessage,
+  origin: INewsShareOrigin,
+): INewsItemPayload {
+  const linkCount = Math.max(1, findLinks(message.cleanContent).length);
+  return {
+    message_id: message.id,
+    channel_id: message.channelId,
+    category_key: null,
+    author_id: origin.sharer.id,
+    author_name: origin.sharer.name,
+    comment: origin.comment,
+    posted_at: message.createdAt.toISOString(),
+    edited_at: message.editedAt?.toISOString() ?? null,
+    link: linkOf(origin.link, previewOf(origin.link, linkCount, message.embeds)),
+    images: imagesOf(message),
+  };
+}
+
+/** The first line of a `/news share` post: who shared it, as a mention. */
+export function newsShareHeader(sharerId: string): string {
+  return `<@${sharerId}> shared`;
+}
+
+const SHARE_HEADER = /^<@(\d+)> shared$/;
+
+/**
+ * What a `/news share` post holds, read back from the bot's message: the sharer (their name
+ * as the post shows it), the comment and the link. Null when the message is not one.
+ */
+function newsShareOf(message: INewsMessage): INewsShareOrigin | null {
+  if (!message.author.bot || message.webhookId !== null || message.system) return null;
+  const lines = (message.content ?? "").split("\n");
+  const sharerId = SHARE_HEADER.exec(lines[0] ?? "")?.[1];
+  const link = lines.at(-1) ?? "";
+  if (!sharerId || lines.length < 2 || !isWebAddress(link)) return null;
+  const shownAs = message.cleanContent.split("\n")[0] ?? "";
+  return {
+    sharer: { id: sharerId, name: shownAs.replace(/ shared$/, "").replace(/^@/, "") },
+    link,
+    comment: lines.slice(1, -1).join("\n").trim() || null,
+  };
+}
+
+/**
+ * The News Item a message in a news place is: a member's post ({@link newsItemFrom}), or
+ * the bot's own `/news share` post, credited to the member who shared it. Null for anything
+ * else. For a message the API already holds as a News Item (renewal, catch-up, moves).
+ */
+export function postedNewsItemFrom(
+  message: INewsMessage,
+  places: NewsPlaces,
+): INewsItemPayload | null {
+  const item = newsItemFrom(message, places);
+  if (item || !places.has(message.channelId)) return item;
+  const share = newsShareOf(message);
+  if (!share) return null;
+  return {
+    ...sharedNewsItemFrom(message, share),
+    category_key: places.get(message.channelId) ?? null,
   };
 }

@@ -10,6 +10,7 @@ import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import axios from "axios";
 
 import { GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
+import { NEWS_HUB_FEATURE_KEY } from "../config/featureGate.js";
 import { DEV_ROLE_ID } from "../config/roles.js";
 import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
@@ -23,14 +24,19 @@ import {
   buildTextSend,
 } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
+import { NEWS_CATEGORY_THREADS, NEWS_IMPORT_COMMAND } from "../config/newsHub.js";
+import { getFeatureState } from "../services/FeaturePostRouting.js";
+import { NEWS_COPY_LANE } from "../services/NewsCopyLane.js";
+import { discordNewsCopier } from "../services/NewsCopying.js";
+import { discordNewsOriginals } from "../services/NewsHistoryCopy.js";
+import { createNewsCategoryDeps, moveNewsCopies } from "../services/NewsCategoryChange.js";
 import {
   DEFAULT_NEWS_IMPORT_DEPS,
-  NEWS_IMPORT_COMMAND,
   newsImportStatusReply,
-  startNewsImportScanReply,
-  type IScanProgressMessage,
+  startNewsHistoryCopyReply,
+  type IProgressMessage,
 } from "../services/NewsImport.js";
-import { discordArchiveReader } from "../services/NewsImportScan.js";
+import { NEWS_ITEM_API, NEWS_UNCOPIED_API } from "../services/NewsItemApi.js";
 import {
   newsImportDownloadReply,
   newsImportUploadReply,
@@ -38,14 +44,14 @@ import {
 } from "../services/NewsImportTransfer.js";
 import { buildAnyErrorMessage, buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 
-const SCAN_ERROR_FILE = "news-import-scan-error.txt";
+const COPY_ERROR_FILE = "news-history-copy-error.txt";
 const UPLOAD_DOWNLOAD_TIMEOUT_MS = 30_000;
 
 /** Posts a progress message that names the staff member without pinging them. */
 async function postProgress(
   channel: SendableChannels,
   text: string,
-): Promise<IScanProgressMessage> {
+): Promise<IProgressMessage> {
   const message = await channel.send({ ...buildTextSend(text), allowedMentions: { parse: [] } });
   return {
     url: message.url,
@@ -56,10 +62,10 @@ async function postProgress(
 }
 
 /**
- * Posts the error that stopped a scan. A failed batch's request holds up to 100 messages,
- * more than a message shows, so a long error goes in a text file in full.
+ * Posts the error that stopped a history copy. A long error (a whole page of the listing
+ * in the response) goes in a text file in full.
  */
-async function postScanError(channel: SendableChannels, text: string): Promise<void> {
+async function postRunError(channel: SendableChannels, text: string): Promise<void> {
   const allowedMentions = { roles: [DEV_ROLE_ID] };
   if (text.length <= MAX_CONTAINER_TEXT) {
     await channel.send({ ...buildTextSend(text), allowedMentions });
@@ -68,11 +74,11 @@ async function postScanError(channel: SendableChannels, text: string): Promise<v
   const firstLine = text.split("\n", 1)[0];
   const container = buildTextContainer(
     `${firstLine}\nThe full request and response are in the attached file.`,
-  ).addFileComponents(buildFileComponent(SCAN_ERROR_FILE));
+  ).addFileComponents(buildFileComponent(COPY_ERROR_FILE));
   await channel.send({
     components: [container],
     flags: buildComponentsV2EditFlags(),
-    files: [new AttachmentBuilder(Buffer.from(text, "utf-8"), { name: SCAN_ERROR_FILE })],
+    files: [new AttachmentBuilder(Buffer.from(text, "utf-8"), { name: COPY_ERROR_FILE })],
     allowedMentions,
   });
 }
@@ -105,56 +111,53 @@ async function attachmentText(attachment: Attachment, maxBytes: number): Promise
 }
 
 /**
- * `/news-import` (spec api#355): staff move the Game News Archive into the News Hub. The
- * API decides who may (Admins and Superadmins, from the acting member's stored roles), so
- * the command has no Discord permission check. It belongs to the News Hub Feature.
+ * `/news-import` (spec api#355, api#367): staff sort the imported news and copy the news
+ * history into the category threads. The API decides who may (Admins and Superadmins,
+ * from the acting member's stored roles), so the command has no Discord permission check.
+ * It belongs to the News Hub Feature.
  */
 @Discord()
 @SlashGroup({
-  description: "Import the Game News Archive into the News Hub (Admins and Superadmins)",
+  description: "Sort imported news and copy news history into threads (Admins and Superadmins)",
   name: NEWS_IMPORT_COMMAND,
 })
 @SlashGroup(NEWS_IMPORT_COMMAND)
 export class NewsImportCommand {
   @Slash({
-    description: "Import the Game News Archive's news, unsorted, continuing where it stopped",
-    name: "scan",
+    description: "Copy every News Item without a News Copy into its category thread",
+    name: "copy",
   })
-  async scan(
-    @SlashOption({
-      description: "Start over from the archive's newest message instead",
-      name: "from-newest",
-      required: false,
-      type: ApplicationCommandOptionType.Boolean,
-    })
-    fromNewest: boolean | undefined,
-    interaction: CommandInteraction,
-  ): Promise<void> {
+  async copy(interaction: CommandInteraction): Promise<void> {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     const channel = interaction.channel;
     if (!channel?.isSendable()) {
-      const text = "Run the scan in a channel where the bot can post its progress.";
+      const text = "Run the history copy in a channel where the bot can post its progress.";
       await safeReply(interaction, buildTextReply(text, true));
       return;
     }
 
     let reply: string;
     try {
-      const started = await startNewsImportScanReply({
+      const started = await startNewsHistoryCopyReply({
         ...DEFAULT_NEWS_IMPORT_DEPS,
         actingUserId: interaction.user.id,
         testMode: IS_TEST_MODE,
-        archive: discordArchiveReader(interaction.client, GAME_NEWS_CHANNEL_ID),
-        archiveId: GAME_NEWS_CHANNEL_ID,
-        fromNewest: fromNewest ?? false,
+        copy: {
+          threads: NEWS_CATEGORY_THREADS,
+          api: NEWS_ITEM_API,
+          discord: discordNewsCopier(interaction.client),
+          listing: NEWS_UNCOPIED_API,
+          originals: discordNewsOriginals(interaction.client, GAME_NEWS_CHANNEL_ID),
+          featureState: () => getFeatureState(NEWS_HUB_FEATURE_KEY),
+        },
         post: (text) => postProgress(channel, text),
-        postDetails: (text) => postScanError(channel, text),
+        postDetails: (text) => postRunError(channel, text),
       });
-      // The scan outlives the interaction; it reports in the progress message.
+      // The run outlives the interaction; it reports in the progress message.
       void started.finished;
       reply = started.reply;
     } catch (error: unknown) {
-      const message = buildAnyErrorMessage("Could not start the News Import scan", error);
+      const message = buildAnyErrorMessage("Could not start the history copy", error);
       await safeReply(interaction, buildErrorReply(message, true));
       return;
     }
@@ -162,7 +165,7 @@ export class NewsImportCommand {
   }
 
   @Slash({
-    description: "Show how many imported News Items are sorted, unsorted and removed",
+    description: "Show the News Import's counts and how many News Items have a News Copy",
     name: "status",
   })
   async status(interaction: CommandInteraction): Promise<void> {
@@ -226,6 +229,10 @@ export class NewsImportCommand {
         maxBytes,
         file: { name: file.name, size: file.size, contentType: file.contentType },
         fetchText: () => attachmentText(file, maxBytes),
+        // Runs on after the reply; every failed move is logged (NewsCategoryChange).
+        moveCopies: (moves) =>
+          void moveNewsCopies(moves, createNewsCategoryDeps(interaction.client)),
+        historyCopyRunning: () => NEWS_COPY_LANE.historyRunning(),
       });
     } catch (error: unknown) {
       const text = buildAnyErrorMessage("Could not apply the News Import file", error);

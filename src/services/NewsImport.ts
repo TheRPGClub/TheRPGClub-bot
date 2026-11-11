@@ -1,6 +1,7 @@
 import axios from "axios";
 import { TimestampStyles, time, userMention } from "discord.js";
 
+import { NEWS_IMPORT_COMMAND } from "../config/newsHub.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
 import {
   buildAnyErrorMessage,
@@ -10,38 +11,36 @@ import {
 import { logError } from "../utilities/LogUtils.js";
 import { NEWS_IMPORT_API, type INewsImportApi } from "./NewsImportApi.js";
 import {
-  NEWS_IMPORT_SCAN,
-  type IArchiveReader,
-  type INewsImportScanProgress,
-  type INewsImportScanRun,
-  type NewsImportScanRunner,
-  type NewsImportSkipReason,
-} from "./NewsImportScan.js";
+  HISTORY_COPY_INTERVAL_MS,
+  NEWS_HISTORY_COPY,
+  type INewsHistoryCopyDeps,
+  type INewsHistoryCopyProgress,
+  type INewsHistoryCopyRun,
+  type NewsHistoryCopyRunner,
+} from "./NewsHistoryCopy.js";
 
-// `/news-import` (spec api#355, bot#1526): the staff actions of the News Import. They work
-// for Admins and Superadmins while the News Hub is Preview or Live, and for nobody while it
-// is Off (the bot's feature gate refuses the command). The API decides who is staff, from
-// the acting member's stored roles; the bot names the acting Discord user.
+// `/news-import` (spec api#355, api#367): the staff actions of the News Import and the
+// history copy. They work for Admins and Superadmins while the News Hub is Preview or Live,
+// and for nobody while it is Off (the bot's feature gate refuses the command). The API
+// decides who is staff, from the acting member's stored roles; the bot names the acting
+// Discord user.
 
 const LOG_CONTEXT = "NewsImport";
 
-/** The command's name, as staff type it. The API's Feature coverage names it too. */
-export const NEWS_IMPORT_COMMAND = "news-import";
-
-/** The shortest gap between two edits of the scan's progress message. */
-export const SCAN_PROGRESS_EDIT_MS = 5_000;
+/** The shortest gap between two edits of the history copy's progress message. */
+export const PROGRESS_EDIT_MS = 5_000;
 
 export const NEWS_IMPORT_STAFF_ONLY_MESSAGE =
   "Only Admins and Superadmins can run the News Import.";
 
 export interface INewsImportDeps {
   api: INewsImportApi;
-  runner: NewsImportScanRunner;
+  runner: NewsHistoryCopyRunner;
 }
 
 export const DEFAULT_NEWS_IMPORT_DEPS: INewsImportDeps = {
   api: NEWS_IMPORT_API,
-  runner: NEWS_IMPORT_SCAN,
+  runner: NEWS_HISTORY_COPY,
 };
 
 /**
@@ -54,7 +53,7 @@ export function newsImportRefusal(error: unknown): string | null {
   return buildApiErrorMessage(NEWS_IMPORT_STAFF_ONLY_MESSAGE, error, { devPing: false });
 }
 
-/** `/news-import status`: the import's counts as the private reply. */
+/** `/news-import status`: the import's and the history copy's counts as the private reply. */
 export async function newsImportStatusReply(
   actingUserId: string,
   deps: INewsImportDeps = DEFAULT_NEWS_IMPORT_DEPS,
@@ -71,135 +70,120 @@ export async function newsImportStatusReply(
   return "**News Import**\n" +
     `- **${status.sorted}** sorted: shown on the website\n` +
     `- **${status.unsorted}** unsorted: hidden until staff assign a News Category\n` +
-    `- **${status.removed}** removed with \`skip\`` +
-    (run ? `\n\nA scan is running: ${runSummary(run)}` : "");
+    `- **${status.removed}** removed with \`skip\`\n` +
+    "**News Copies** (live and imported News Items)\n" +
+    `- **${status.copied}** copied into the category threads\n` +
+    `- **${status.uncopied}** waiting for a News Copy` +
+    (run ? `\n\nA history copy is running: ${runSummary(run)}` : "");
 }
 
-const SKIP_LABELS: Readonly<Record<NewsImportSkipReason, string>> = {
-  textOnly: "text only",
-  bot: "by a bot or webhook",
-  system: "system messages",
-};
-
-function total(counts: Readonly<Record<string, number | undefined>>): number {
-  return Object.values(counts).reduce<number>((sum, n) => sum + (n ?? 0), 0);
+/** How long `left` copies take at the history copy's pace, roughly. */
+function timeLeft(left: number): string {
+  const minutes = Math.ceil((left * HISTORY_COPY_INTERVAL_MS) / 60_000);
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
-/** The scan's counts, one fact per line. */
-export function scanCountsText(progress: Readonly<INewsImportScanProgress>): string {
-  const reached = progress.oldestPostedAt
-    ? `, back to ${time(new Date(progress.oldestPostedAt), TimestampStyles.LongDate)}`
+/** The history copy's counts, one fact per line. */
+export function copyCountsText(progress: Readonly<INewsHistoryCopyProgress>): string {
+  const reached = progress.reachedPostedAt
+    ? `, up to news from ${time(new Date(progress.reachedPostedAt), TimestampStyles.LongDate)}`
     : "";
-  const lines = [
-    `Scanned **${progress.scanned}** messages${reached}.`,
-    `Recorded **${progress.created + progress.updated}** News Items ` +
-      `(${progress.created} new, ${progress.updated} already imported).`,
-  ];
-  const skips = (Object.keys(SKIP_LABELS) as NewsImportSkipReason[])
-    .filter((reason) => progress.skipped[reason])
-    .map((reason) => `${progress.skipped[reason]} ${SKIP_LABELS[reason]}`);
-  lines.push(skips.length
-    ? `Skipped **${total(progress.skipped)}**: ${skips.join(", ")}.`
-    : "Skipped none.");
-  if (progress.previouslyRemoved) {
-    lines.push(`Left out **${progress.previouslyRemoved}** that staff removed with \`skip\`.`);
+  const lines = [`Copied **${progress.copied}** News Items${reached}.`];
+  if (progress.failed) {
+    lines.push(`Skipped **${progress.failed}** whose copy failed (each error is in the ` +
+      "console log); the next run tries them again.");
   }
-  const rejected = Object.entries(progress.rejected);
-  if (rejected.length) {
-    const reasons = rejected.map(([reason, n]) => `${reason} (${n})`).join("; ");
-    lines.push(`Rejected **${total(progress.rejected)}** by the API: ${reasons}.`);
+  if (progress.left !== null && !progress.finished) {
+    lines.push(`**${progress.left}** left, about ${timeLeft(progress.left)}.`);
   }
   return lines.join("\n");
 }
 
-function startedLine(run: Pick<INewsImportScanRun, "startedBy" | "startedAt">): string {
+function startedLine(run: Pick<INewsHistoryCopyRun, "startedBy" | "startedAt">): string {
   return `started by ${userMention(run.startedBy)} ` +
     time(run.startedAt, TimestampStyles.RelativeTime);
 }
 
-function runSummary(run: Readonly<INewsImportScanRun>): string {
+function runSummary(run: Readonly<INewsHistoryCopyRun>): string {
   return `${startedLine(run)}.\n` +
-    (run.progress ? scanCountsText(run.progress) : "It is reading its first page.");
+    (run.progress ? copyCountsText(run.progress) : "It is posting its first copy.");
 }
 
-const RERUN_NOTE = `Run \`/${NEWS_IMPORT_COMMAND} scan\` again; it continues where it stopped.`;
-const RESTART_NOTE = "If the bot restarts, run the scan again; it continues where it stopped.";
+const RERUN_NOTE = `Run \`/${NEWS_IMPORT_COMMAND} copy\` again; it continues where it stopped.`;
+const RESTART_NOTE = `If the bot restarts, run \`/${NEWS_IMPORT_COMMAND} copy\` again; it ` +
+  "continues where it stopped. New posts are copied after the history.";
 
-function runningText(run: Readonly<INewsImportScanRun>): string {
-  return `**News Import scan** ${runSummary(run)}\n-# ${RESTART_NOTE}`;
+function runningText(run: Readonly<INewsHistoryCopyRun>): string {
+  return `**History copy** ${runSummary(run)}\n-# ${RESTART_NOTE}`;
 }
 
 function finishedText(
-  run: Readonly<INewsImportScanRun>,
-  progress: Readonly<INewsImportScanProgress>,
+  run: Readonly<INewsHistoryCopyRun>,
+  progress: Readonly<INewsHistoryCopyProgress>,
 ): string {
   if (progress.finished) {
-    return `**News Import scan** finished (${startedLine(run)}).\n` +
-      `${scanCountsText(progress)}\n` +
-      "Imported News Items stay hidden until staff assign their News Categories. " +
+    return `**History copy** finished (${startedLine(run)}).\n` +
+      `${copyCountsText(progress)}\n` +
       `\`/${NEWS_IMPORT_COMMAND} status\` shows the counts.`;
   }
   const reason = progress.failure
-    ? `\n${scanFailureReason(progress.failure.label, progress.failure.error)}`
+    ? `\n${runFailureReason(progress.failure.label, progress.failure.error)}`
     : "";
-  return `**News Import scan** stopped on an error (${startedLine(run)}). ` +
-    `The details are below.${reason}\n${scanCountsText(progress)}\n${RERUN_NOTE}`;
+  return `**History copy** stopped (${startedLine(run)}).${reason}\n` +
+    `${copyCountsText(progress)}\n${RERUN_NOTE}`;
 }
 
 /** Longest reason line the progress message carries; the details message has the rest. */
 const FAILURE_REASON_MAX = 400;
 
 /**
- * Why a scan stopped, in one short line for its progress message, so staff see the cause
+ * Why a run stopped, in one short line for its progress message, so staff see the cause
  * even when the full details message cannot be posted: the step, the HTTP status and the
- * API's answer, or the error's own message.
+ * API's answer, or the error's own message. A null error is the label alone.
  */
-export function scanFailureReason(label: string, error: unknown): string {
-  let cause: string;
-  if (axios.isAxiosError(error) && error.response) {
+export function runFailureReason(label: string, error: unknown): string {
+  let cause: string | null;
+  if (error === null) {
+    cause = null;
+  } else if (axios.isAxiosError(error) && error.response) {
     cause = `HTTP ${error.response.status} ${JSON.stringify(error.response.data ?? null)}`;
   } else if (error instanceof Error) {
     cause = error.message;
   } else {
     cause = String(error);
   }
-  const line = `${label}: ${cause}`.replace(/\s+/g, " ");
+  const line = (cause === null ? label : `${label}: ${cause}`).replace(/\s+/g, " ");
   return line.length > FAILURE_REASON_MAX ? `${line.slice(0, FAILURE_REASON_MAX - 1)}…` : line;
 }
 
-/** The scan's progress message, posted in the channel where staff ran the command. */
-export interface IScanProgressMessage {
+/** The run's progress message, posted in the channel where staff ran the command. */
+export interface IProgressMessage {
   url: string;
   edit(text: string): Promise<void>;
 }
 
-export interface INewsImportScanStart extends INewsImportDeps {
+export interface INewsHistoryCopyStart extends INewsImportDeps {
   actingUserId: string;
-  /** A PR preview shares the production API, so test mode refuses the scan. */
+  /** A PR preview shares the production API, so test mode refuses the history copy. */
   testMode: boolean;
-  archive: IArchiveReader;
-  archiveId: string;
-  /**
-   * Start over from the archive's newest message. By default the scan continues from just
-   * before the oldest message already imported (the archive is locked, so nothing newer
-   * appears).
-   */
-  fromNewest?: boolean;
+  /** What the run copies with; its progress goes to the progress message. */
+  copy: Omit<INewsHistoryCopyDeps, "onProgress">;
   /** Posts the progress message. A failure is thrown to the command's error reply. */
-  post(text: string): Promise<IScanProgressMessage>;
-  /** Posts the full error that stopped a scan, below the progress message. */
+  post(text: string): Promise<IProgressMessage>;
+  /** Posts the full error that stopped a run, below the progress message. */
   postDetails(text: string): Promise<void>;
   now?: () => Date;
   editIntervalMs?: number;
 }
 
 /**
- * Edits the progress message at most once per interval while the scan runs, never two
+ * Edits the progress message at most once per interval while the run goes on, never two
  * edits at once, and always with the final text. Edit failures are logged, never thrown:
- * a deleted progress message does not stop the scan.
+ * a deleted progress message does not stop the run.
  */
 function progressEditor(
-  message: IScanProgressMessage,
+  message: IProgressMessage,
   intervalMs: number,
   now: () => Date,
 ): { show(text: () => string): void; finish(text: string): Promise<void> } {
@@ -207,7 +191,8 @@ function progressEditor(
   let editing: Promise<void> | null = null;
   const edit = (text: string): Promise<void> =>
     message.edit(text).catch((error: unknown) => {
-      logError(LOG_CONTEXT, buildDiscordErrorMessage("Could not edit the scan progress", error));
+      const label = "Could not edit the history copy's progress";
+      logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
     });
   return {
     show(text) {
@@ -225,16 +210,16 @@ function progressEditor(
 }
 
 /**
- * `/news-import scan`: refuses in test mode, then asks the API whether the acting member is
- * staff (the batch write is service-only, so the status read is the check) and where the
- * last scan stopped, then starts the scan unless one is running. Returns the private reply,
- * and `finished`, which settles (never rejects) once the progress message shows the final
- * counts; null when not started.
+ * `/news-import copy`: refuses in test mode, then asks the API whether the acting member
+ * is staff (the uncopied listing is service-only, so the status read is the check) and
+ * how many News Items have no copy, then starts the history copy unless one is running.
+ * Returns the private reply, and `finished`, which settles (never rejects) once the
+ * progress message shows the final counts; null when not started.
  */
-export async function startNewsImportScanReply(
-  start: INewsImportScanStart,
+export async function startNewsHistoryCopyReply(
+  start: INewsHistoryCopyStart,
 ): Promise<{ reply: string; finished: Promise<void> | null }> {
-  const testRefusal = sharedStateCommandRefusal(`/${NEWS_IMPORT_COMMAND} scan`, start.testMode);
+  const testRefusal = sharedStateCommandRefusal(`/${NEWS_IMPORT_COMMAND} copy`, start.testMode);
   if (testRefusal) return { reply: testRefusal, finished: null };
   let status: Awaited<ReturnType<INewsImportApi["status"]>>;
   try {
@@ -244,19 +229,15 @@ export async function startNewsImportScanReply(
     if (refusal) return { reply: refusal, finished: null };
     throw error;
   }
-  const startBefore = start.fromNewest ? null : status.oldestMessageId;
   const running = start.runner.current();
   if (running) return { reply: alreadyRunningReply(running), finished: null };
 
   const now = start.now ?? ((): Date => new Date());
   const run = { startedBy: start.actingUserId, startedAt: now(), progress: null };
   const message = await start.post(runningText(run));
-  const editor = progressEditor(message, start.editIntervalMs ?? SCAN_PROGRESS_EDIT_MS, now);
+  const editor = progressEditor(message, start.editIntervalMs ?? PROGRESS_EDIT_MS, now);
   const done = start.runner.start(run.startedBy, run.startedAt, {
-    archive: start.archive,
-    api: start.api,
-    archiveId: start.archiveId,
-    startBefore,
+    ...start.copy,
     onProgress: () => {
       const current = start.runner.current();
       if (current) editor.show(() => runningText(current));
@@ -265,41 +246,40 @@ export async function startNewsImportScanReply(
   if (!done) {
     // Another start won the race between the check above and now.
     const other = start.runner.current();
-    await editor.finish("**News Import scan** not started: another scan began first.");
-    const reply = other ? alreadyRunningReply(other) : "Another scan began first.";
+    await editor.finish("**History copy** not started: another run began first.");
+    const reply = other ? alreadyRunningReply(other) : "Another history copy began first.";
     return { reply, finished: null };
   }
   const finished = done.then(
     async (progress) => {
       await editor.finish(finishedText(run, progress));
       const failure = progress.failure;
-      if (failure) await postDetails(start, buildAnyErrorMessage(failure.label, failure.error));
+      if (failure && failure.error !== null) {
+        await postDetails(start, buildAnyErrorMessage(failure.label, failure.error));
+      }
     },
     async (error: unknown) => {
-      await editor.finish("**News Import scan** stopped on an unexpected error. The details are " +
-        `below.\n${scanFailureReason("The News Import scan failed", error)}\n${RERUN_NOTE}`);
-      await postDetails(start, buildAnyErrorMessage("The News Import scan failed", error));
+      await editor.finish("**History copy** stopped on an unexpected error. The details are " +
+        `below.\n${runFailureReason("The history copy failed", error)}\n${RERUN_NOTE}`);
+      await postDetails(start, buildAnyErrorMessage("The history copy failed", error));
     },
   ).catch((error: unknown) => {
-    logError(LOG_CONTEXT, buildAnyErrorMessage("Could not report the News Import scan", error));
+    logError(LOG_CONTEXT, buildAnyErrorMessage("Could not report the history copy", error));
   });
-  const from = startBefore
-    ? "continuing where the last scan stopped"
-    : "from the newest message";
   return {
-    reply: `The News Import scan has started, ${from}. Its progress is posted here: ` +
-      message.url,
+    reply: `The history copy has started: ${status.uncopied} News Items have no News Copy ` +
+      `yet, copied oldest first. Its progress is posted here: ${message.url}`,
     finished,
   };
 }
 
-function alreadyRunningReply(run: Readonly<INewsImportScanRun>): string {
-  return `A News Import scan is already running, ${runSummary(run)}`;
+function alreadyRunningReply(run: Readonly<INewsHistoryCopyRun>): string {
+  return `A history copy is already running, ${runSummary(run)}`;
 }
 
-async function postDetails(start: INewsImportScanStart, text: string): Promise<void> {
+async function postDetails(start: INewsHistoryCopyStart, text: string): Promise<void> {
   await start.postDetails(text).catch((error: unknown) => {
-    logError(LOG_CONTEXT, `${buildDiscordErrorMessage("Could not post the scan error", error)}\n` +
-      text);
+    const label = "Could not post the error that stopped the history copy";
+    logError(LOG_CONTEXT, `${buildDiscordErrorMessage(label, error)}\n${text}`);
   });
 }

@@ -4,8 +4,11 @@ import { AxiosError, AxiosHeaders, type AxiosResponse } from "axios";
 import { parseDelimited, writeDelimited } from "../functions/DelimitedText.js";
 import { NEWS_IMPORT_FILE_COLUMNS, type INewsImportListItem } from "../functions/NewsImportFile.js";
 import { NEWS_IMPORT_STAFF_ONLY_MESSAGE } from "../services/NewsImport.js";
+import type { NewsCategoryKey } from "../config/newsHub.js";
+import type { INewsCopyLocation } from "../services/NewsItemApi.js";
 import type {
   INewsImportApi,
+  INewsImportMove,
   INewsImportAssignResult,
   INewsImportAssignRow,
 } from "../services/NewsImportApi.js";
@@ -67,22 +70,25 @@ interface IFakeImportApi extends INewsImportApi {
 function fakeApi(items: INewsImportListItem[], options: {
   perPage?: number;
   error?: unknown;
+  /** Items already sorted, with their category. */
+  sorted?: ReadonlyMap<string, NewsCategoryKey>;
+  /** Items with a News Copy, and where it lives. */
+  copies?: ReadonlyMap<string, INewsCopyLocation>;
 } = {}): IFakeImportApi {
   const perPage = options.perPage ?? 2;
   const api: IFakeImportApi = {
     pagesRead: [],
     assignCalls: [],
     statusCalls: 0,
-    categories: new Map(items.map((one) => [one.message_id, null])),
+    categories: new Map(items.map((one) =>
+      [one.message_id, options.sorted?.get(one.message_id) ?? null])),
     async status() {
       api.statusCalls += 1;
       if (options.error) throw options.error;
       const values = [...api.categories.values()];
       const unsorted = values.filter((value) => value === null).length;
-      return { sorted: values.length - unsorted, unsorted, removed: 0, oldestMessageId: null };
-    },
-    async recordBatch() {
-      throw new Error("not used");
+      const sorted = values.length - unsorted;
+      return { sorted, unsorted, removed: 0, copied: 0, uncopied: 0 };
     },
     async list(actingUserId, page) {
       api.pagesRead.push({ actingUserId, page });
@@ -96,7 +102,7 @@ function fakeApi(items: INewsImportListItem[], options: {
       api.assignCalls.push({ actingUserId, rows: [...rows] });
       if (options.error) throw options.error;
       const result: INewsImportAssignResult = {
-        assigned: 0, removed: 0, rejected: 0, unsorted: 0, rejections: [],
+        assigned: 0, removed: 0, rejected: 0, unsorted: 0, rejections: [], moved: [],
       };
       rows.forEach((row, index) => {
         if (!api.categories.has(row.messageId)) {
@@ -107,6 +113,19 @@ function fakeApi(items: INewsImportListItem[], options: {
           api.categories.delete(row.messageId);
         } else {
           result.assigned += 1;
+          const previous = api.categories.get(row.messageId) as NewsCategoryKey | null;
+          const copy = options.copies?.get(row.messageId);
+          if (previous && copy && previous !== row.value) {
+            const categoryKey = row.value as NewsCategoryKey;
+            const previousCategoryKey = previous;
+            result.moved.push({
+              messageId: row.messageId,
+              categoryKey,
+              previousCategoryKey,
+              origin: "import",
+              copy,
+            });
+          }
           api.categories.set(row.messageId, row.value);
         }
       });
@@ -204,6 +223,7 @@ function uploadStart(
     maxBytes: 1_000_000,
     file: { name: "sorted.csv", size: Buffer.byteLength(text), contentType: "text/csv" },
     fetches: 0,
+    moveCopies: () => undefined,
     async fetchText() {
       start.fetches += 1;
       return text;
@@ -238,6 +258,61 @@ test("upload assigns categories, removes skip rows, leaves blank rows out", asyn
   assert.match(reply.text, /\*\*0\*\* rejected/);
   assert.match(reply.text, /\*\*1\*\* left blank/);
   assert.match(reply.text, /\*\*1\*\* imported News Items? (is|are) still unsorted/);
+});
+
+test("upload moves the News Copies of items whose category changed", async () => {
+  const copy = { message_id: "640000000000000001", thread_id: "520000000000000002" };
+  const api = fakeApi([item(1), item(2), item(3)], {
+    sorted: new Map([[id(1), "releases"], [id(3), "industry"]]),
+    copies: new Map([[id(1), copy], [id(3), copy]]),
+  });
+  const text = fileOf([row(id(1), "rumours"), row(id(2), "industry"), row(id(3), "industry")]);
+  const moves: INewsImportMove[] = [];
+
+  const reply = await newsImportUploadReply(uploadStart(api, text, {
+    moveCopies: (moved) => {
+      moves.push(...moved);
+    },
+  }));
+
+  assert.deepEqual(moves, [
+    { messageId: id(1), categoryKey: "rumours", previousCategoryKey: "releases",
+      origin: "import", copy },
+  ]);
+  assert.match(reply.text, /\*\*1\*\* News Copy moving to its new category's thread/);
+});
+
+test("during a history copy, upload says its copies move once the history copy ends",
+  async () => {
+    const copy = { message_id: "640000000000000001", thread_id: "520000000000000002" };
+    const api = fakeApi([item(1)], {
+      sorted: new Map([[id(1), "releases"]]),
+      copies: new Map([[id(1), copy]]),
+    });
+    const moves: INewsImportMove[] = [];
+
+    const reply = await newsImportUploadReply(uploadStart(api, fileOf([row(id(1), "rumours")]), {
+      moveCopies: (moved) => {
+        moves.push(...moved);
+      },
+      historyCopyRunning: () => true,
+    }));
+
+    assert.equal(moves.length, 1);
+    assert.match(reply.text, /\*\*1\*\* News Copy will move to its new category's thread/);
+    assert.match(reply.text, /when the history copy running now finishes/);
+  });
+
+test("upload with no changed categories moves no copies", async () => {
+  const api = fakeApi([item(1)]);
+  let called = false;
+  const reply = await newsImportUploadReply(uploadStart(api, fileOf([row(id(1), "general")]), {
+    moveCopies: () => {
+      called = true;
+    },
+  }));
+  assert.equal(called, false);
+  assert.doesNotMatch(reply.text, /moving/);
 });
 
 test("upload reports the file's and the API's rejected rows by line, applies others", async () => {

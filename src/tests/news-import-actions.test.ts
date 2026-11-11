@@ -1,19 +1,35 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AxiosError, AxiosHeaders, type AxiosResponse } from "axios";
-import type { INewsMessage } from "../functions/NewsItem.js";
+import type { NewsCategoryThreads } from "../config/newsHub.js";
+import type { INewsPost } from "../services/NewsCopying.js";
 import {
   NEWS_IMPORT_STAFF_ONLY_MESSAGE,
   newsImportStatusReply,
-  startNewsImportScanReply,
-  type INewsImportScanStart,
+  startNewsHistoryCopyReply,
+  type INewsHistoryCopyStart,
 } from "../services/NewsImport.js";
 import type { INewsImportApi, INewsImportStatus } from "../services/NewsImportApi.js";
-import { NewsImportScanRunner, type IArchiveReader } from "../services/NewsImportScan.js";
+import {
+  NewsHistoryCopyRunner,
+  type INewsHistoryCopyDeps,
+} from "../services/NewsHistoryCopy.js";
+import type { IUncopiedNewsItem, IUncopiedNewsPage } from "../services/NewsItemApi.js";
 
 const STAFF_ID = "730000000000000001";
-const ARCHIVE = "530000000000000001";
+const NEWS_CHANNEL = "530000000000000001";
 const PROGRESS_URL = "https://discord.com/channels/1/2/3";
+
+const THREAD = "531000000000000001";
+const THREADS: NewsCategoryThreads = {
+  announcements: { threadId: THREAD, emoji: "a" },
+  releases: { threadId: THREAD, emoji: "b" },
+  emulation: { threadId: THREAD, emoji: "c" },
+  industry: { threadId: THREAD, emoji: "d" },
+  hardware: { threadId: THREAD, emoji: "e" },
+  rumours: { threadId: THREAD, emoji: "f" },
+  general: { threadId: THREAD, emoji: "g" },
+};
 
 function forbidden(): AxiosError {
   const config = {
@@ -31,78 +47,102 @@ function forbidden(): AxiosError {
   return new AxiosError("Request failed", "ERR_BAD_REQUEST", config, null, response);
 }
 
+const NO_STATUS: INewsImportStatus = {
+  sorted: 0,
+  unsorted: 0,
+  removed: 0,
+  copied: 0,
+  uncopied: 0,
+};
+
 function fakeApi(options: {
   status?: INewsImportStatus;
   statusError?: unknown;
-  batchError?: unknown;
-} = {}): INewsImportApi & { statusFor: string[]; batches: number } {
+} = {}): INewsImportApi & { statusFor: string[] } {
   const api = {
     statusFor: [] as string[],
-    batches: 0,
     async status(actingUserId: string): Promise<INewsImportStatus> {
       api.statusFor.push(actingUserId);
       if (options.statusError) throw options.statusError;
-      return options.status ?? { sorted: 0, unsorted: 0, removed: 0, oldestMessageId: null };
-    },
-    async recordBatch(items: readonly unknown[]) {
-      api.batches += 1;
-      if (options.batchError) throw options.batchError;
-      return { created: items.length, updated: 0, previouslyRemoved: 0, rejected: [] };
+      return options.status ?? NO_STATUS;
     },
     async list() {
-      throw new Error("the scan does not list");
+      throw new Error("the history copy does not list unsorted items");
     },
     async assign() {
-      throw new Error("the scan does not assign");
+      throw new Error("the history copy does not assign");
     },
   };
   return api;
 }
 
-test("status shows the sorted, unsorted and removed counts for the acting member", async () => {
-  const api = fakeApi({ status: { sorted: 12, unsorted: 340, removed: 5, oldestMessageId: null } });
-
-  const text = await newsImportStatusReply(STAFF_ID, { api, runner: new NewsImportScanRunner() });
-
-  assert.deepEqual(api.statusFor, [STAFF_ID]);
-  assert.match(text, /\*\*12\*\* sorted/);
-  assert.match(text, /\*\*340\*\* unsorted/);
-  assert.match(text, /\*\*5\*\* removed/);
-});
-
-test("status refuses a member who is not an Admin or Superadmin, showing the call", async () => {
-  const api = fakeApi({ statusError: forbidden() });
-
-  const text = await newsImportStatusReply(STAFF_ID, { api, runner: new NewsImportScanRunner() });
-
-  assert.ok(text.startsWith(NEWS_IMPORT_STAFF_ONLY_MESSAGE));
-  assert.match(text, /"status": 403/);
-  assert.match(text, /news_import\/status\?acting_user_id=/);
-});
-
-function newsMessage(n: number, text = `News https://example.com/${n}`): INewsMessage {
+/** News Item n, imported, posted on 2019-06-n. */
+function newsItem(n: number): IUncopiedNewsItem {
   return {
-    id: String(630000000000000000n + BigInt(n)),
-    channelId: ARCHIVE,
+    message_id: String(630000000000000000n + BigInt(n)),
+    category_key: "industry",
+    origin: "import",
+    comment: `Story ${n}`,
+    posted_at: new Date(Date.UTC(2019, 5, n)).toISOString(),
+    link: { url: `https://example.com/${n}` },
+    author: { user_id: "740000000000000001" },
+  };
+}
+
+function original(messageId: string): INewsPost {
+  return {
+    id: messageId,
+    channelId: NEWS_CHANNEL,
+    url: `https://discord.com/channels/1/${NEWS_CHANNEL}/${messageId}`,
     system: false,
     webhookId: null,
     author: { id: "740000000000000001", bot: false, username: "reporter", globalName: null },
     member: null,
-    cleanContent: text,
-    createdAt: new Date(Date.UTC(2019, 5, n)),
+    cleanContent: "",
+    createdAt: new Date(Date.UTC(2019, 5, 1)),
     editedAt: null,
     attachments: new Map(),
     embeds: [],
   };
 }
 
-/** An archive of `count` messages read as a single short page, newest first. */
-function archiveOf(messages: INewsMessage[], gate?: Promise<void>): IArchiveReader {
+/**
+ * The copy's fakes: `items` without a copy, listed oldest first until reported. `gate`
+ * holds every listing read until it settles; `listError` fails them.
+ */
+function copyDeps(
+  items: IUncopiedNewsItem[],
+  options: { gate?: Promise<void>; listError?: unknown; onList?: () => void } = {},
+): Omit<INewsHistoryCopyDeps, "onProgress"> & { reported: string[] } {
+  const reported: string[] = [];
+  let copyId = 0;
   return {
-    async page(before) {
-      if (gate) await gate;
-      return before === null ? [...messages].reverse() : [];
+    reported,
+    threads: THREADS,
+    api: {
+      record: async () => undefined,
+      remove: async () => ({ removed: false, newsCopy: null }),
+      reportCopy: async (messageId) => {
+        reported.push(messageId);
+      },
     },
+    discord: {
+      react: async () => undefined,
+      postCopy: async () => ({ messageId: String((copyId += 1)) }),
+      deleteMessage: async () => undefined,
+    },
+    listing: {
+      async uncopied(page, per): Promise<IUncopiedNewsPage> {
+        if (options.gate) await options.gate;
+        options.onList?.();
+        if (options.listError) throw options.listError;
+        const left = items.filter((i) => !reported.includes(i.message_id));
+        const next = page * per < left.length ? page + 1 : null;
+        return { items: left.slice((page - 1) * per, page * per), count: left.length, next };
+      },
+    },
+    originals: { fetch: async (messageId) => original(messageId) },
+    sleep: async () => undefined,
   };
 }
 
@@ -112,19 +152,18 @@ interface IFakeChannel {
   details: string[];
 }
 
-function scanStart(
+function copyStart(
   api: INewsImportApi,
-  runner: NewsImportScanRunner,
-  overrides: Partial<INewsImportScanStart> = {},
-): { start: INewsImportScanStart; channel: IFakeChannel } {
+  runner: NewsHistoryCopyRunner,
+  overrides: Partial<INewsHistoryCopyStart> = {},
+): { start: INewsHistoryCopyStart; channel: IFakeChannel } {
   const channel: IFakeChannel = { posts: [], edits: [], details: [] };
-  const start: INewsImportScanStart = {
+  const start: INewsHistoryCopyStart = {
     actingUserId: STAFF_ID,
     testMode: false,
     api,
     runner,
-    archive: archiveOf([newsMessage(1), newsMessage(2, "just chatting")]),
-    archiveId: ARCHIVE,
+    copy: copyDeps([newsItem(1), newsItem(2)]),
     post: async (text) => {
       channel.posts.push(text);
       return {
@@ -142,82 +181,33 @@ function scanStart(
   return { start, channel };
 }
 
-test("staff start a scan: the reply links the progress message, ending with counts", async () => {
+test("staff start a history copy: the reply links the progress message, ending with counts",
+  async () => {
+    const api = fakeApi({ status: { ...NO_STATUS, copied: 3, uncopied: 2 } });
+    const copy = copyDeps([newsItem(1), newsItem(2)]);
+    const { start, channel } = copyStart(api, new NewsHistoryCopyRunner(), { copy });
+
+    const { reply, finished } = await startNewsHistoryCopyReply(start);
+    await finished;
+
+    assert.deepEqual(api.statusFor, [STAFF_ID]);
+    assert.match(reply, new RegExp(PROGRESS_URL));
+    assert.match(reply, /2 News Items/);
+    assert.equal(channel.posts.length, 1);
+    assert.match(channel.posts[0], new RegExp(`<@${STAFF_ID}>`));
+    assert.match(channel.posts[0], /run `\/news-import copy` again/);
+    const final = channel.edits.at(-1) ?? "";
+    assert.match(final, /finished/);
+    assert.match(final, /Copied \*\*2\*\*/);
+    assert.deepEqual(copy.reported, [newsItem(1).message_id, newsItem(2).message_id]);
+    assert.deepEqual(channel.details, []);
+  });
+
+test("a history copy is refused in test mode before any call", async () => {
   const api = fakeApi();
-  const { start, channel } = scanStart(api, new NewsImportScanRunner());
+  const { start, channel } = copyStart(api, new NewsHistoryCopyRunner(), { testMode: true });
 
-  const { reply, finished } = await startNewsImportScanReply(start);
-  await finished;
-
-  assert.match(reply, new RegExp(PROGRESS_URL));
-  assert.equal(channel.posts.length, 1);
-  assert.match(channel.posts[0], new RegExp(`<@${STAFF_ID}>`));
-  const final = channel.edits.at(-1) ?? "";
-  assert.match(final, /finished/);
-  assert.match(final, /Scanned \*\*2\*\* messages/);
-  assert.match(final, /Recorded \*\*1\*\*/);
-  assert.match(final, /1 text only/);
-  assert.deepEqual(channel.details, []);
-});
-
-/** An archive of `messages` that pages like discord.js and keeps the cursors it was asked. */
-function pagedArchive(messages: INewsMessage[]): IArchiveReader & { cursors: (string | null)[] } {
-  const newestFirst = [...messages].reverse();
-  const archive = {
-    cursors: [] as (string | null)[],
-    async page(before: string | null, limit: number): Promise<INewsMessage[]> {
-      archive.cursors.push(before);
-      const older = before === null
-        ? newestFirst
-        : newestFirst.filter((m) => BigInt(m.id) < BigInt(before));
-      return older.slice(0, limit);
-    },
-  };
-  return archive;
-}
-
-test("a scan continues from just before the oldest message already imported", async () => {
-  const messages = Array.from({ length: 6 }, (_, i) => newsMessage(i + 1));
-  const archive = pagedArchive(messages);
-  const api = fakeApi({
-    status: { sorted: 0, unsorted: 3, removed: 0, oldestMessageId: messages[3].id },
-  });
-  const { start, channel } = scanStart(api, new NewsImportScanRunner(), { archive });
-
-  const { reply, finished } = await startNewsImportScanReply(start);
-  await finished;
-
-  assert.deepEqual(archive.cursors, [messages[3].id]);
-  assert.match(reply, /continuing where the last scan stopped/);
-  const restartNote = "If the bot restarts, run the scan again; it continues where it stopped.";
-  assert.ok(channel.posts[0].includes(restartNote));
-  assert.match(channel.edits.at(-1) ?? "", /Scanned \*\*3\*\* messages/);
-});
-
-test("a scan started over reads the archive from the newest message", async () => {
-  const messages = Array.from({ length: 6 }, (_, i) => newsMessage(i + 1));
-  const archive = pagedArchive(messages);
-  const api = fakeApi({
-    status: { sorted: 0, unsorted: 3, removed: 0, oldestMessageId: messages[3].id },
-  });
-  const { start, channel } = scanStart(api, new NewsImportScanRunner(), {
-    archive,
-    fromNewest: true,
-  });
-
-  const { reply, finished } = await startNewsImportScanReply(start);
-  await finished;
-
-  assert.deepEqual(archive.cursors, [null]);
-  assert.match(reply, /from the newest message/);
-  assert.match(channel.edits.at(-1) ?? "", /Scanned \*\*6\*\* messages/);
-});
-
-test("a scan is refused in test mode before any call", async () => {
-  const api = fakeApi();
-  const { start, channel } = scanStart(api, new NewsImportScanRunner(), { testMode: true });
-
-  const { reply, finished } = await startNewsImportScanReply(start);
+  const { reply, finished } = await startNewsHistoryCopyReply(start);
 
   assert.equal(finished, null);
   assert.match(reply, /disabled in test mode/);
@@ -225,30 +215,31 @@ test("a scan is refused in test mode before any call", async () => {
   assert.deepEqual(channel.posts, []);
 });
 
-test("a scan is refused for a member who is not an Admin or Superadmin", async () => {
+test("a history copy is refused for a member who is not an Admin or Superadmin", async () => {
   const api = fakeApi({ statusError: forbidden() });
-  const { start, channel } = scanStart(api, new NewsImportScanRunner());
+  const copy = copyDeps([newsItem(1)]);
+  const { start, channel } = copyStart(api, new NewsHistoryCopyRunner(), { copy });
 
-  const { reply, finished } = await startNewsImportScanReply(start);
+  const { reply, finished } = await startNewsHistoryCopyReply(start);
 
   assert.equal(finished, null);
   assert.ok(reply.startsWith(NEWS_IMPORT_STAFF_ONLY_MESSAGE));
   assert.deepEqual(channel.posts, []);
-  assert.equal(api.batches, 0);
+  assert.deepEqual(copy.reported, []);
 });
 
-test("a second start while a scan runs is refused with its progress", async () => {
+test("a second copy while one runs is refused with its progress", async () => {
   let release = (): void => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const runner = new NewsImportScanRunner();
+  const runner = new NewsHistoryCopyRunner();
   const api = fakeApi();
-  const first = scanStart(api, runner, { archive: archiveOf([newsMessage(1)], gate) });
-  const second = scanStart(api, runner);
+  const first = copyStart(api, runner, { copy: copyDeps([newsItem(1)], { gate }) });
+  const second = copyStart(api, runner);
 
-  const started = await startNewsImportScanReply(first.start);
-  const refused = await startNewsImportScanReply(second.start);
+  const started = await startNewsHistoryCopyReply(first.start);
+  const refused = await startNewsHistoryCopyReply(second.start);
 
   assert.equal(refused.finished, null);
   assert.match(refused.reply, /already running/);
@@ -258,91 +249,97 @@ test("a second start while a scan runs is refused with its progress", async () =
   release();
   await started.finished;
   assert.equal(runner.current(), null);
-  const again = await startNewsImportScanReply(second.start);
+  const again = await startNewsHistoryCopyReply(second.start);
   await again.finished;
   assert.equal(second.channel.posts.length, 1);
 });
 
-test("a scan stopped by an error says so and posts the full error below", async () => {
-  const api = fakeApi({ batchError: forbidden() });
-  const runner = new NewsImportScanRunner();
-  const { start, channel } = scanStart(api, runner);
+test("a copy stopped by an error says so and posts the full error below", async () => {
+  const runner = new NewsHistoryCopyRunner();
+  const copy = copyDeps([newsItem(1)], { listError: forbidden() });
+  const { start, channel } = copyStart(fakeApi(), runner, { copy });
 
-  const { finished } = await startNewsImportScanReply(start);
+  const { finished } = await startNewsHistoryCopyReply(start);
   await finished;
 
-  assert.match(channel.edits.at(-1) ?? "", /stopped/);
-  assert.match(channel.edits.at(-1) ?? "", /again/);
+  const final = channel.edits.at(-1) ?? "";
+  assert.match(final, /stopped/);
+  assert.match(final, /Could not list the News Items without a News Copy/);
+  assert.match(final, /403/);
+  assert.match(final, /again/);
   assert.equal(channel.details.length, 1);
-  assert.match(channel.details[0], /Could not record 1 archive messages/);
   assert.match(channel.details[0], /"status": 403/);
   assert.equal(runner.current(), null);
 });
 
-test("a stopped scan names the reason in its progress message, even if details fail", async () => {
-  const api = fakeApi({ batchError: forbidden() });
-  const { start, channel } = scanStart(api, new NewsImportScanRunner(), {
-    postDetails: async () => {
-      throw new Error("Discord refused the details message");
-    },
-  });
+test("status shows the import's counts and how many News Items have a copy", async () => {
+  const status = { sorted: 12, unsorted: 340, removed: 5, copied: 9000, uncopied: 1191 };
+  const api = fakeApi({ status });
 
-  const { finished } = await startNewsImportScanReply(start);
-  await finished;
+  const text = await newsImportStatusReply(STAFF_ID, { api, runner: new NewsHistoryCopyRunner() });
 
-  const final = channel.edits.at(-1) ?? "";
-  assert.match(final, /Could not record 1 archive messages/);
-  assert.match(final, /403/);
-  assert.match(final, /forbidden/);
+  assert.deepEqual(api.statusFor, [STAFF_ID]);
+  assert.match(text, /\*\*12\*\* sorted/);
+  assert.match(text, /\*\*340\*\* unsorted/);
+  assert.match(text, /\*\*5\*\* removed/);
+  assert.match(text, /\*\*9000\*\* copied/);
+  assert.match(text, /\*\*1191\*\* waiting/);
 });
 
-test("status mentions a scan in progress", async () => {
+test("status refuses a member who is not an Admin or Superadmin, showing the call", async () => {
+  const api = fakeApi({ statusError: forbidden() });
+
+  const text = await newsImportStatusReply(STAFF_ID, { api, runner: new NewsHistoryCopyRunner() });
+
+  assert.ok(text.startsWith(NEWS_IMPORT_STAFF_ONLY_MESSAGE));
+  assert.match(text, /"status": 403/);
+  assert.match(text, /news_import\/status\?acting_user_id=/);
+});
+
+test("status shows a history copy in progress", async () => {
   let release = (): void => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const runner = new NewsImportScanRunner();
+  const runner = new NewsHistoryCopyRunner();
   const api = fakeApi();
-  const { start } = scanStart(api, runner, { archive: archiveOf([newsMessage(1)], gate) });
-  const started = await startNewsImportScanReply(start);
+  const { start } = copyStart(api, runner, { copy: copyDeps([newsItem(1)], { gate }) });
+  const started = await startNewsHistoryCopyReply(start);
 
   const text = await newsImportStatusReply(STAFF_ID, { api, runner });
 
-  assert.match(text, /scan is running/);
+  assert.match(text, /history copy is running/);
   release();
   await started.finished;
 });
 
-test("the progress message is edited at most once per interval, then with the counts", async () => {
-  let clock = Date.UTC(2026, 10, 10);
-  const messages = Array.from({ length: 301 }, (_, i) => newsMessage(i + 1));
-  const newestFirst = [...messages].reverse();
-  const archive: IArchiveReader = {
-    async page(before, limit) {
-      clock += 3_000;
-      const start = before === null ? 0 : newestFirst.findIndex((m) => m.id === before) + 1;
-      return newestFirst.slice(start, start + limit);
-    },
-  };
-  const { start, channel } = scanStart(fakeApi(), new NewsImportScanRunner(), {
-    archive,
-    now: () => new Date(clock),
-    editIntervalMs: 5_000,
+test("the progress message is edited at most once per interval, then with the counts",
+  async () => {
+    let clock = Date.UTC(2026, 10, 10);
+    const items = Array.from({ length: 5 }, (_, i) => newsItem(i + 1));
+    const copy = copyDeps(items);
+    copy.sleep = async () => {
+      clock += 1_500;
+    };
+    const { start, channel } = copyStart(fakeApi(), new NewsHistoryCopyRunner(), {
+      copy,
+      now: () => new Date(clock),
+      editIntervalMs: 5_000,
+    });
+
+    const { finished } = await startNewsHistoryCopyReply(start);
+    await finished;
+
+    // Copies land at 0, 1.5, 3, 4.5 and 6 s: one edit at 6 s, then the final one.
+    assert.equal(channel.edits.length, 2);
+    assert.match(channel.edits[0], /Copied \*\*5\*\*/);
+    assert.match(channel.edits[1], /finished/);
   });
-
-  const { finished } = await startNewsImportScanReply(start);
-  await finished;
-
-  assert.equal(channel.edits.length, 3);
-  assert.match(channel.edits[0], /Scanned \*\*200\*\* messages/);
-  assert.match(channel.edits[1], /Scanned \*\*301\*\* messages/);
-  assert.match(channel.edits[2], /finished/);
-});
 
 test("/news-import belongs to the News Hub Feature", async () => {
   const { featureKeyFor } = await import("../functions/FeatureGate.js");
   const { NEWS_HUB_FEATURE_KEY } = await import("../config/featureGate.js");
-  const { NEWS_IMPORT_COMMAND } = await import("../services/NewsImport.js");
+  const { NEWS_IMPORT_COMMAND } = await import("../config/newsHub.js");
 
   assert.equal(NEWS_IMPORT_COMMAND, "news-import");
   assert.equal(featureKeyFor({ type: "command", name: NEWS_IMPORT_COMMAND }), NEWS_HUB_FEATURE_KEY);
