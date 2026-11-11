@@ -53,14 +53,14 @@ export interface INewsCategoryThread {
 
 export type NewsCategoryThreads = Readonly<Record<NewsCategoryKey, INewsCategoryThread>>;
 
-// PLACEHOLDER bot#1537: the emojis below are stand-ins. Replace each with the emoji in its
-// category thread's name before the cutover (bot#1543).
+// Each emoji matches the one in its category thread's name. Check them against the real
+// thread names before the cutover (bot#1543).
 export const NEWS_CATEGORY_THREADS: NewsCategoryThreads = {
-  announcements: { threadId: NEWS_ANNOUNCEMENTS_THREAD_ID, emoji: "📣" },
+  announcements: { threadId: NEWS_ANNOUNCEMENTS_THREAD_ID, emoji: "📢" },
   releases: { threadId: NEWS_RELEASES_THREAD_ID, emoji: "📦" },
-  emulation: { threadId: NEWS_EMULATION_THREAD_ID, emoji: "🕹️" },
+  emulation: { threadId: NEWS_EMULATION_THREAD_ID, emoji: "💾" },
   industry: { threadId: NEWS_INDUSTRY_THREAD_ID, emoji: "🏢" },
-  hardware: { threadId: NEWS_HARDWARE_THREAD_ID, emoji: "🖥️" },
+  hardware: { threadId: NEWS_HARDWARE_THREAD_ID, emoji: "🎮" },
   rumours: { threadId: NEWS_RUMOURS_THREAD_ID, emoji: "🤫" },
   general: { threadId: NEWS_GENERAL_THREAD_ID, emoji: "📰" },
 };
