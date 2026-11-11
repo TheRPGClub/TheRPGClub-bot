@@ -5,7 +5,7 @@
  * with the interaction, and routes a Feature's automated posts.
  */
 
-import { TextDisplayBuilder } from "discord.js";
+import { TextDisplayBuilder } from "@discordjs/builders";
 
 import { FEATURE_ACCESS_WAIT_MS, FEATURE_STAFF_WAIT_MS } from "../config/cacheDefaults.js";
 import { ANNOUNCEMENT_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";

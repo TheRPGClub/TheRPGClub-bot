@@ -1,15 +1,12 @@
 import type { ButtonInteraction, CommandInteraction } from "discord.js";
-import {
-  ContainerBuilder,
-  MessageFlags,
-  ModalSubmitInteraction,
-  TextDisplayBuilder,
-} from "discord.js";
+import { MessageFlags, ModalSubmitInteraction } from "discord.js";
 import {
   CheckboxGroupBuilder,
+  ContainerBuilder,
   LabelBuilder,
   ModalBuilder,
   RadioGroupBuilder,
+  TextDisplayBuilder,
 } from "@discordjs/builders";
 import { TextInputStyle } from "discord-api-types/v10";
 import {
