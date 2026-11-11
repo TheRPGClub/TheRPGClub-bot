@@ -32,7 +32,7 @@ export const SHARED_STATE_SERVICES: readonly ISharedStateService[] = [
   { name: "GameReleaseAnnouncementService", start: startGameReleaseAnnouncementService },
   { name: "RssFeedService", start: startRssFeedService },
   { name: "BotJobService", start: startBotJobService },
-  // Records what the News Category threads gained, lost or changed while the bot was down.
+  // Files the News Channel posts missed while the bot was down and posts missing News Copies.
   { name: "NewsHubCatchUp", start: startNewsCatchUp },
 ];
 

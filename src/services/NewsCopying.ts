@@ -117,6 +117,11 @@ export interface INewsFiling {
   copy: INewsCopySource;
   /** Whether to react to the original: live posts only, never history. */
   react: boolean;
+  /**
+   * Whether to post the News Copy now (default true). Catch-up records first and copies
+   * afterwards, oldest first, and posts no copies while a history copy runs.
+   */
+  postCopy?: boolean;
 }
 
 export interface INewsFilingOutcome {
@@ -127,7 +132,8 @@ export interface INewsFilingOutcome {
 
 /**
  * Records the News Item with its category and pick, reacts to the original with the
- * category's emoji, posts the News Copy and reports where it lives. An item the API does
+ * category's emoji, posts the News Copy (unless told not to) and reports where it lives.
+ * An item the API does
  * not record is neither reacted to nor copied; a failed reaction does not stop the copy.
  */
 export async function fileNewsItem(
@@ -154,6 +160,7 @@ export async function fileNewsItem(
       logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
     }
   }
+  if (filing.postCopy === false) return { recorded: true, copy: null };
   const copy = await postNewsCopy(item.message_id, categoryKey, filing.copy, deps);
   return { recorded: true, copy };
 }

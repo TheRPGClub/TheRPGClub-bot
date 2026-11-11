@@ -93,7 +93,8 @@ test("images that do not fit in what is left of the upload limit are linked", ()
   const copy = buildNewsCopy(source({ linkUrl: null, images: [image(1), image(2), image(3)] }));
 
   assert.deepEqual(copy.files.map((file) => file.name), ["shot1.png", "shot2.png"]);
-  assert.match(copy.content, /\nhttps:\/\/cdn\.discordapp\.com\/a\/3\/shot3\.png\?ex=1\n-# Discuss/);
+  const linked = "https://cdn.discordapp.com/a/3/shot3.png?ex=1";
+  assert.ok(copy.content.endsWith(`\n${linked}\n-# Discuss: ${ORIGINAL}`));
 });
 
 test("an image of unknown size is uploaded", () => {

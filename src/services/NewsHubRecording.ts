@@ -120,11 +120,13 @@ function awaitsPreview(message: INewsMessage, linked: boolean): boolean {
  * Files a News Channel message that is a News Item: waits for the link preview when there
  * is none yet, picks the category, then records, reacts, copies and reports the copy
  * (see {@link fileNewsItem}). Null when the message is not a News Item, or was deleted
- * while waiting. Does not check the Feature or test mode; the caller does.
+ * while waiting. Does not check the Feature or test mode; the caller does. `postCopy: false`
+ * files it without its News Copy (catch-up copies afterwards).
  */
 export async function fileNewsMessage(
   message: INewsPost,
   deps: INewsRecordingDeps,
+  options: { postCopy?: boolean } = {},
 ): Promise<INewsFilingOutcome | null> {
   let post = message;
   let item = newsItemFrom(post, deps.places);
@@ -146,6 +148,7 @@ export async function fileNewsMessage(
       pickedCategoryKey: categoryKey,
       copy: newsCopySourceOf(post, item),
       react: true,
+      postCopy: options.postCopy,
     }, deps);
     return outcome;
   } finally {
