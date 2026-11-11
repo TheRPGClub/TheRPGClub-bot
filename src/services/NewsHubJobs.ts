@@ -19,7 +19,7 @@ import {
   NEWS_ITEM_API,
   NEWS_UNCOPIED_API,
   newsItemRecordBody,
-  type INewsFilingApi,
+  type INewsSyncApi,
   type INewsUncopiedApi,
   type IUncopiedNewsItem,
 } from "./NewsItemApi.js";
@@ -57,7 +57,7 @@ export interface INewsPage<T> {
 }
 
 /** The News Item calls the jobs make, with the uncopied listing the history copy uses. */
-export interface INewsHubApi extends INewsFilingApi, INewsUncopiedApi {
+export interface INewsHubApi extends INewsSyncApi, INewsUncopiedApi {
   /** One page of every sorted News Item, as the service token sees it, newest first. */
   listRecent(page: number, per: number): Promise<INewsPage<IStoredNewsItem>>;
 }

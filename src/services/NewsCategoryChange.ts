@@ -12,7 +12,7 @@ import {
 import { FEATURE_NOT_AVAILABLE_MESSAGE } from "../functions/FeatureGate.js";
 import { NOT_A_NEWS_ITEM_MESSAGE } from "../functions/NewsCategoryChangePrompt.js";
 import type { INewsCopySource } from "../functions/NewsCopy.js";
-import { newsImageAttachments, newsItemFrom } from "../functions/NewsItem.js";
+import { newsItemFrom } from "../functions/NewsItem.js";
 import {
   buildApiErrorMessage,
   buildDiscordErrorMessage,
@@ -20,6 +20,7 @@ import {
 import { logError } from "../utilities/LogUtils.js";
 import {
   discordNewsCopier,
+  newsCopyImagesOf,
   newsCopySourceOf,
   postNewsCopy,
   type INewsCopyDiscord,
@@ -191,7 +192,7 @@ function correctedCopySource(post: INewsPost, item: INewsItemRecord): INewsCopyS
     authorId: item.author.user_id,
     comment: item.comment,
     linkUrl: item.link?.url ?? null,
-    images: newsImageAttachments(post).map(({ url, name }) => ({ url, name })),
+    images: newsCopyImagesOf(post),
     postedAt: item.origin === "import" ? new Date(item.posted_at) : null,
   };
 }

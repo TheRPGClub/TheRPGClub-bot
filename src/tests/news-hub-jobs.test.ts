@@ -11,7 +11,8 @@ import {
   type IBotJobContext,
   type IBotJobSurface,
 } from "../services/BotJobHandlers.js";
-import type { INewsCopyDiscord, INewsPost } from "../services/NewsCopying.js";
+import type { INewsPost } from "../services/NewsCopying.js";
+import type { INewsSyncDiscord } from "../services/NewsCopySync.js";
 import type {
   INewsChannelReader,
   INewsHubApi,
@@ -135,6 +136,12 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
       if (!existing) throw new Error(`404 PUT /api/v1/news_items/${messageId}`);
       existing.news_copy = copy;
     },
+    find: async (messageId) => {
+      const found = store.get(messageId);
+      if (!found || found.category_key === null) return null;
+      const { message_id, origin, posted_at, news_copy } = found;
+      return { message_id, origin, posted_at, news_copy };
+    },
     listRecent: async (page, per) => {
       const listed = [...store.values()]
         .filter((item) => item.category_key !== null)
@@ -164,7 +171,7 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
   return api;
 }
 
-interface IFakeDiscord extends INewsChannelReader, INewsCopyDiscord {
+interface IFakeDiscord extends INewsChannelReader, INewsSyncDiscord {
   channels: Map<string, INewsPost[]>;
   fetches: number;
   /** Writes, in order: reactions, posted copies and deletes. */
@@ -206,6 +213,9 @@ function fakeDiscord(channels: Record<string, INewsPost[]> = {}): IFakeDiscord {
     },
     deleteMessage: async (_channelId, messageId) => {
       discord.calls.push(`delete ${messageId}`);
+    },
+    editCopy: async (_threadId, messageId) => {
+      discord.calls.push(`edit ${messageId}`);
     },
   };
   return discord;
