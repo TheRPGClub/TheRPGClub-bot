@@ -71,6 +71,7 @@ type HelpTopicId =
   | "giveaway"
   | "thread"
   | "flag"
+  | "news"
   | "news-import"
   | "admin"
   | "mod"
@@ -367,6 +368,18 @@ const HELP_TOPICS: HelpTopic[] = [
     access: "staff",
   },
   {
+    id: "news",
+    label: "/news",
+    summary: "Share game news in the News Channel through the bot.",
+    syntax: "Syntax: /news share link:<url> [category:<News Category>] [comment:<text>] " +
+      "[image:<image>]",
+    notes:
+      "Posts your news in the News Channel credited to you (no ping), files it in its " +
+      "category's thread and confirms privately with a link to the post. Leave category " +
+      "out and the bot picks one from the link's preview. Works from any channel. Staff " +
+      "only while the News Hub is in Preview.",
+  },
+  {
     id: "news-import",
     label: "/news-import",
     summary: "Sort imported news and copy the news history into the category threads " +
@@ -453,6 +466,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
     name: "Utilities",
     topicIds: [
       "hltb",
+      "news",
       "suggestion",
       "giveaway",
       "avatar-history",
@@ -984,6 +998,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   "now-playing": "Show Now Playing lists and thread links.",
   "game-completion": "Log and manage your completed games.",
   hltb: "Look up HowLongToBeat playtimes.",
+  news: "Share game news in the News Channel.",
   suggestion: "Submit a bot suggestion.",
   giveaway: "Claim or donate game keys.",
   "avatar-history": "View a member’s avatar history.",
