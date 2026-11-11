@@ -4,6 +4,7 @@ import type { INewsCopySource } from "../functions/NewsCopy.js";
 import { buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
+  fetchNewsChannel,
   newsCopyImagesOf,
   postNewsCopy,
   type INewsCopyDeps,
@@ -236,10 +237,7 @@ export const NEWS_HISTORY_COPY = new NewsHistoryCopyRunner();
 export function discordNewsOriginals(client: Client, channelId: string): INewsOriginals {
   return {
     async fetch(messageId) {
-      const channel = await client.channels.fetch(channelId);
-      if (!channel?.isTextBased()) {
-        throw new Error(`Channel ${channelId} is not a text channel the bot can read.`);
-      }
+      const channel = await fetchNewsChannel(client, channelId);
       return channel.messages.fetch({ message: messageId, cache: false, force: true });
     },
   };

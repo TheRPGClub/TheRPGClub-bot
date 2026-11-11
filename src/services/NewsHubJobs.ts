@@ -1,4 +1,4 @@
-import { RESTJSONErrorCodes, SnowflakeUtil, type Client } from "discord.js";
+import { SnowflakeUtil, type Client } from "discord.js";
 import { GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
 import { NEWS_HUB_FEATURE_KEY } from "../config/featureGate.js";
 import type { NewsPlaces } from "../config/newsHub.js";
@@ -6,10 +6,16 @@ import type { FeatureState } from "../functions/FeatureGate.js";
 import { postedNewsItemFrom } from "../functions/NewsItem.js";
 import { buildAnyErrorMessage, buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
+import { plural } from "../utilities/TextUtils.js";
 import { FEATURE_ACCESS_API } from "./FeatureAccessService.js";
 import { getFeatureState } from "./FeaturePostRouting.js";
-import { newsCopySourceOf, postNewsCopy, type INewsPost } from "./NewsCopying.js";
-import { deleteNewsCopy } from "./NewsCopySync.js";
+import {
+  fetchNewsChannel,
+  newsCopySourceOf,
+  postNewsCopy,
+  type INewsPost,
+} from "./NewsCopying.js";
+import { deleteNewsCopy, isGone } from "./NewsCopySync.js";
 import {
   NEWS_COPY_LANE,
   type INewsCopyLaneHold,
@@ -110,25 +116,11 @@ export const NEWS_HUB_API: INewsHubApi = {
   listRecent: (page, per) => readPage("/api/v1/news_items", page, per),
 };
 
-function isGone(err: unknown): boolean {
-  if (typeof err !== "object" || err === null || !("code" in err)) return false;
-  return err.code === RESTJSONErrorCodes.UnknownMessage
-    || err.code === RESTJSONErrorCodes.UnknownChannel;
-}
-
-async function textChannel(client: Client, channelId: string) {
-  const channel = await client.channels.fetch(channelId);
-  if (!channel?.isTextBased()) {
-    throw new Error(`Channel ${channelId} is missing or holds no messages.`);
-  }
-  return channel;
-}
-
 function discordReader(client: Client): INewsChannelReader {
   return {
     fetchMessage: async (channelId, messageId) => {
       try {
-        const channel = await textChannel(client, channelId);
+        const channel = await fetchNewsChannel(client, channelId);
         return await channel.messages.fetch({ message: messageId, force: true });
       } catch (err: unknown) {
         if (isGone(err)) return null;
@@ -136,7 +128,7 @@ function discordReader(client: Client): INewsChannelReader {
       }
     },
     fetchMessages: async (channelId, { limit, after }) => {
-      const channel = await textChannel(client, channelId);
+      const channel = await fetchNewsChannel(client, channelId);
       const page = await channel.messages.fetch(
         after === undefined ? { limit, cache: false } : { limit, after, cache: false },
       );
@@ -193,10 +185,6 @@ function newsPlaces(deps: INewsHubJobDeps): NewsPlaces {
   const places = new Map(deps.categoryThreads);
   if (deps.archiveChannelId !== "") places.set(deps.archiveChannelId, null);
   return places;
-}
-
-function plural(count: number, noun: string, plural = `${noun}s`): string {
-  return `${count} ${count === 1 ? noun : plural}`;
 }
 
 /** Removes a News Item renewal found gone, and deletes its News Copy (failures logged). */

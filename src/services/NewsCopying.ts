@@ -1,4 +1,4 @@
-import type { Client } from "discord.js";
+import type { Client, SendableChannels } from "discord.js";
 import type { NewsCategoryKey, NewsCategoryThreads } from "../config/newsHub.js";
 import {
   buildNewsCopy,
@@ -181,10 +181,17 @@ export async function fileNewsItem(
   return { recorded: true, copy, waiting: false };
 }
 
-async function messageChannel(client: Client, channelId: string) {
+/**
+ * A channel the News Hub reads and posts in: the News Channel or a category thread. Throws
+ * when it is missing or holds no messages.
+ */
+export async function fetchNewsChannel(
+  client: Client,
+  channelId: string,
+): Promise<SendableChannels> {
   const channel = await client.channels.fetch(channelId);
   if (!channel?.isSendable()) {
-    throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
+    throw new Error(`Channel ${channelId} is missing or is not a channel the bot can post in.`);
   }
   return channel;
 }
@@ -193,14 +200,14 @@ async function messageChannel(client: Client, channelId: string) {
 export function discordNewsCopier(client: Client): INewsCopyDiscord {
   return {
     react: async (channelId, messageId, emoji) => {
-      await (await messageChannel(client, channelId)).messages.react(messageId, emoji);
+      await (await fetchNewsChannel(client, channelId)).messages.react(messageId, emoji);
     },
     postCopy: async (threadId, copy) => {
-      const posted = await (await messageChannel(client, threadId)).send(copy);
+      const posted = await (await fetchNewsChannel(client, threadId)).send(copy);
       return { messageId: posted.id };
     },
     deleteMessage: async (channelId, messageId) => {
-      await (await messageChannel(client, channelId)).messages.delete(messageId);
+      await (await fetchNewsChannel(client, channelId)).messages.delete(messageId);
     },
   };
 }

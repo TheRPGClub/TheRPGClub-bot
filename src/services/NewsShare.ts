@@ -23,6 +23,7 @@ import {
 } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
+  fetchNewsChannel,
   fileNewsItem,
   newsCopySourceOf,
   type INewsCopyDeps,
@@ -230,12 +231,7 @@ export function createNewsShareDeps(client: Client): INewsShareDeps {
     waitForPreview: recording.waitForPreview,
     filing: recording.filing,
     copyWaits: recording.copyWaits,
-    postShare: async (channelId, message) => {
-      const channel = await client.channels.fetch(channelId);
-      if (!channel?.isSendable()) {
-        throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
-      }
-      return channel.send(message);
-    },
+    postShare: async (channelId, message) =>
+      (await fetchNewsChannel(client, channelId)).send(message),
   };
 }

@@ -9,6 +9,7 @@ import {
 } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
+  fetchNewsChannel,
   newsCopySourceOf,
   type INewsCopyDeps,
   type INewsCopyDiscord,
@@ -49,8 +50,14 @@ function discordErrorCode(error: unknown): number | undefined {
 }
 
 /** Discord's answer for a message that is not there: the copy is already gone. */
-function isGone(error: unknown): boolean {
+function isUnknownMessage(error: unknown): boolean {
   return discordErrorCode(error) === RESTJSONErrorCodes.UnknownMessage;
+}
+
+/** Discord's answer for a message, or the channel it was in, that is not there. */
+export function isGone(error: unknown): boolean {
+  return isUnknownMessage(error) ||
+    discordErrorCode(error) === RESTJSONErrorCodes.UnknownChannel;
 }
 
 /**
@@ -108,7 +115,7 @@ export async function syncEditedNewsMessage(
       buildNewsCopy(newsCopySourceOf(message, item, postedAt)),
     );
   } catch (error: unknown) {
-    if (isGone(error)) return;
+    if (isUnknownMessage(error)) return;
     const label = `Could not edit the News Copy ${copy.message_id} of News Item ` +
       `${item.message_id} in thread ${copy.thread_id}`;
     logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
@@ -127,7 +134,7 @@ export async function deleteNewsCopy(
   try {
     await discord.deleteMessage(location.thread_id, location.message_id);
   } catch (error: unknown) {
-    if (isGone(error)) return;
+    if (isUnknownMessage(error)) return;
     const label = `Could not delete the News Copy ${location.message_id} of removed News ` +
       `Item ${messageId} in thread ${location.thread_id}`;
     logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
@@ -160,10 +167,7 @@ export async function removeNewsItem(
 export function discordNewsCopyEditor(client: Client): Pick<INewsSyncDiscord, "editCopy"> {
   return {
     editCopy: async (threadId, messageId, copy) => {
-      const thread = await client.channels.fetch(threadId);
-      if (!thread?.isTextBased()) {
-        throw new Error(`Thread ${threadId} is missing or is not a text channel.`);
-      }
+      const thread = await fetchNewsChannel(client, threadId);
       // The copy's files replace the old ones: discord.js sends them as the only attachments.
       await thread.messages.edit(messageId, copy);
     },

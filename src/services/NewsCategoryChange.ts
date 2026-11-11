@@ -20,6 +20,7 @@ import {
 import { logError } from "../utilities/LogUtils.js";
 import {
   discordNewsCopier,
+  fetchNewsChannel,
   newsCopyImagesOf,
   newsCopySourceOf,
   postNewsCopy,
@@ -343,20 +344,12 @@ function emojiKey(emoji: { id: string | null; name: string | null }): string {
   return emoji.id ? `${emoji.name ?? ""}:${emoji.id}` : emoji.name ?? "";
 }
 
-async function textChannel(client: Client, channelId: string) {
-  const channel = await client.channels.fetch(channelId);
-  if (!channel?.isTextBased()) {
-    throw new Error(`Channel ${channelId} is missing or not a text channel.`);
-  }
-  return channel;
-}
-
 /** The real Discord side of moving a News Copy, through the bot's client. */
 export function discordNewsCategoryMover(client: Client): INewsCategoryMoveDiscord {
   return {
     ...discordNewsCopier(client),
     fetchPost: async (channelId, messageId) => {
-      const channel = await textChannel(client, channelId);
+      const channel = await fetchNewsChannel(client, channelId);
       const post = await channel.messages.fetch({ message: messageId, force: true });
       const ownReactions = post.reactions.cache
         .filter((reacted) => reacted.me)
@@ -364,7 +357,7 @@ export function discordNewsCategoryMover(client: Client): INewsCategoryMoveDisco
       return { post, ownReactions };
     },
     removeOwnReaction: async (channelId, messageId, emoji) => {
-      const channel = await textChannel(client, channelId);
+      const channel = await fetchNewsChannel(client, channelId);
       const post = await channel.messages.fetch(messageId);
       const key = emoji.includes(":") ? emoji.slice(emoji.lastIndexOf(":") + 1) : emoji;
       await post.reactions.resolve(key)?.users.remove();

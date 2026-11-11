@@ -10,6 +10,7 @@ import {
 } from "../functions/NewsImportFile.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
+import { plural } from "../utilities/TextUtils.js";
 import { newsImportRefusal } from "./NewsImport.js";
 import {
   NEWS_IMPORT_ASSIGN_MAX,
@@ -60,8 +61,9 @@ const HOW_TO_TEXT = `Fill in the ${code("category")} column with a News Category
   "-# Only the message_id and category columns are read back. If you open the file in a " +
   "spreadsheet, keep message_id as text, or it turns into a rounded number.";
 
-function plural(count: number, one: string, many: string): string {
-  return `**${count}** ${count === 1 ? one : many}`;
+/** The count in bold with its noun, as the replies show counts. */
+function counted(count: number, one: string, many: string): string {
+  return plural(count, one, many, `**${count}**`);
 }
 
 /** Every page of unsorted imported items, oldest first. */
@@ -135,7 +137,7 @@ export async function newsImportDownloadReply(
   const where = files.length === 1
     ? "in the attached file"
     : `in **${files.length}** files (each one can be uploaded on its own)`;
-  const intro = `**News Import download**: ${plural(items.length,
+  const intro = `**News Import download**: ${counted(items.length,
     "unsorted imported News Item", "unsorted imported News Items")}, oldest first, ${where}.\n` +
     HOW_TO_TEXT;
   let sent = 0;
@@ -280,15 +282,15 @@ export async function newsImportUploadReply(
   ];
   if (upload.blank) lines.push(`- **${upload.blank}** left blank: still unsorted`);
   if (totals.moves.length && start.historyCopyRunning?.()) {
-    lines.push(`- ${plural(totals.moves.length,
+    lines.push(`- ${counted(totals.moves.length,
       "News Copy will move to its new category's thread",
       "News Copies will move to their new categories' threads")} when the history copy ` +
       "running now finishes");
   } else if (totals.moves.length) {
-    lines.push(`- ${plural(totals.moves.length, "News Copy moving to its new category's thread",
+    lines.push(`- ${counted(totals.moves.length, "News Copy moving to its new category's thread",
       "News Copies moving to their new categories' threads")}`);
   }
-  lines.push(`${plural(totals.unsorted, "imported News Item is", "imported News Items are")} ` +
+  lines.push(`${counted(totals.unsorted, "imported News Item is", "imported News Items are")} ` +
     "still unsorted.");
   if (!problems.length) return reply(lines.join("\n"));
 
