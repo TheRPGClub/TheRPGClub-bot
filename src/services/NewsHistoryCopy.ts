@@ -1,9 +1,13 @@
 import type { Client } from "discord.js";
 import type { INewsCopySource } from "../functions/NewsCopy.js";
-import { newsImageAttachments } from "../functions/NewsItem.js";
 import { buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
-import { postNewsCopy, type INewsCopyDeps, type INewsPost } from "./NewsCopying.js";
+import {
+  newsCopyImagesOf,
+  postNewsCopy,
+  type INewsCopyDeps,
+  type INewsPost,
+} from "./NewsCopying.js";
 import type { INewsUncopiedApi, IUncopiedNewsItem } from "./NewsItemApi.js";
 
 // The history copy (spec api#367, bot#1539): staff copy every News Item that has no News
@@ -78,7 +82,7 @@ function copySource(item: IUncopiedNewsItem, post: INewsPost): INewsCopySource {
     authorId: item.author.user_id,
     comment: item.comment,
     linkUrl: item.link?.url ?? null,
-    images: newsImageAttachments(post).map(({ url, name }) => ({ url, name })),
+    images: newsCopyImagesOf(post),
     postedAt: item.origin === "import" ? new Date(item.posted_at) : null,
   };
 }

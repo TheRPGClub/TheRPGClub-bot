@@ -2,6 +2,7 @@ import type { Client } from "discord.js";
 import type { NewsCategoryKey, NewsCategoryThreads } from "../config/newsHub.js";
 import {
   buildNewsCopy,
+  type INewsCopyImage,
   type INewsCopyMessage,
   type INewsCopySource,
 } from "../functions/NewsCopy.js";
@@ -53,6 +54,11 @@ export interface INewsCopyDeps {
 /** A message the News Copy can link back to: discord.js's Message has its jump `url`. */
 export type INewsPost = INewsMessage & { url: string };
 
+/** The original's images as a News Copy takes them: fresh addresses, names and sizes. */
+export function newsCopyImagesOf(post: INewsMessage): INewsCopyImage[] {
+  return newsImageAttachments(post).map(({ url, name, size }) => ({ url, name, size }));
+}
+
 /**
  * What the News Copy of `item` shows, read from its original message `post`: fetch the
  * message first when it is old, so its image addresses have not expired. `postedAt` is the
@@ -68,7 +74,7 @@ export function newsCopySourceOf(
     authorId: item.author_id,
     comment: item.comment,
     linkUrl: item.link?.url ?? null,
-    images: newsImageAttachments(post).map(({ url, name, size }) => ({ url, name, size })),
+    images: newsCopyImagesOf(post),
     postedAt,
   };
 }
