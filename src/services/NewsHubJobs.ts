@@ -203,8 +203,10 @@ async function removeForRenewal(
 /**
  * Fetches a News Item's message again and records it whole, which stores fresh image
  * addresses and expiry times; removes the News Item when the message is gone or no longer
- * qualifies. The bot's own `/news share` post is the member's News Item too. An imported item keeps its category (the API ignores `category_key` for it).
- * API and Discord errors are thrown as they are, for the job's error message.
+ * qualifies, and deletes its News Copy then. The bot's own `/news share` post is the
+ * member's News Item too. An imported item keeps its category (the API ignores
+ * `category_key` for it). API and Discord errors are thrown as they are, for the job's
+ * error message.
  */
 export async function renewNewsItem(
   messageId: string,
