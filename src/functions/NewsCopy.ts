@@ -49,7 +49,7 @@ function creditLine(source: INewsCopySource): string {
 }
 
 /** The comment, cut to `room` characters (ending in an ellipsis when cut). */
-function fitted(comment: string, room: number): string {
+function commentCutToFit(comment: string, room: number): string {
   if (comment.length <= room) return comment;
   return `${comment.slice(0, Math.max(0, room - ELLIPSIS.length)).trimEnd()}${ELLIPSIS}`;
 }
@@ -95,7 +95,7 @@ export function buildNewsCopy(
   let lines = [head, ...tail];
   if (source.comment) {
     const room = DISCORD_MESSAGE_CONTENT_MAX - lines.join("\n").length - 1;
-    lines = [head, fitted(source.comment, room), ...tail];
+    lines = [head, commentCutToFit(source.comment, room), ...tail];
   }
   return {
     content: lines.join("\n"),

@@ -12,9 +12,9 @@ import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { plural } from "../utilities/TextUtils.js";
 import { newsImportRefusal } from "./NewsImport.js";
+import { NEWS_LIST_PER_MAX } from "./NewsItemApi.js";
 import {
   NEWS_IMPORT_ASSIGN_MAX,
-  NEWS_IMPORT_LIST_PER,
   type INewsImportApi,
   type INewsImportAssignRow,
   type INewsImportMove,
@@ -71,7 +71,8 @@ async function listAll(api: INewsImportApi, actingUserId: string): Promise<INews
   const items: INewsImportListItem[] = [];
   let page: number | null = 1;
   while (page !== null) {
-    const listed = await api.list(actingUserId, page, NEWS_IMPORT_LIST_PER);
+    // The largest page: one read covers most of the unsorted items.
+    const listed = await api.list(actingUserId, page, NEWS_LIST_PER_MAX);
     items.push(...listed.items);
     page = listed.next !== null && listed.next > page ? listed.next : null;
   }

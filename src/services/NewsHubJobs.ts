@@ -29,6 +29,7 @@ import {
 } from "./NewsHubRecording.js";
 import {
   NEWS_ITEM_API,
+  NEWS_LIST_PER,
   NEWS_UNCOPIED_API,
   newsItemRecordBody,
   type INewsSyncApi,
@@ -233,8 +234,6 @@ export async function renewNewsItem(
 
 /** Discord's page size for message history. */
 const DISCORD_PAGE = 100;
-/** Page size when the catch-up reads recorded News Items. */
-const API_PAGE = 100;
 
 /** What one catch-up did. */
 export type NewsCatchUpOutcome =
@@ -272,7 +271,7 @@ const isBefore = (id: string, other: string): boolean => BigInt(id) < BigInt(oth
 async function newestRecordedBefore(ceiling: number, api: INewsHubApi): Promise<string | null> {
   let page: number | null = 1;
   while (page !== null) {
-    const feed: INewsPage<IStoredNewsItem> = await api.listRecent(page, API_PAGE);
+    const feed: INewsPage<IStoredNewsItem> = await api.listRecent(page, NEWS_LIST_PER);
     const older = feed.items.find((item) => Date.parse(item.posted_at) < ceiling);
     if (older) return older.message_id;
     page = feed.nextPage;
@@ -360,7 +359,7 @@ async function copyMissing(
   const tried = new Set<string>();
   let page: number | null = 1;
   while (page !== null) {
-    const listing = await deps.api.uncopied(page, API_PAGE, "live");
+    const listing = await deps.api.uncopied(page, NEWS_LIST_PER, "live");
     const fresh = listing.items.filter((item) => !tried.has(item.message_id));
     if (fresh.length === 0) {
       page = listing.next;
@@ -382,7 +381,8 @@ async function copyMissing(
   }
 }
 
-async function step(
+/** Runs one catch-up step; a failure is noted in `counts` (labelled) and does not throw. */
+async function runStepOrNoteFailure(
   label: string,
   counts: CatchUpCounts,
   run: () => Promise<void>,
@@ -429,7 +429,7 @@ async function catchUp(deps: INewsHubJobDeps, fileMissed: boolean): Promise<Catc
   if (deps.archiveChannelId === "") return counts;
   const ceiling = deps.liveSince();
   if (fileMissed) {
-    await step(
+    await runStepOrNoteFailure(
       `Could not record the posts missed in the News Channel ${deps.archiveChannelId}`,
       counts,
       () => recordMissed(deps, ceiling, counts),
@@ -442,7 +442,7 @@ async function catchUp(deps: INewsHubJobDeps, fileMissed: boolean): Promise<Catc
     return counts;
   }
   try {
-    await step("Could not post the missing News Copies", counts, () =>
+    await runStepOrNoteFailure("Could not post the missing News Copies", counts, () =>
       copyMissing(deps, ceiling, counts, hold));
   } finally {
     hold.release();

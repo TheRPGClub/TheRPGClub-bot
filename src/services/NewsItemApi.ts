@@ -97,8 +97,8 @@ export interface INewsFeedPage {
   meta: { page: number; pages: number };
 }
 
-/** Feed items per page the lookup reads: an edit is nearly always of a recent post. */
-const FEED_LOOKUP_PER = 100;
+/** The page the bot reads News Item listings with (feed, uncopied), in turn. */
+export const NEWS_LIST_PER = 100;
 /** How far a recorded `posted_at` may sit before its message's own time and still match. */
 const POSTED_AT_SLACK_MS = 60_000;
 
@@ -112,7 +112,7 @@ const POSTED_AT_SLACK_MS = 60_000;
 export async function findInNewsFeed(
   messageId: string,
   readPage: (page: number, per: number) => Promise<INewsFeedPage>,
-  per = FEED_LOOKUP_PER,
+  per = NEWS_LIST_PER,
 ): Promise<IRecordedNewsItem | null> {
   const postedAt = SnowflakeUtil.timestampFrom(messageId) - POSTED_AT_SLACK_MS;
   for (let page = 1; ; page += 1) {
@@ -169,8 +169,8 @@ export interface IUncopiedNewsPage {
   next: number | null;
 }
 
-/** The API's largest page of the uncopied listing. */
-export const UNCOPIED_PER_MAX = 500;
+/** The largest page the API's News Item and News Import listings give. */
+export const NEWS_LIST_PER_MAX = 500;
 
 /** Where News Items came from: posted live, or brought in by the News Import. */
 export type NewsItemOrigin = "live" | "import";

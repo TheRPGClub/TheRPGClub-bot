@@ -68,6 +68,20 @@ export function buildTextReply(
   };
 }
 
+/** A private reply a service returns: its text, and whether it reports a failure. */
+export interface IPrivateReply {
+  text: string;
+  /** Shown as an error, which allows the dev role mention in its failure block. */
+  failed: boolean;
+}
+
+/** The ephemeral reply for `reply`: an error reply when it failed, else a text reply. */
+export function buildPrivateReply(
+  reply: IPrivateReply,
+): ReturnType<typeof buildTextReply> | ReturnType<typeof buildErrorReply> {
+  return reply.failed ? buildErrorReply(reply.text, true) : buildTextReply(reply.text, true);
+}
+
 /**
  * Same shape as buildTextReply, but permits the dev role mention that
  * formatApiError appends to every request/response failure block.

@@ -11,7 +11,11 @@ import {
   type INewsPost,
 } from "./NewsCopying.js";
 import { NEWS_COPY_LANE, type NewsCopyLane } from "./NewsCopyLane.js";
-import type { INewsUncopiedApi, IUncopiedNewsItem } from "./NewsItemApi.js";
+import {
+  NEWS_LIST_PER,
+  type INewsUncopiedApi,
+  type IUncopiedNewsItem,
+} from "./NewsItemApi.js";
 
 // The history copy (spec api#367, bot#1539): staff copy every News Item that has no News
 // Copy into its category's thread, oldest first, about one every 1.5 seconds. It runs in
@@ -23,9 +27,6 @@ const LOG_CONTEXT = "NewsHistoryCopy";
 
 /** The gap between two copies: about 40 a minute, well inside Discord's limits. */
 export const HISTORY_COPY_INTERVAL_MS = 1_500;
-
-/** The page the runner reads the uncopied listing with. */
-export const HISTORY_COPY_PER = 100;
 
 /**
  * Copies that fail in a row before the run stops: something is wrong for every item (a
@@ -122,7 +123,7 @@ export async function copyNewsHistory(
 ): Promise<INewsHistoryCopyProgress> {
   const progress = emptyProgress();
   const sleep = deps.sleep ?? realSleep;
-  const per = deps.per ?? HISTORY_COPY_PER;
+  const per = deps.per ?? NEWS_LIST_PER;
   const failureLimit = deps.failureLimit ?? HISTORY_COPY_FAILURE_LIMIT;
   const skipped = new Set<string>();
   let failedInARow = 0;

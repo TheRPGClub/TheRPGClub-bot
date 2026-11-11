@@ -8,9 +8,6 @@ import { apiGetOrThrow, apiPostOrThrow } from "./RpgClubApiClient.js";
 // answers 403 for anyone else). The service token is not feature-gated: the bot's own gate
 // keeps /news-import to Preview and Live. The scan's batch write is gone with the scan.
 
-/** The page size the bot lists unsorted items with (the API's maximum). */
-export const NEWS_IMPORT_LIST_PER = 500;
-
 /** The most rows one assignment request takes (the API answers 422 above it). */
 export const NEWS_IMPORT_ASSIGN_MAX = 5000;
 

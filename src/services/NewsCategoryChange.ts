@@ -9,6 +9,7 @@ import {
   type NewsCategoryThreads,
   type NewsPlaces,
 } from "../config/newsHub.js";
+import type { IPrivateReply } from "../functions/ComponentsV2Utils.js";
 import { FEATURE_NOT_AVAILABLE_MESSAGE } from "../functions/FeatureGate.js";
 import { NOT_A_NEWS_ITEM_MESSAGE } from "../functions/NewsCategoryChangePrompt.js";
 import type { INewsCopySource } from "../functions/NewsCopy.js";
@@ -216,12 +217,6 @@ export interface INewsCategoryChangeRequest {
   categoryKey: NewsCategoryKey;
 }
 
-/** The private reply; `failed` replies are shown as errors (with the dev ping allowed). */
-export interface INewsCategoryChangeReply {
-  text: string;
-  failed: boolean;
-}
-
 /** The member-facing reason for an API refusal, or null when it is not one. */
 function refusalText(status: number | undefined, code: unknown): string | null {
   if (status === 404) return NOT_A_NEWS_ITEM_MESSAGE;
@@ -231,7 +226,7 @@ function refusalText(status: number | undefined, code: unknown): string | null {
     : NEWS_CATEGORY_NOT_AUTHOR_MESSAGE;
 }
 
-function refusalReply(error: unknown): INewsCategoryChangeReply {
+function refusalReply(error: unknown): IPrivateReply {
   if (axios.isAxiosError(error)) {
     const code = (error.response?.data as { error?: unknown } | undefined)?.error;
     const refusal = refusalText(error.response?.status, code);
@@ -252,7 +247,7 @@ const bold = (key: NewsCategoryKey): string => `**${NEWS_CATEGORY_NAMES[key]}**`
 export async function changeNewsCategory(
   request: INewsCategoryChangeRequest,
   deps: INewsCategoryChangeDeps,
-): Promise<INewsCategoryChangeReply> {
+): Promise<IPrivateReply> {
   const { messageId, categoryKey } = request;
   if (deps.lane?.historyRunning()) {
     return { text: NEWS_CATEGORY_HISTORY_COPY_MESSAGE, failed: false };

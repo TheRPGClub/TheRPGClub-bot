@@ -11,7 +11,7 @@ import { NEWS_CATEGORY_PICK_PREFIX } from "../config/customIdPrefixes.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import {
   buildComponentsV2EditFlags,
-  buildErrorReply,
+  buildPrivateReply,
   buildTextReply,
 } from "../functions/ComponentsV2Utils.js";
 import {
@@ -77,9 +77,9 @@ export class NewsCategoryCommand {
       { actingUserId: interaction.user.id, ...target, categoryKey },
       createNewsCategoryDeps(interaction.client),
     );
-    const payload = reply.failed
-      ? buildErrorReply(reply.text, true)
-      : buildTextReply(reply.text, true);
-    await safeEditReply(interaction, { ...payload, flags: buildComponentsV2EditFlags() });
+    await safeEditReply(interaction, {
+      ...buildPrivateReply(reply),
+      flags: buildComponentsV2EditFlags(),
+    });
   }
 }

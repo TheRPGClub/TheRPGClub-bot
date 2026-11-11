@@ -16,6 +16,7 @@ import {
   sharedNewsItemFrom,
   type INewsShareOrigin,
 } from "../functions/NewsItem.js";
+import type { IPrivateReply } from "../functions/ComponentsV2Utils.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
 import {
   buildApiErrorMessage,
@@ -70,12 +71,6 @@ export interface INewsShareDeps extends INewsCopyDeps {
   waitForPreview: INewsRecordingDeps["waitForPreview"];
   /** Messages being filed, shared with the listener: a delete takes the post out. */
   filing: INewsRecordingDeps["filing"];
-}
-
-/** The private reply; `failed` replies are shown as errors. */
-export interface INewsShareReply {
-  text: string;
-  failed: boolean;
 }
 
 const COMMAND_LABEL = `/${NEWS_COMMAND} ${NEWS_SHARE_SUBCOMMAND}`;
@@ -161,7 +156,7 @@ function confirmation(
 export async function shareNewsReply(
   share: INewsShare,
   deps: INewsShareDeps,
-): Promise<INewsShareReply> {
+): Promise<IPrivateReply> {
   const refusal = shareRefusal(share, deps.testMode);
   if (refusal) return { text: refusal, failed: true };
 
