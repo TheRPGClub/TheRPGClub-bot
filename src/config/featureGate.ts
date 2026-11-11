@@ -28,6 +28,8 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   // Admins and Superadmins in Preview and Live, nobody while Off: this gate refuses
   // everyone while Off, and the API refuses anyone but Admins and Superadmins.
   "news-import": "news_hub",
+  // /news share: staff only in Preview, everyone when Live (spec api#367).
+  news: "news_hub",
 };
 
 /**

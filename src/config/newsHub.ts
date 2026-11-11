@@ -25,6 +25,17 @@ export const NEWS_CATEGORY_KEYS = [
 
 export type NewsCategoryKey = (typeof NEWS_CATEGORY_KEYS)[number];
 
+/** Each News Category's name, as the API and the website show it. */
+export const NEWS_CATEGORY_NAMES: Readonly<Record<NewsCategoryKey, string>> = {
+  announcements: "Announcements & Trailers",
+  releases: "Releases & Updates",
+  emulation: "Emulation & Preservation",
+  industry: "Industry",
+  hardware: "Hardware & Platforms",
+  rumours: "Rumours & Leaks",
+  general: "General",
+};
+
 /**
  * Where News Items are posted: channel ID -> the News Category a message there takes, or
  * null when the bot picks it (the News Channel) or staff sort it (the News Import). A
@@ -67,3 +78,10 @@ export const NEWS_CATEGORY_THREADS: NewsCategoryThreads = {
 
 /** How long a new post waits for Discord's link preview before its category is picked. */
 export const NEWS_PREVIEW_WAIT_MS = 10_000;
+
+/**
+ * `/news share`'s longest link and comment. With the credit line they keep the post, and its
+ * News Copy with the jump link back, under Discord's 2,000 characters.
+ */
+export const NEWS_SHARE_LINK_MAX = 512;
+export const NEWS_SHARE_COMMENT_MAX = 1_200;

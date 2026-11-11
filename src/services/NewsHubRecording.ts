@@ -160,7 +160,13 @@ export async function onNewsMessageCreated(
   await fileNewsMessage(message, deps);
 }
 
+/**
+ * Records an edited message again, or removes its News Item when it is no longer one. A
+ * bot's message is never a member's News Item and is left alone: the bot's own `/news share`
+ * post is recorded by the command, and the edit that adds its link preview must not remove it.
+ */
 async function recordOrRemove(message: INewsPost, deps: INewsRecordingDeps): Promise<void> {
+  if (message.author.bot) return;
   if (deps.filing.has(message.id)) {
     deps.filing.set(message.id, message);
     return;
