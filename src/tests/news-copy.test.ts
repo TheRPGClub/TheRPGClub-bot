@@ -64,3 +64,42 @@ test("a long comment is shortened so the copy fits in one Discord message", () =
   assert.equal(copy.content.length, 2000);
   assert.match(copy.content, /x…\nhttps:\/\/example\.com\/news\/1\n-# Discuss: /);
 });
+
+test("an image too large to upload is linked instead, so the copy can still post", () => {
+  const limit = 10 * 1024 * 1024;
+  const small = { url: "https://cdn.discordapp.com/a/1/small.png?ex=1", name: "small.png" };
+  const huge = { url: "https://cdn.discordapp.com/a/2/huge.png?ex=1", name: "huge.png" };
+  const copy = buildNewsCopy(source({
+    images: [{ ...small, size: 2_000_000 }, { ...huge, size: limit + 1 }],
+  }));
+
+  assert.deepEqual(copy.files, [{ attachment: small.url, name: "small.png" }]);
+  assert.equal(
+    copy.content,
+    "<@710000000000000001> shared\n" +
+      "Big patch today\n" +
+      "https://example.com/news/1\n" +
+      `${huge.url}\n` +
+      `-# Discuss: ${ORIGINAL}`,
+  );
+});
+
+test("images that do not fit in what is left of the upload limit are linked", () => {
+  const image = (n: number): { url: string; name: string; size: number } => ({
+    url: `https://cdn.discordapp.com/a/${n}/shot${n}.png?ex=1`,
+    name: `shot${n}.png`,
+    size: 4 * 1024 * 1024,
+  });
+  const copy = buildNewsCopy(source({ linkUrl: null, images: [image(1), image(2), image(3)] }));
+
+  assert.deepEqual(copy.files.map((file) => file.name), ["shot1.png", "shot2.png"]);
+  assert.match(copy.content, /\nhttps:\/\/cdn\.discordapp\.com\/a\/3\/shot3\.png\?ex=1\n-# Discuss/);
+});
+
+test("an image of unknown size is uploaded", () => {
+  const copy = buildNewsCopy(source({
+    images: [{ url: "https://cdn.discordapp.com/a/1/shot.png", name: "shot.png" }],
+  }));
+
+  assert.equal(copy.files.length, 1);
+});

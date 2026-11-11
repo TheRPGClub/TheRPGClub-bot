@@ -250,6 +250,26 @@ test("an image post is filed in General with its images uploaded again", async (
   }]);
 });
 
+test("an image larger than the bot may upload is linked in the copy, which still posts", async () => {
+  const fake = fakes();
+  const huge = {
+    url: "https://cdn.discordapp.com/a/1/huge.png?ex=6a000000",
+    contentType: "image/png",
+    name: "huge.png",
+    size: 30 * 1024 * 1024,
+  };
+  await onNewsMessageCreated(
+    message({ cleanContent: "Look", attachments: new Map([["1", huge]]) }),
+    deps(fake),
+  );
+
+  assert.deepEqual(fake.calls[2], ["post", THREADS.general.threadId, {
+    content: `<@${AUTHOR_ID}> shared\nLook\n${huge.url}\n-# Discuss: ${ORIGINAL_URL}`,
+    files: [],
+    allowedMentions: { parse: [] },
+  }]);
+});
+
 test("thread messages, text-only messages and bots' messages are ignored", async () => {
   const fake = fakes();
   const bot = { id: "710000000000000002", bot: true, username: "bot", globalName: null };

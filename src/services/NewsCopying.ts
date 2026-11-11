@@ -63,7 +63,7 @@ export function newsCopySourceOf(
     authorId: item.author_id,
     comment: item.comment,
     linkUrl: item.link?.url ?? null,
-    images: newsImageAttachments(post).map(({ url, name }) => ({ url, name })),
+    images: newsImageAttachments(post).map(({ url, name, size }) => ({ url, name, size })),
     postedAt,
   };
 }
