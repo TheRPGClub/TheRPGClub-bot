@@ -71,6 +71,7 @@ type HelpTopicId =
   | "giveaway"
   | "thread"
   | "flag"
+  | "news"
   | "news-import"
   | "admin"
   | "mod"
@@ -367,19 +368,34 @@ const HELP_TOPICS: HelpTopic[] = [
     access: "staff",
   },
   {
+    id: "news",
+    label: "/news",
+    summary: "Share game news in the News Channel through the bot.",
+    syntax: "Syntax: /news share link:<url> [category:<News Category>] [comment:<text>] " +
+      "[image:<image>]",
+    notes:
+      "Posts your news in the News Channel credited to you (no ping), files it in its " +
+      "category's thread and confirms privately with a link to the post. Leave category " +
+      "out and the bot picks one from the link's preview. Works from any channel. Staff " +
+      "only while the News Hub is in Preview.",
+  },
+  {
     id: "news-import",
     label: "/news-import",
-    summary: "Import the Game News Archive into the News Hub (Admins and Superadmins).",
-    syntax: "Syntax: /news-import scan [from-newest:<true|false>] | /news-import status | " +
+    summary: "Sort imported news and copy the news history into the category threads " +
+      "(Admins and Superadmins).",
+    syntax: "Syntax: /news-import copy | /news-import status | " +
       "/news-import download | /news-import upload file:<csv>",
     notes:
       "Works for Admins and Superadmins while the News Hub is Preview or Live, and for " +
       "nobody while it is Off. " +
-      "scan reads the archive and imports its news as unsorted News Items, hidden until " +
-      "sorted; its progress is posted in the channel. If it stops (a restart, an error), " +
-      "run it again: it continues where it stopped; from-newest:true starts over from the " +
-      "newest message. Running it again never records anything twice. " +
-      "status shows how many imported items are sorted, unsorted and removed. download " +
+      "copy posts a News Copy of every News Item that has none into its category's " +
+      "thread, oldest first, about one every 1.5 seconds; imported items show their " +
+      "original date. Its progress is posted in the channel. While it runs, new posts are " +
+      "filed and reacted to at once and copied after the history. If it stops (a restart, " +
+      "an error), run it again: it continues where it stopped. " +
+      "status shows how many imported items are sorted, unsorted and removed, and how many " +
+      "News Items have a News Copy and how many wait for one. download " +
       "gives the unsorted items as a .csv file (several when it is large); fill in its " +
       "category column with a News Category key, or skip to remove the item, then upload " +
       "it. upload assigns the categories, lists rejected rows with reasons, and can be run " +
@@ -450,6 +466,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
     name: "Utilities",
     topicIds: [
       "hltb",
+      "news",
       "suggestion",
       "giveaway",
       "avatar-history",
@@ -981,6 +998,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   "now-playing": "Show Now Playing lists and thread links.",
   "game-completion": "Log and manage your completed games.",
   hltb: "Look up HowLongToBeat playtimes.",
+  news: "Share game news in the News Channel.",
   suggestion: "Submit a bot suggestion.",
   giveaway: "Claim or donate game keys.",
   "avatar-history": "View a member’s avatar history.",
@@ -992,7 +1010,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   thread: "Create threads and link them to GameDB games.",
   rss: "Manage RSS relays with filters.",
   flag: "Turn Features Off, Preview or Live.",
-  "news-import": "Import the Game News Archive into the News Hub.",
+  "news-import": "Sort imported news and copy the news history into the category threads.",
 };
 
 function getVisibleCategoryTopics(categoryId: string, access: HelpAccess): HelpTopic[] {

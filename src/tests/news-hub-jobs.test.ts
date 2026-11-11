@@ -16,9 +16,12 @@ import type {
   INewsChannelReader,
   INewsHubApi,
   INewsHubJobDeps,
-  IUncopiedNewsItem,
 } from "../services/NewsHubJobs.js";
-import type { INewsCopyLocation, NewsItemRecordBody } from "../services/NewsItemApi.js";
+import type {
+  INewsCopyLocation,
+  IUncopiedNewsItem,
+  NewsItemRecordBody,
+} from "../services/NewsItemApi.js";
 
 // News Hub bot jobs: image renewal (bot#1525) and the News Channel catch-up (bot#1540), with
 // a fake API that keeps the recorded News Items and their News Copies, and a fake Discord
@@ -140,18 +143,22 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
         .map(({ message_id, origin, posted_at }) => ({ message_id, origin, posted_at }));
       return { items, nextPage: page * per < listed.length ? page + 1 : null };
     },
-    listUncopied: async (page, per) => {
+    uncopied: async (page, per) => {
       const listed = [...store.values()]
         .filter((item) => item.category_key !== null && item.news_copy === null)
         .sort(byPostedAt);
       const items: IUncopiedNewsItem[] = listed.slice((page - 1) * per, page * per)
-        .map(({ message_id, origin, posted_at, category_key }) => ({
+        .map(({ message_id, origin, posted_at, category_key, body }) => ({
           message_id,
           origin,
           posted_at,
           category_key: category_key as NewsCategoryKey,
+          comment: body.comment ?? null,
+          link: body.link ? { url: body.link.url } : null,
+          author: { user_id: AUTHOR_ID },
         }));
-      return { items, nextPage: page * per < listed.length ? page + 1 : null };
+      const next = page * per < listed.length ? page + 1 : null;
+      return { items, count: listed.length, next };
     },
   };
   return api;

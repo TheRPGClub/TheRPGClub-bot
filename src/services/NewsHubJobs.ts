@@ -1,7 +1,7 @@
 import { RESTJSONErrorCodes, SnowflakeUtil, type Client } from "discord.js";
 import { GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
 import { NEWS_HUB_FEATURE_KEY } from "../config/featureGate.js";
-import type { NewsCategoryKey, NewsPlaces } from "../config/newsHub.js";
+import type { NewsPlaces } from "../config/newsHub.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
 import { newsItemFrom } from "../functions/NewsItem.js";
 import { buildAnyErrorMessage, buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
@@ -9,6 +9,7 @@ import { logError, logInfo } from "../utilities/LogUtils.js";
 import { FEATURE_ACCESS_API } from "./FeatureAccessService.js";
 import { getFeatureState } from "./FeaturePostRouting.js";
 import { newsCopySourceOf, postNewsCopy, type INewsPost } from "./NewsCopying.js";
+import { HISTORY_COPY_INTERVAL_MS, newsCopiesPaused } from "./NewsHistoryCopy.js";
 import {
   createNewsRecordingDeps,
   fileNewsMessage,
@@ -16,8 +17,11 @@ import {
 } from "./NewsHubRecording.js";
 import {
   NEWS_ITEM_API,
+  NEWS_UNCOPIED_API,
   newsItemRecordBody,
   type INewsFilingApi,
+  type INewsUncopiedApi,
+  type IUncopiedNewsItem,
 } from "./NewsItemApi.js";
 import { apiGetOrThrow } from "./RpgClubApiClient.js";
 
@@ -25,9 +29,6 @@ import { apiGetOrThrow } from "./RpgClubApiClient.js";
 // files the News Channel posts the bot missed and posts the News Copies still missing.
 
 const LOG_CONTEXT = "NewsHubJobs";
-
-/** The pause after each News Copy the catch-up posts: the history copy's pace (spec Q14). */
-export const NEWS_CATCH_UP_COPY_PACE_MS = 1_500;
 
 /** The narrow slice of Discord the jobs read. */
 export interface INewsChannelReader {
@@ -50,21 +51,15 @@ export interface IStoredNewsItem {
   posted_at: string;
 }
 
-/** A News Item that has a News Category and no News Copy yet. */
-export interface IUncopiedNewsItem extends IStoredNewsItem {
-  category_key: NewsCategoryKey;
-}
-
 export interface INewsPage<T> {
   items: T[];
   nextPage: number | null;
 }
 
-export interface INewsHubApi extends INewsFilingApi {
+/** The News Item calls the jobs make, with the uncopied listing the history copy uses. */
+export interface INewsHubApi extends INewsFilingApi, INewsUncopiedApi {
   /** One page of every sorted News Item, as the service token sees it, newest first. */
   listRecent(page: number, per: number): Promise<INewsPage<IStoredNewsItem>>;
-  /** One page of the News Items with a category and no News Copy, oldest first. */
-  listUncopied(page: number, per: number): Promise<INewsPage<IUncopiedNewsItem>>;
 }
 
 export interface INewsHubJobDeps {
@@ -102,8 +97,8 @@ async function readPage<T>(path: string, page: number, per: number): Promise<INe
 
 export const NEWS_HUB_API: INewsHubApi = {
   ...NEWS_ITEM_API,
+  ...NEWS_UNCOPIED_API,
   listRecent: (page, per) => readPage("/api/v1/news_items", page, per),
-  listUncopied: (page, per) => readPage("/api/v1/news_items/uncopied", page, per),
 };
 
 function isGone(err: unknown): boolean {
@@ -163,8 +158,8 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 
 /**
  * The jobs' real dependencies. `liveSince` defaults to the moment the catch-up runs (the
- * job after the News Hub left Off); startup passes when the bot came back. `copiesPaused`
- * is the history copy's running state (bot#1539).
+ * job after the News Hub left Off); startup passes when the bot came back. Copies pause
+ * while the history copy (bot#1539) runs, and go at its pace otherwise.
  */
 export function createNewsHubJobDeps(
   client: Client,
@@ -178,9 +173,9 @@ export function createNewsHubJobDeps(
     discord: discordReader(client),
     freshFeatureState: () => readNewsHubState(client),
     recording: createNewsRecordingDeps(client),
-    copiesPaused: options.copiesPaused ?? (() => false),
+    copiesPaused: options.copiesPaused ?? newsCopiesPaused,
     liveSince: options.liveSince ?? (() => Date.now()),
-    pace: () => wait(NEWS_CATCH_UP_COPY_PACE_MS),
+    pace: () => wait(HISTORY_COPY_INTERVAL_MS),
   };
 }
 
@@ -340,10 +335,10 @@ async function copyMissing(
   const tried = new Set<string>();
   let page: number | null = 1;
   while (page !== null) {
-    const listing: INewsPage<IUncopiedNewsItem> = await deps.api.listUncopied(page, API_PAGE);
+    const listing = await deps.api.uncopied(page, API_PAGE);
     const fresh = listing.items.filter((item) => !tried.has(item.message_id));
     if (fresh.length === 0) {
-      page = listing.nextPage;
+      page = listing.next;
       continue;
     }
     for (const item of fresh) {
