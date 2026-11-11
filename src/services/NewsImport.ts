@@ -139,8 +139,32 @@ function finishedText(
       "Imported News Items stay hidden until staff assign their News Categories. " +
       `\`/${NEWS_IMPORT_COMMAND} status\` shows the counts.`;
   }
+  const reason = progress.failure
+    ? `\n${scanFailureReason(progress.failure.label, progress.failure.error)}`
+    : "";
   return `**News Import scan** stopped on an error (${startedLine(run)}). ` +
-    `The details are below.\n${scanCountsText(progress)}\n${RERUN_NOTE}`;
+    `The details are below.${reason}\n${scanCountsText(progress)}\n${RERUN_NOTE}`;
+}
+
+/** Longest reason line the progress message carries; the details message has the rest. */
+const FAILURE_REASON_MAX = 400;
+
+/**
+ * Why a scan stopped, in one short line for its progress message, so staff see the cause
+ * even when the full details message cannot be posted: the step, the HTTP status and the
+ * API's answer, or the error's own message.
+ */
+export function scanFailureReason(label: string, error: unknown): string {
+  let cause: string;
+  if (axios.isAxiosError(error) && error.response) {
+    cause = `HTTP ${error.response.status} ${JSON.stringify(error.response.data ?? null)}`;
+  } else if (error instanceof Error) {
+    cause = error.message;
+  } else {
+    cause = String(error);
+  }
+  const line = `${label}: ${cause}`.replace(/\s+/g, " ");
+  return line.length > FAILURE_REASON_MAX ? `${line.slice(0, FAILURE_REASON_MAX - 1)}…` : line;
 }
 
 /** The scan's progress message, posted in the channel where staff ran the command. */
@@ -253,7 +277,7 @@ export async function startNewsImportScanReply(
     },
     async (error: unknown) => {
       await editor.finish("**News Import scan** stopped on an unexpected error. The details are " +
-        `below.\n${RERUN_NOTE}`);
+        `below.\n${scanFailureReason("The News Import scan failed", error)}\n${RERUN_NOTE}`);
       await postDetails(start, buildAnyErrorMessage("The News Import scan failed", error));
     },
   ).catch((error: unknown) => {

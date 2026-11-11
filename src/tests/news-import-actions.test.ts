@@ -279,6 +279,23 @@ test("a scan stopped by an error says so and posts the full error below", async 
   assert.equal(runner.current(), null);
 });
 
+test("a stopped scan names the reason in its progress message, even if details fail", async () => {
+  const api = fakeApi({ batchError: forbidden() });
+  const { start, channel } = scanStart(api, new NewsImportScanRunner(), {
+    postDetails: async () => {
+      throw new Error("Discord refused the details message");
+    },
+  });
+
+  const { finished } = await startNewsImportScanReply(start);
+  await finished;
+
+  const final = channel.edits.at(-1) ?? "";
+  assert.match(final, /Could not record 1 archive messages/);
+  assert.match(final, /403/);
+  assert.match(final, /forbidden/);
+});
+
 test("status mentions a scan in progress", async () => {
   let release = (): void => {};
   const gate = new Promise<void>((resolve) => {
