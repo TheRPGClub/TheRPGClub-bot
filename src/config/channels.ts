@@ -12,39 +12,38 @@ export const GAMEDB_UPDATES_CHANNEL_ID = resolveId(
 export const GAME_NEWS_CHANNEL_ID = resolveId("GAME_NEWS_CHANNEL_ID", "738040352274907225");
 // News Hub (spec api#355): the game news forum and one thread per News Category. The
 // discussion threads get no IDs, so the bot ignores them.
-// PLACEHOLDER bot#1528: the forum and threads do not exist yet. Every ID below is a made-up
-// stand-in until the owner creates them and supplies the real snowflakes.
+// PLACEHOLDER bot#1528: the forum's own ID is still a made-up stand-in (nothing reads it yet).
 export const GAME_NEWS_FORUM_ID = resolveId(
   "GAME_NEWS_FORUM_ID",
   "100000000000000000", // PLACEHOLDER bot#1528
 );
 export const NEWS_ANNOUNCEMENTS_THREAD_ID = resolveId(
   "NEWS_ANNOUNCEMENTS_THREAD_ID",
-  "100000000000000001", // PLACEHOLDER bot#1528
+  "1569864992121946112",
 );
 export const NEWS_RELEASES_THREAD_ID = resolveId(
   "NEWS_RELEASES_THREAD_ID",
-  "100000000000000002", // PLACEHOLDER bot#1528
+  "1569867331277029497",
 );
 export const NEWS_EMULATION_THREAD_ID = resolveId(
   "NEWS_EMULATION_THREAD_ID",
-  "100000000000000003", // PLACEHOLDER bot#1528
+  "1569867977342591128",
 );
 export const NEWS_INDUSTRY_THREAD_ID = resolveId(
   "NEWS_INDUSTRY_THREAD_ID",
-  "100000000000000004", // PLACEHOLDER bot#1528
+  "1569868376002531472",
 );
 export const NEWS_HARDWARE_THREAD_ID = resolveId(
   "NEWS_HARDWARE_THREAD_ID",
-  "100000000000000005", // PLACEHOLDER bot#1528
+  "1569868801976049705",
 );
 export const NEWS_RUMOURS_THREAD_ID = resolveId(
   "NEWS_RUMOURS_THREAD_ID",
-  "100000000000000006", // PLACEHOLDER bot#1528
+  "1569869204478238720",
 );
 export const NEWS_GENERAL_THREAD_ID = resolveId(
   "NEWS_GENERAL_THREAD_ID",
-  "100000000000000007", // PLACEHOLDER bot#1528
+  "1569870095499395212",
 );
 export const DISCORD_LOG_CHANNEL_ID = resolveId("DISCORD_LOG_CHANNEL_ID", "679499735757094950");
 export const DISCORD_CONSOLE_LOG_CHANNEL_ID = resolveId(
