@@ -25,6 +25,7 @@ import {
   type INewsCopyDeps,
   type INewsPost,
 } from "./NewsCopying.js";
+import { removeNewsItem } from "./NewsCopySync.js";
 import { createNewsRecordingDeps, type INewsRecordingDeps } from "./NewsHubRecording.js";
 import type { INewsFilingApi } from "./NewsItemApi.js";
 
@@ -77,6 +78,8 @@ export interface INewsShareReply {
 }
 
 const COMMAND_LABEL = `/${NEWS_COMMAND} ${NEWS_SHARE_SUBCOMMAND}`;
+
+const DELETED_WHILE_FILING_MESSAGE = "Your news was deleted before it could be filed.";
 
 /** The post crediting the member (no ping), with their comment, the link and the image. */
 export function buildNewsShare(share: INewsShare): INewsShareMessage {
@@ -151,7 +154,8 @@ function confirmation(
  * preview, picks the category when the member chose none, then records it as the member's,
  * reacts and copies it (see {@link fileNewsItem}). Returns the private reply. Every failure
  * is answered with its full request and response; a post that cannot be recorded is
- * deleted again, since nothing else would record a message the bot posted.
+ * deleted again, since nothing else would record a message the bot posted. A post deleted
+ * while it is filed has its News Item and News Copy removed once filed, as a live post's.
  */
 export async function shareNewsReply(
   share: INewsShare,
@@ -172,7 +176,7 @@ export async function shareNewsReply(
   try {
     post = await deps.waitForPreview(post);
     if (!deps.filing.has(post.id)) {
-      return { text: "Your news was deleted before it could be filed.", failed: true };
+      return { text: DELETED_WHILE_FILING_MESSAGE, failed: true };
     }
     const item = sharedNewsItemFrom(post, share);
     const categoryKey = share.categoryKey ?? pickNewsCategory(item);
@@ -188,6 +192,11 @@ export async function shareNewsReply(
       await deleteUnrecorded(post, deps);
       const label = "Could not record your news, so its post was removed again";
       return { text: buildApiErrorMessage(label, keeper.error()), failed: true };
+    }
+    if (!deps.filing.has(post.id)) {
+      // Deleted while it was filed: the listener left the removal to the filing.
+      await removeNewsItem(post.id, "for a deleted message", deps);
+      return { text: DELETED_WHILE_FILING_MESSAGE, failed: true };
     }
     let copy: ShareCopyState = "copied";
     if (outcome.copy === null) copy = outcome.waiting ? "waiting" : "failed";

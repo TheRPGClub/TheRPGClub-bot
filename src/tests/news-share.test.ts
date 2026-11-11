@@ -392,6 +392,36 @@ test("a post deleted while waiting for its preview is not recorded", async () =>
   assert.equal(filing.size, 0);
 });
 
+test("a post deleted while it is filed has its item removed and its copy deleted", async () => {
+  const fake = fakes();
+  const filing = new Map();
+  const removedCopy = { message_id: COPY_ID, thread_id: THREADS.industry.threadId };
+  const api: INewsFilingApi = {
+    ...fake.api,
+    record: async (messageId, body) => {
+      await fake.api.record(messageId, body);
+      // The News Channel listener sees the delete and leaves it to the filing.
+      filing.delete(messageId);
+    },
+    remove: async (messageId) => {
+      await fake.api.remove(messageId);
+      return { removed: true, newsCopy: removedCopy };
+    },
+  };
+  const reply = await shareNewsReply(
+    share({ categoryKey: "industry" }),
+    { ...deps(fake, { filing }), api },
+  );
+
+  assert.deepEqual(fake.calls.map((call) => call[0]), [
+    "share", "record", "react", "post", "reportCopy", "remove", "delete",
+  ]);
+  assert.deepEqual(fake.calls.at(-1), ["delete", THREADS.industry.threadId, COPY_ID]);
+  assert.equal(reply.failed, true);
+  assert.match(reply.text, /deleted/);
+  assert.equal(filing.size, 0);
+});
+
 test("the News Channel listener records the bot's post neither on arrival nor on its preview",
   async () => {
     const fake = fakes();
