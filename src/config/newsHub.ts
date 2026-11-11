@@ -25,6 +25,17 @@ export const NEWS_CATEGORY_KEYS = [
 
 export type NewsCategoryKey = (typeof NEWS_CATEGORY_KEYS)[number];
 
+/** Each News Category's name, as the API and the website show it. */
+export const NEWS_CATEGORY_NAMES: Readonly<Record<NewsCategoryKey, string>> = {
+  announcements: "Announcements & Trailers",
+  releases: "Releases & Updates",
+  emulation: "Emulation & Preservation",
+  industry: "Industry",
+  hardware: "Hardware & Platforms",
+  rumours: "Rumours & Leaks",
+  general: "General",
+};
+
 /**
  * Where News Items are posted: channel ID -> the News Category a message there takes, or
  * null when the bot picks it (the News Channel) or staff sort it (the News Import). A

@@ -28,6 +28,9 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   // Admins and Superadmins in Preview and Live, nobody while Off: this gate refuses
   // everyone while Off, and the API refuses anyone but Admins and Superadmins.
   "news-import": "news_hub",
+  // The message command: the sharer and staff while Live, staff only while Preview (the
+  // API also checks author or staff on every change).
+  "Change news category": "news_hub",
 };
 
 /**
@@ -80,6 +83,8 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
 
   ["suggestion-", "suggestions"],
   ["todo-review-suggestions", "suggestions"],
+
+  ["news-category-pick-v1:", "news_hub"],
 ];
 
 /**

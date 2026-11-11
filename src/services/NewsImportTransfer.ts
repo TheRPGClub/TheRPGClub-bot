@@ -15,6 +15,7 @@ import {
   NEWS_IMPORT_LIST_PER,
   type INewsImportApi,
   type INewsImportAssignRow,
+  type INewsImportMove,
 } from "./NewsImportApi.js";
 
 // `/news-import download` and `/news-import upload` (spec api#355, bot#1527): staff take the
@@ -156,6 +157,11 @@ export interface INewsImportUploadStart {
   file: { name: string; size: number; contentType: string | null };
   /** Downloads the attachment's text. A failure is thrown to the command's error reply. */
   fetchText(): Promise<string>;
+  /**
+   * Moves the News Copies of items whose category the upload changed (spec api#367). It
+   * runs on in the background: moving many copies can outlast the interaction.
+   */
+  moveCopies(moves: readonly INewsImportMove[]): void;
 }
 
 function isDelimitedFile(file: INewsImportUploadStart["file"]): boolean {
@@ -181,6 +187,7 @@ interface IUploadTotals {
   removed: number;
   unsorted: number;
   problems: INewsImportRowProblem[];
+  moves: INewsImportMove[];
 }
 
 /**
@@ -216,6 +223,7 @@ async function assignAll(
     totals.assigned += result.assigned;
     totals.removed += result.removed;
     totals.unsorted = result.unsorted;
+    totals.moves.push(...result.moved.filter((move) => move.copy));
     for (const rejection of result.rejections) {
       const line = chunk[rejection.index]?.line ?? 0;
       totals.problems.push({ ...rejection, line });
@@ -254,8 +262,10 @@ export async function newsImportUploadReply(
   const upload = readNewsImportUpload(await start.fetchText());
   if (!upload.ok) return reply(`${upload.reason} Start from a file ${download} gave you.`);
 
-  const totals: IUploadTotals = { assigned: 0, removed: 0, unsorted, problems: [] };
+  const totals: IUploadTotals = { assigned: 0, removed: 0, unsorted, problems: [], moves: [] };
   const failure = await assignAll(start, upload.rows, totals);
+  // Rows applied before a failed request changed categories too, so their copies move.
+  if (totals.moves.length) start.moveCopies(totals.moves);
   if (failure) return failure;
   const problems = [...upload.problems, ...totals.problems].sort((a, b) => a.line - b.line);
 
@@ -266,6 +276,10 @@ export async function newsImportUploadReply(
     `- **${problems.length}** rejected`,
   ];
   if (upload.blank) lines.push(`- **${upload.blank}** left blank: still unsorted`);
+  if (totals.moves.length) {
+    lines.push(`- ${plural(totals.moves.length, "News Copy moving to its new category's thread",
+      "News Copies moving to their new categories' threads")}`);
+  }
   lines.push(`${plural(totals.unsorted, "imported News Item is", "imported News Items are")} ` +
     "still unsorted.");
   if (!problems.length) return reply(lines.join("\n"));

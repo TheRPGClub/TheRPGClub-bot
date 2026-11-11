@@ -23,6 +23,7 @@ import {
   buildTextSend,
 } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
+import { createNewsCategoryDeps, moveNewsCopies } from "../services/NewsCategoryChange.js";
 import {
   DEFAULT_NEWS_IMPORT_DEPS,
   NEWS_IMPORT_COMMAND,
@@ -226,6 +227,9 @@ export class NewsImportCommand {
         maxBytes,
         file: { name: file.name, size: file.size, contentType: file.contentType },
         fetchText: () => attachmentText(file, maxBytes),
+        // Runs on after the reply; every failed move is logged (NewsCategoryChange).
+        moveCopies: (moves) =>
+          void moveNewsCopies(moves, createNewsCategoryDeps(interaction.client)),
       });
     } catch (error: unknown) {
       const text = buildAnyErrorMessage("Could not apply the News Import file", error);
