@@ -89,7 +89,8 @@ function trimAddress(raw: string): string {
   }
 }
 
-function isWebAddress(text: string): boolean {
+/** An http or https address with a host. */
+export function isWebAddress(text: string): boolean {
   try {
     const { protocol, hostname } = new URL(text);
     return (protocol === "http:" || protocol === "https:") && hostname !== "";
@@ -147,7 +148,7 @@ function linkOf(url: string, preview: INewsEmbed | null): INewsLinkPayload {
 const IMAGE_NAME_PATTERN = /\.(png|jpe?g|gif|webp|avif|bmp)$/i;
 
 /** An image by its media type, or by its file name when Discord gave no type. */
-function isImage(attachment: INewsAttachment): boolean {
+export function isImageAttachment(attachment: INewsAttachment): boolean {
   if (attachment.contentType) return attachment.contentType.startsWith("image/");
   return IMAGE_NAME_PATTERN.test(attachment.name);
 }
@@ -168,7 +169,7 @@ function expiresAt(url: string): string | null {
 
 /** The message's images: the attachments a News Item stores and its News Copy uploads again. */
 export function newsImageAttachments(message: INewsMessage): INewsAttachment[] {
-  return [...message.attachments.values()].filter(isImage);
+  return [...message.attachments.values()].filter(isImageAttachment);
 }
 
 function imagesOf(message: INewsMessage): INewsImagePayload[] {
@@ -244,5 +245,38 @@ export function newsItemFrom(
     edited_at: message.editedAt?.toISOString() ?? null,
     link: url ? linkOf(url, previewOf(url, links.length, message.embeds)) : null,
     images,
+  };
+}
+
+/** Who shared news through the bot, and what they gave it (spec api#367, /news share). */
+export interface INewsShareOrigin {
+  sharer: { id: string; name: string };
+  /** The shared address, as the member gave it. */
+  link: string;
+  comment: string | null;
+}
+
+/**
+ * The News Item of a message the bot posted in the News Channel for a member through
+ * `/news share`. {@link newsItemFrom} refuses it, since a bot posted it: the item is the
+ * member's, with their link and comment, and the preview and images the bot's message has.
+ * Its category is left null for the caller to set.
+ */
+export function sharedNewsItemFrom(
+  message: INewsMessage,
+  origin: INewsShareOrigin,
+): INewsItemPayload {
+  const linkCount = Math.max(1, findLinks(message.cleanContent).length);
+  return {
+    message_id: message.id,
+    channel_id: message.channelId,
+    category_key: null,
+    author_id: origin.sharer.id,
+    author_name: origin.sharer.name,
+    comment: origin.comment,
+    posted_at: message.createdAt.toISOString(),
+    edited_at: message.editedAt?.toISOString() ?? null,
+    link: linkOf(origin.link, previewOf(origin.link, linkCount, message.embeds)),
+    images: imagesOf(message),
   };
 }
