@@ -132,7 +132,7 @@ function finishedText(
   const reason = progress.failure
     ? `\n${runFailureReason(progress.failure.label, progress.failure.error)}`
     : "";
-  return `**History copy** stopped on an error (${startedLine(run)}).${reason}\n` +
+  return `**History copy** stopped (${startedLine(run)}).${reason}\n` +
     `${copyCountsText(progress)}\n${RERUN_NOTE}`;
 }
 

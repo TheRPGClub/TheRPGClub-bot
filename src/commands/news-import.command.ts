@@ -10,6 +10,7 @@ import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import axios from "axios";
 
 import { GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
+import { NEWS_HUB_FEATURE_KEY } from "../config/featureGate.js";
 import { DEV_ROLE_ID } from "../config/roles.js";
 import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
@@ -24,6 +25,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
 import { NEWS_CATEGORY_THREADS } from "../config/newsHub.js";
+import { getFeatureState } from "../services/FeaturePostRouting.js";
 import { discordNewsCopier } from "../services/NewsCopying.js";
 import { discordNewsOriginals } from "../services/NewsHistoryCopy.js";
 import { createNewsCategoryDeps, moveNewsCopies } from "../services/NewsCategoryChange.js";
@@ -146,6 +148,7 @@ export class NewsImportCommand {
           discord: discordNewsCopier(interaction.client),
           listing: NEWS_UNCOPIED_API,
           originals: discordNewsOriginals(interaction.client, GAME_NEWS_CHANNEL_ID),
+          featureState: () => getFeatureState(NEWS_HUB_FEATURE_KEY),
         },
         post: (text) => postProgress(channel, text),
         postDetails: (text) => postRunError(channel, text),

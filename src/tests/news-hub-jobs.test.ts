@@ -230,6 +230,8 @@ function fakeDiscord(channels: Record<string, INewsPost[]> = {}): IFakeDiscord {
 
 interface IDepOptions {
   state?: FeatureState | null;
+  /** The cached flag state, read before each item (defaults to `state`). */
+  cachedState?: () => FeatureState | null;
   copiesPaused?: () => boolean;
   liveSince?: number;
   filing?: Map<string, null>;
@@ -252,7 +254,7 @@ function deps(
       testMode: false,
       places: new Map([[NEWS_CHANNEL, null]]),
       threads: COPY_THREADS,
-      featureState: async () => state,
+      featureState: async () => options.cachedState?.() ?? state,
       api,
       discord,
       // A live post's wait; catch-up must not use it for old messages.
@@ -723,6 +725,50 @@ test("catch-up: does nothing while the News Hub is Off", async () => {
   assert.equal(discord.fetches, 0);
   assert.deepEqual(discord.calls, []);
   assert.match(text, /Off/);
+});
+
+test("catch-up: switching the News Hub Off stops the copies before the next item", async () => {
+  const channel = posts(10, 3);
+  const api = fakeApi(channel.map((m) => recorded(m, "releases", null)));
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
+  let state: FeatureState = "live";
+  const paced: string[] = [];
+  const pacing = deps(api, discord, { cachedState: () => state, paced });
+  const switchingOff: INewsHubJobDeps = {
+    ...pacing,
+    pace: async () => {
+      state = "off";
+    },
+  };
+
+  const text = String(await handleNewsCatchUp(
+    catchUpPayload(),
+    surface(switchingOff),
+    context("live"),
+  ));
+
+  assert.deepEqual(copiedIds(discord), [channel[0].id]);
+  assert.match(text, /switched Off/);
+});
+
+test("catch-up: switching the News Hub Off stops filing missed posts", async () => {
+  const channel = posts(10, 4);
+  const api = fakeApi([recorded(channel[0], "releases")]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
+  let state: FeatureState = "live";
+  const recordOnce: INewsHubApi = {
+    ...api,
+    record: async (messageId, body) => {
+      await api.record(messageId, body);
+      state = "off";
+    },
+  };
+
+  await catchUp(recordOnce, discord, { cachedState: () => state });
+
+  assert.equal(api.store.has(channel[1].id), true);
+  assert.equal(api.store.has(channel[2].id), false);
+  assert.equal(api.store.has(channel[3].id), false);
 });
 
 test("catch-up: reads the News Hub's state afresh, not the job's cached state", async () => {

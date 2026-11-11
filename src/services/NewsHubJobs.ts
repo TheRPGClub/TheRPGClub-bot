@@ -252,6 +252,8 @@ export type NewsCatchUpOutcome =
     skipped: number;
     /** True when a history copy was running, so copies were left to it. */
     paused: boolean;
+    /** True when the News Hub was switched Off during the run, which stopped it. */
+    switchedOff: boolean;
     /** A step that could not run at all, with the full request. */
     failures: string[];
   };
@@ -303,6 +305,7 @@ async function recordMissed(
     for (const message of ascending) {
       if (!isBefore(message.id, ceilingId)) return;
       if (recording.filing.has(message.id)) continue;
+      if (await switchedOff(deps, counts)) return;
       const filed = await fileNewsMessage(message, recording, { postCopy: false });
       if (filed?.recorded) counts.recorded += 1;
       else if (filed) counts.unrecorded += 1;
@@ -311,6 +314,13 @@ async function recordMissed(
     if (page.length < DISCORD_PAGE || !last) return;
     cursor = last.id;
   }
+}
+
+/** Whether the News Hub went Off (the flag cache, read before each item); it stops the run. */
+async function switchedOff(deps: INewsHubJobDeps, counts: CatchUpCounts): Promise<boolean> {
+  if ((await deps.recording.featureState()) !== "off") return false;
+  counts.switchedOff = true;
+  return true;
 }
 
 type CopyResult = "copied" | "uncopied" | "skipped";
@@ -357,6 +367,7 @@ async function copyMissing(
         counts.paused = true;
         return;
       }
+      if (await switchedOff(deps, counts)) return;
       tried.add(item.message_id);
       if (deps.recording.filing.has(item.message_id)) continue;
       const result = await copyItem(item, deps);
@@ -394,6 +405,7 @@ export async function runNewsCatchUp(deps: INewsHubJobDeps): Promise<NewsCatchUp
     uncopied: 0,
     skipped: 0,
     paused: false,
+    switchedOff: false,
     failures: [],
   };
   if (deps.archiveChannelId === "") return { status: "done", ...counts };
@@ -403,9 +415,8 @@ export async function runNewsCatchUp(deps: INewsHubJobDeps): Promise<NewsCatchUp
     counts,
     () => recordMissed(deps, ceiling, counts),
   );
-  if (deps.copiesPaused()) {
-    counts.paused = true;
-  } else {
+  if (!counts.switchedOff && deps.copiesPaused()) counts.paused = true;
+  if (!counts.switchedOff && !counts.paused) {
     await step("Could not post the missing News Copies", counts, () =>
       copyMissing(deps, ceiling, counts));
   }
@@ -426,12 +437,13 @@ export function newsCatchUpSummary(outcome: NewsCatchUpOutcome): string {
   const paused = outcome.paused
     ? " Copies wait: a history copy is running and copies them after the history."
     : "";
+  const off = outcome.switchedOff ? " Stopped early: the News Hub was switched Off." : "";
   const failed = outcome.failures.length > 0
     ? ` ${plural(outcome.failures.length, "step")} could not run.`
     : "";
   return `Caught up the News Channel: ${outcome.recorded} missed News Items recorded` +
     `${unrecorded}, ${plural(outcome.copied, "News Copy", "News Copies")} posted` +
-    `${uncopied}.${skipped}${paused}${failed}`;
+    `${uncopied}.${skipped}${paused}${off}${failed}`;
 }
 
 /**

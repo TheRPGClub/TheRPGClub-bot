@@ -1,4 +1,5 @@
 import type { Client } from "discord.js";
+import type { FeatureState } from "../functions/FeatureGate.js";
 import type { INewsCopySource } from "../functions/NewsCopy.js";
 import { buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -30,6 +31,9 @@ export const HISTORY_COPY_PER = 100;
  */
 export const HISTORY_COPY_FAILURE_LIMIT = 10;
 
+/** Why a run stopped when the News Hub went Off while it ran. */
+const NEWS_HUB_OFF_LABEL = "Stopped: the News Hub was switched Off";
+
 /** Reads a News Item's original message, fresh, so its image addresses have not expired. */
 export interface INewsOriginals {
   fetch: (messageId: string) => Promise<INewsPost>;
@@ -42,6 +46,8 @@ export interface INewsHistoryCopyDeps extends INewsCopyDeps {
   intervalMs?: number;
   per?: number;
   failureLimit?: number;
+  /** The News Hub's state, read before each item: Off stops the run. Absent: never Off. */
+  featureState?: () => Promise<FeatureState | null>;
   /** Called after each copy. The object is the live progress, so read it at once. */
   onProgress?: (progress: Readonly<INewsHistoryCopyProgress>) => void;
 }
@@ -136,6 +142,10 @@ export async function copyNewsHistory(
       continue;
     }
     for (const item of fresh) {
+      if ((await deps.featureState?.()) === "off") {
+        progress.failure = { label: NEWS_HUB_OFF_LABEL, error: null };
+        return progress;
+      }
       if (copiedBefore) await sleep(deps.intervalMs ?? HISTORY_COPY_INTERVAL_MS);
       copiedBefore = true;
       if (await copyOne(item, deps)) {
