@@ -10,7 +10,12 @@ import { FEATURE_ACCESS_API } from "./FeatureAccessService.js";
 import { getFeatureState } from "./FeaturePostRouting.js";
 import { newsCopySourceOf, postNewsCopy, type INewsPost } from "./NewsCopying.js";
 import { deleteNewsCopy } from "./NewsCopySync.js";
-import { HISTORY_COPY_INTERVAL_MS, newsCopiesPaused } from "./NewsHistoryCopy.js";
+import {
+  NEWS_COPY_LANE,
+  type INewsCopyLaneHold,
+  type NewsCopyLane,
+} from "./NewsCopyLane.js";
+import { HISTORY_COPY_INTERVAL_MS } from "./NewsHistoryCopy.js";
 import {
   createNewsRecordingDeps,
   fileNewsMessage,
@@ -74,8 +79,11 @@ export interface INewsHubJobDeps {
   freshFeatureState: () => Promise<FeatureState | null>;
   /** How the catch-up files a missed post: as live recording does, minus the preview wait. */
   recording: INewsRecordingDeps;
-  /** True while a history copy runs: the catch-up posts no News Copies then. */
-  copiesPaused: () => boolean;
+  /**
+   * The copy lane: one catch-up at a time, and its copy phase holds the lane, so it posts no
+   * copies while a history copy runs and stops for one that starts.
+   */
+  lane: NewsCopyLane;
   /**
    * When live filing took over (ms): the bot came back, or the News Hub left Off. Posts from
    * then on are the live listener's, so the catch-up leaves them alone.
@@ -159,12 +167,12 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 
 /**
  * The jobs' real dependencies. `liveSince` defaults to the moment the catch-up runs (the
- * job after the News Hub left Off); startup passes when the bot came back. Copies pause
- * while the history copy (bot#1539) runs, and go at its pace otherwise.
+ * job after the News Hub left Off); startup passes when the bot came back. Copies go at the
+ * history copy's pace, in the bot's one copy lane.
  */
 export function createNewsHubJobDeps(
   client: Client,
-  options: { liveSince?: () => number; copiesPaused?: () => boolean } = {},
+  options: { liveSince?: () => number } = {},
 ): INewsHubJobDeps {
   return {
     // None: the category threads hold only News Copies since bot#1537.
@@ -174,7 +182,7 @@ export function createNewsHubJobDeps(
     discord: discordReader(client),
     freshFeatureState: () => readNewsHubState(client),
     recording: createNewsRecordingDeps(client),
-    copiesPaused: options.copiesPaused ?? newsCopiesPaused,
+    lane: NEWS_COPY_LANE,
     liveSince: options.liveSince ?? (() => Date.now()),
     pace: () => wait(HISTORY_COPY_INTERVAL_MS),
   };
@@ -238,6 +246,8 @@ const API_PAGE = 100;
 /** What one catch-up did. */
 export type NewsCatchUpOutcome =
   | { status: "off" }
+  /** Another catch-up was running, so this one did nothing. */
+  | { status: "busy" }
   | {
     status: "done";
     /** Missed News Channel posts recorded (and reacted to). */
@@ -250,7 +260,7 @@ export type NewsCatchUpOutcome =
     uncopied: number;
     /** Items whose message is gone from the News Channel or is no longer news. */
     skipped: number;
-    /** True when a history copy was running, so copies were left to it. */
+    /** True when a history copy was running or took over, so copies were left to it. */
     paused: boolean;
     /** True when the News Hub was switched Off during the run, which stopped it. */
     switchedOff: boolean;
@@ -341,7 +351,8 @@ async function copyItem(item: IUncopiedNewsItem, deps: INewsHubJobDeps): Promise
  * Posts the live News Items' missing News Copies, oldest first, from the API's listing of
  * items without one: it retries copies that failed earlier and copies the posts
  * {@link recordMissed} filed. Imported items are left to the history copy (`/news-import copy`).
- * Each item is tried once per catch-up. Stops when a history copy starts, and leaves items
+ * Each item is tried once per catch-up. It holds the copy lane and stops after the current
+ * item when a history copy takes over. It leaves items
  * from when live filing took over, and any being filed now, to the live listener.
  *
  * Copied items leave the listing, so the same page is read again; a page left with only
@@ -351,6 +362,7 @@ async function copyMissing(
   deps: INewsHubJobDeps,
   ceiling: number,
   counts: CatchUpCounts,
+  hold: INewsCopyLaneHold,
 ): Promise<void> {
   const tried = new Set<string>();
   let page: number | null = 1;
@@ -363,7 +375,7 @@ async function copyMissing(
     }
     for (const item of fresh) {
       if (Date.parse(item.posted_at) >= ceiling) return;
-      if (deps.copiesPaused()) {
+      if (hold.stopRequested()) {
         counts.paused = true;
         return;
       }
@@ -391,13 +403,23 @@ async function step(
 
 /**
  * The catch-up (on startup, and when the News Hub leaves Off): files the News Channel posts
- * missed while the bot was not listening, then posts the News Copies still missing, oldest
- * first, unless a history copy is running. Does nothing while the News Hub is Off, read from
- * the API (the flag cache can lag behind the change that queued the job). A step that fails
- * is reported and the next still runs; running it again is safe.
+ * missed while the bot was not listening, then posts the live News Items' missing News
+ * Copies, oldest first, unless a history copy is running. Does nothing while the News Hub is
+ * Off, read from the API (the flag cache can lag behind the change that queued the job), or
+ * while another catch-up runs. A step that fails is reported and the next still runs;
+ * running it again is safe.
  */
 export async function runNewsCatchUp(deps: INewsHubJobDeps): Promise<NewsCatchUpOutcome> {
   if ((await deps.freshFeatureState()) === "off") return { status: "off" };
+  if (!deps.lane.beginCatchUp()) return { status: "busy" };
+  try {
+    return { status: "done", ...(await catchUp(deps)) };
+  } finally {
+    deps.lane.endCatchUp();
+  }
+}
+
+async function catchUp(deps: INewsHubJobDeps): Promise<CatchUpCounts> {
   const counts: CatchUpCounts = {
     recorded: 0,
     unrecorded: 0,
@@ -408,24 +430,32 @@ export async function runNewsCatchUp(deps: INewsHubJobDeps): Promise<NewsCatchUp
     switchedOff: false,
     failures: [],
   };
-  if (deps.archiveChannelId === "") return { status: "done", ...counts };
+  if (deps.archiveChannelId === "") return counts;
   const ceiling = deps.liveSince();
   await step(
     `Could not record the posts missed in the News Channel ${deps.archiveChannelId}`,
     counts,
     () => recordMissed(deps, ceiling, counts),
   );
-  if (!counts.switchedOff && deps.copiesPaused()) counts.paused = true;
-  if (!counts.switchedOff && !counts.paused) {
-    await step("Could not post the missing News Copies", counts, () =>
-      copyMissing(deps, ceiling, counts));
+  if (counts.switchedOff) return counts;
+  const hold = deps.lane.holdForCatchUp();
+  if (!hold) {
+    counts.paused = true;
+    return counts;
   }
-  return { status: "done", ...counts };
+  try {
+    await step("Could not post the missing News Copies", counts, () =>
+      copyMissing(deps, ceiling, counts, hold));
+  } finally {
+    hold.release();
+  }
+  return counts;
 }
 
 /** The catch-up's outcome in plain words, for the job's result and the log. */
 export function newsCatchUpSummary(outcome: NewsCatchUpOutcome): string {
   if (outcome.status === "off") return "Nothing caught up: the News Hub is Off.";
+  if (outcome.status === "busy") return "Nothing caught up: a catch-up is already running.";
   const unrecorded = outcome.unrecorded > 0 ? ` (${outcome.unrecorded} could not be)` : "";
   const uncopied = outcome.uncopied > 0
     ? `, ${outcome.uncopied} could not be and wait for the next catch-up`

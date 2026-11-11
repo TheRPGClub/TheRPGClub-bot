@@ -9,13 +9,14 @@ import {
   type INewsCopyDeps,
   type INewsPost,
 } from "./NewsCopying.js";
+import { NEWS_COPY_LANE, type NewsCopyLane } from "./NewsCopyLane.js";
 import type { INewsUncopiedApi, IUncopiedNewsItem } from "./NewsItemApi.js";
 
 // The history copy (spec api#367, bot#1539): staff copy every News Item that has no News
 // Copy into its category's thread, oldest first, about one every 1.5 seconds. It runs in
 // the bot, one at a time, like the News Import scan it replaces. Its resume point is the
-// API's: the items still without a copy. While it runs, new copies wait (see
-// `newsCopiesPaused`); they are the newest items without a copy, so it posts them last.
+// API's: the items still without a copy. It holds the copy lane (NewsCopyLane), so new
+// copies wait while it runs; they are the newest items without a copy, so it posts them last.
 
 const LOG_CONTEXT = "NewsHistoryCopy";
 
@@ -181,20 +182,18 @@ export interface INewsHistoryCopyRun {
 }
 
 /**
- * Runs one history copy at a time inside the bot. A run does not survive a restart; staff
- * run it again, and it continues with the items still without a copy.
+ * Runs one history copy at a time inside the bot, holding the copy lane: a catch-up copying
+ * when it starts stops after its current item, and the run then begins. A run does not
+ * survive a restart; staff run it again, and it continues with the items still without a copy.
  */
 export class NewsHistoryCopyRunner {
   private run: INewsHistoryCopyRun | null = null;
 
+  constructor(private readonly lane: NewsCopyLane = NEWS_COPY_LANE) {}
+
   /** The run in progress, or null. */
   current(): Readonly<INewsHistoryCopyRun> | null {
     return this.run;
-  }
-
-  /** True while a run is in progress: new News Copies wait for it. */
-  copiesPaused(): boolean {
-    return this.run !== null;
   }
 
   /**
@@ -209,12 +208,18 @@ export class NewsHistoryCopyRunner {
     if (this.run) return null;
     const run: INewsHistoryCopyRun = { startedBy, startedAt, progress: null };
     this.run = run;
-    return copyNewsHistory({
-      ...deps,
-      onProgress: (progress) => {
-        run.progress = progress;
-        deps.onProgress?.(progress);
-      },
+    return this.lane.holdForHistory().then(async (hold) => {
+      try {
+        return await copyNewsHistory({
+          ...deps,
+          onProgress: (progress) => {
+            run.progress = progress;
+            deps.onProgress?.(progress);
+          },
+        });
+      } finally {
+        hold.release();
+      }
     }).finally(() => {
       this.run = null;
     });
@@ -223,14 +228,6 @@ export class NewsHistoryCopyRunner {
 
 /** The bot's one history copy runner. */
 export const NEWS_HISTORY_COPY = new NewsHistoryCopyRunner();
-
-/**
- * Whether new News Copies wait now, because a history copy is running. The live filing
- * flow asks it (through `INewsCopyDeps.copiesPaused`), and so does catch-up.
- */
-export function newsCopiesPaused(): boolean {
-  return NEWS_HISTORY_COPY.copiesPaused();
-}
 
 /**
  * Reads originals from the News Channel, skipping the message cache (a whole-history run

@@ -8,6 +8,7 @@ import type { NewsCategoryThreads, NewsPlaces } from "../config/newsHub.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
 import type { INewsCopyMessage } from "../functions/NewsCopy.js";
 import type { INewsEmbed } from "../functions/NewsItem.js";
+import { NewsCopyLane } from "../services/NewsCopyLane.js";
 import type { INewsPost } from "../services/NewsCopying.js";
 import {
   onNewsMessageCreated,
@@ -196,7 +197,7 @@ function deps(
     state?: FeatureState | null;
     testMode?: boolean;
     preview?: (message: INewsPost) => Promise<INewsPost>;
-    copiesPaused?: () => boolean;
+    copyWaits?: () => boolean;
   } = {},
 ): INewsRecordingDeps {
   return {
@@ -208,7 +209,7 @@ function deps(
     discord,
     waitForPreview: options.preview ?? (async (message) => message),
     filing: new Map(),
-    ...(options.copiesPaused ? { copiesPaused: options.copiesPaused } : {}),
+    ...(options.copyWaits ? { copyWaits: options.copyWaits } : {}),
   };
 }
 
@@ -277,9 +278,11 @@ test("a link post is recorded, reacted to, copied and its copy reported, in orde
   ]);
 });
 
-test("while a history copy runs, a post is recorded and reacted to but not copied", async () => {
+test("while a backfill copies, a post is recorded and reacted to but not copied", async () => {
   const fake = fakes();
-  await onNewsMessageCreated(message(), deps(fake, { copiesPaused: () => true }));
+  const lane = new NewsCopyLane();
+  lane.holdForCatchUp();
+  await onNewsMessageCreated(message(), deps(fake, { copyWaits: () => lane.copyWaits() }));
 
   assert.deepEqual(fake.calls, [
     ["record", MESSAGE_ID, RECORDED_BODY],
@@ -287,9 +290,11 @@ test("while a history copy runs, a post is recorded and reacted to but not copie
   ]);
 });
 
-test("once the history copy ends, a post is copied again", async () => {
+test("once the backfill ends, a post is copied again", async () => {
   const fake = fakes();
-  await onNewsMessageCreated(message(), deps(fake, { copiesPaused: () => false }));
+  const lane = new NewsCopyLane();
+  lane.holdForCatchUp()?.release();
+  await onNewsMessageCreated(message(), deps(fake, { copyWaits: () => lane.copyWaits() }));
 
   assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "react", "post", "reportCopy"]);
 });

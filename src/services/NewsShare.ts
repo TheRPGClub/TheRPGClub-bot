@@ -25,7 +25,6 @@ import {
   type INewsCopyDeps,
   type INewsPost,
 } from "./NewsCopying.js";
-import { newsCopiesPaused } from "./NewsHistoryCopy.js";
 import { createNewsRecordingDeps, type INewsRecordingDeps } from "./NewsHubRecording.js";
 import type { INewsFilingApi } from "./NewsItemApi.js";
 
@@ -125,7 +124,7 @@ function recordErrorKeeper(api: INewsFilingApi): {
   };
 }
 
-/** Where the share's News Copy is: posted, waiting for a history copy, or failed. */
+/** Where the share's News Copy is: posted, waiting for a backfill copier, or failed. */
 type ShareCopyState = "copied" | "waiting" | "failed";
 
 function confirmation(
@@ -140,8 +139,7 @@ function confirmation(
     `${how} **${NEWS_CATEGORY_NAMES[categoryKey]}**.`,
   ];
   if (copy === "waiting") {
-    lines.push("Its copy in the category thread will be posted after the history copy " +
-      "that is running now.");
+    lines.push("Its copy in the category thread will be posted after the copies running now.");
   } else if (copy === "failed") {
     lines.push("Its copy in the category thread could not be posted yet; it will be retried.");
   }
@@ -192,7 +190,7 @@ export async function shareNewsReply(
       return { text: buildApiErrorMessage(label, keeper.error()), failed: true };
     }
     let copy: ShareCopyState = "copied";
-    if (outcome.copy === null) copy = deps.copiesPaused?.() ? "waiting" : "failed";
+    if (outcome.copy === null) copy = outcome.waiting ? "waiting" : "failed";
     return {
       text: confirmation(post, categoryKey, share.categoryKey === null, copy),
       failed: false,
@@ -222,7 +220,7 @@ export function createNewsShareDeps(client: Client): INewsShareDeps {
     discord: recording.discord,
     waitForPreview: recording.waitForPreview,
     filing: recording.filing,
-    copiesPaused: newsCopiesPaused,
+    copyWaits: recording.copyWaits,
     postShare: async (channelId, message) => {
       const channel = await client.channels.fetch(channelId);
       if (!channel?.isSendable()) {

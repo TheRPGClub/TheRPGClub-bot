@@ -3,6 +3,7 @@ import test from "node:test";
 import type { NewsCategoryKey, NewsCategoryThreads } from "../config/newsHub.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
 import type { INewsCopyMessage } from "../functions/NewsCopy.js";
+import { NewsCopyLane } from "../services/NewsCopyLane.js";
 import type { INewsCopyDiscord, INewsPost } from "../services/NewsCopying.js";
 import {
   copyNewsHistory,
@@ -378,7 +379,8 @@ test("one run at a time: a second start is refused, and copies wait while it run
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const runner = new NewsHistoryCopyRunner();
+  const lane = new NewsCopyLane();
+  const runner = new NewsHistoryCopyRunner(lane);
   const w = world([item(1)]);
   const listing = w.deps.listing;
   const gated = {
@@ -390,18 +392,18 @@ test("one run at a time: a second start is refused, and copies wait while it run
       },
     },
   };
-  assert.equal(runner.copiesPaused(), false);
+  assert.equal(lane.paused(), false);
 
   const first = runner.start("staff", new Date(), gated);
   const second = runner.start("staff", new Date(), w.deps);
 
   assert.ok(first);
   assert.equal(second, null);
-  assert.equal(runner.copiesPaused(), true);
+  assert.equal(lane.paused(), true);
   assert.equal(runner.current()?.startedBy, "staff");
   release();
   await first;
-  assert.equal(runner.copiesPaused(), false);
+  assert.equal(lane.paused(), false);
   assert.equal(runner.current(), null);
   const again = runner.start("staff", new Date(), w.deps);
   assert.ok(again);

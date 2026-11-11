@@ -11,7 +11,9 @@ import {
   type IBotJobContext,
   type IBotJobSurface,
 } from "../services/BotJobHandlers.js";
+import { NewsCopyLane } from "../services/NewsCopyLane.js";
 import type { INewsPost } from "../services/NewsCopying.js";
+import { NewsHistoryCopyRunner } from "../services/NewsHistoryCopy.js";
 import type { INewsSyncDiscord } from "../services/NewsCopySync.js";
 import type {
   INewsChannelReader,
@@ -232,7 +234,7 @@ interface IDepOptions {
   state?: FeatureState | null;
   /** The cached flag state, read before each item (defaults to `state`). */
   cachedState?: () => FeatureState | null;
-  copiesPaused?: () => boolean;
+  lane?: NewsCopyLane;
   liveSince?: number;
   filing?: Map<string, null>;
   paced?: string[];
@@ -261,7 +263,7 @@ function deps(
       waitForPreview: () => new Promise<INewsPost>(() => undefined),
       filing: options.filing ?? new Map(),
     },
-    copiesPaused: options.copiesPaused ?? (() => false),
+    lane: options.lane ?? new NewsCopyLane(),
     liveSince: () => options.liveSince ?? CATCH_UP_AT,
     pace: async () => {
       options.paced?.push("pace");
@@ -648,7 +650,9 @@ test("catch-up: posts no copies while a history copy runs", async () => {
   const api = fakeApi([recorded(channel[0], "releases"), recorded(channel[1], "releases", null)]);
   const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
 
-  const text = await catchUp(api, discord, { copiesPaused: () => true });
+  const lane = new NewsCopyLane();
+  await lane.holdForHistory();
+  const text = await catchUp(api, discord, { lane });
 
   assert.deepEqual(discord.posted, []);
   // Missed posts are still recorded and reacted to; the history copy copies them later.
@@ -657,14 +661,68 @@ test("catch-up: posts no copies while a history copy runs", async () => {
   assert.match(text, /history copy/);
 });
 
-test("catch-up: stops copying when a history copy starts", async () => {
+test("catch-up: a history copy started meanwhile takes over after the current item", async () => {
   const channel = posts(10, 4);
+  const imported = message(snowflake(-90_000), NEWS_CHANNEL);
+  const api = fakeApi([
+    recorded(imported, "emulation", null, "import"),
+    ...channel.map((m) => recorded(m, "releases", null)),
+  ]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: [imported, ...channel] });
+  const lane = new NewsCopyLane();
+  const runner = new NewsHistoryCopyRunner(lane);
+  const catchUpDeps = deps(api, discord, { lane });
+  let history: Promise<unknown> | null = null;
+  const startsHistory: INewsHubJobDeps = {
+    ...catchUpDeps,
+    pace: async () => {
+      history ??= runner.start("staff", new Date(), {
+        threads: COPY_THREADS,
+        api,
+        discord,
+        listing: api,
+        originals: {
+          fetch: async (id) => (await discord.fetchMessage(NEWS_CHANNEL, id)) as INewsPost,
+        },
+        sleep: async () => undefined,
+      });
+    },
+  };
+
+  const text = String(await handleNewsCatchUp(
+    catchUpPayload(),
+    surface(startsHistory),
+    context("live"),
+  ));
+  await history;
+
+  // Catch-up posted one copy; the history copy posted the rest, the import first.
+  assert.deepEqual(copiedIds(discord), [channel[0].id, imported.id, ...ids(channel.slice(1))]);
+  assert.match(text, /1 News Copy posted/);
+  assert.match(text, /history copy/);
+});
+
+test("catch-up: a second catch-up while one runs does nothing", async () => {
+  const channel = posts(10, 2);
   const api = fakeApi(channel.map((m) => recorded(m, "releases", null)));
   const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
+  const lane = new NewsCopyLane();
+  let second: string | null = null;
+  const nested: INewsHubJobDeps = {
+    ...deps(api, discord, { lane }),
+    pace: async () => {
+      second ??= String(await handleNewsCatchUp(
+        catchUpPayload(),
+        surface(deps(api, discord, { lane })),
+        context("live"),
+      ));
+    },
+  };
 
-  await catchUp(api, discord, { copiesPaused: () => discord.posted.length >= 2 });
+  await handleNewsCatchUp(catchUpPayload(), surface(nested), context("live"));
 
-  assert.deepEqual(copiedIds(discord), ids(channel.slice(0, 2)));
+  assert.deepEqual(copiedIds(discord), ids(channel));
+  assert.match(second ?? "", /already running/);
 });
 
 test("catch-up: posts from when live filing took over are left to it", async () => {

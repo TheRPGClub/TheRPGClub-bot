@@ -45,10 +45,11 @@ export interface INewsCopyDeps {
   api: INewsFilingApi;
   discord: INewsCopyDiscord;
   /**
-   * True while a history copy runs (bot#1539): new copies wait, and the history copy posts
-   * them after the history, keeping the threads in date order. Absent: never paused.
+   * True when a new copy must wait for the backfill copier running now (the history copy
+   * or catch-up's copy phase; see NewsCopyLane), which keeps the threads in date order. The
+   * item is left without a copy, and catch-up posts it after the backfill. Absent: never.
    */
-  copiesPaused?: () => boolean;
+  copyWaits?: () => boolean;
 }
 
 /** A message the News Copy can link back to: discord.js's Message has its jump `url`. */
@@ -139,6 +140,8 @@ export interface INewsFilingOutcome {
   recorded: boolean;
   /** Where the News Copy lives, or null when it could not be posted or reported. */
   copy: INewsCopyLocation | null;
+  /** True when the copy waits for a backfill copier, which leaves it to catch-up. */
+  waiting: boolean;
 }
 
 /**
@@ -146,7 +149,7 @@ export interface INewsFilingOutcome {
  * category's emoji, posts the News Copy (unless told not to) and reports where it lives.
  * An item the API does not record is neither reacted to nor copied; a failed reaction does
  * not stop the copy.
- * While copies are paused the item is left without a copy, for the history copy to post.
+ * While a backfill copier runs the item is left without a copy, for catch-up to post after it.
  */
 export async function fileNewsItem(
   filing: INewsFiling,
@@ -161,7 +164,7 @@ export async function fileNewsItem(
   } catch (error: unknown) {
     logError(LOG_CONTEXT, buildApiErrorMessage(`Could not record News Item ${item.message_id}`,
       error));
-    return { recorded: false, copy: null };
+    return { recorded: false, copy: null, waiting: false };
   }
   if (filing.react) {
     try {
@@ -172,9 +175,10 @@ export async function fileNewsItem(
       logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
     }
   }
-  if (filing.postCopy === false || deps.copiesPaused?.()) return { recorded: true, copy: null };
+  if (filing.postCopy === false) return { recorded: true, copy: null, waiting: false };
+  if (deps.copyWaits?.()) return { recorded: true, copy: null, waiting: true };
   const copy = await postNewsCopy(item.message_id, categoryKey, filing.copy, deps);
-  return { recorded: true, copy };
+  return { recorded: true, copy, waiting: false };
 }
 
 async function messageChannel(client: Client, channelId: string) {

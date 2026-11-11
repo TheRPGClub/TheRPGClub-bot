@@ -157,7 +157,7 @@ function previewArrives(title: string): INewsShareDeps["waitForPreview"] {
 function deps(
   fake: IFakes,
   options: Partial<Pick<INewsShareDeps,
-    "testMode" | "waitForPreview" | "filing" | "copiesPaused">> = {},
+    "testMode" | "waitForPreview" | "filing" | "copyWaits">> = {},
 ): INewsShareDeps {
   return {
     testMode: false,
@@ -366,15 +366,15 @@ test("a copy that fails still confirms the share, saying the copy will be retrie
     assert.match(reply.text, /will be retried/);
   });
 
-test("during a history copy the share is filed and its copy waits for the history",
+test("during a backfill copy the share is filed and its copy waits for it",
   async () => {
     const fake = fakes();
-    const reply = await shareNewsReply(share(), deps(fake, { copiesPaused: () => true }));
+    const reply = await shareNewsReply(share(), deps(fake, { copyWaits: () => true }));
 
     assert.deepEqual(fake.calls.map((call) => call[0]), ["share", "record", "react"]);
     assert.equal(reply.failed, false);
     assert.match(reply.text, new RegExp(SHARE_URL));
-    assert.match(reply.text, /after the history copy/);
+    assert.match(reply.text, /after the copies running now/);
     assert.doesNotMatch(reply.text, /could not be posted/);
   });
 
