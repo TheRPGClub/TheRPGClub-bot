@@ -12,10 +12,9 @@ export const GAMEDB_UPDATES_CHANNEL_ID = resolveId(
 export const GAME_NEWS_CHANNEL_ID = resolveId("GAME_NEWS_CHANNEL_ID", "738040352274907225");
 // News Hub (spec api#355): the game news forum and one thread per News Category. The
 // discussion threads get no IDs, so the bot ignores them.
-// PLACEHOLDER bot#1528: the forum's own ID is still a made-up stand-in (nothing reads it yet).
 export const GAME_NEWS_FORUM_ID = resolveId(
   "GAME_NEWS_FORUM_ID",
-  "100000000000000000", // PLACEHOLDER bot#1528
+  "1569864387429269574",
 );
 export const NEWS_ANNOUNCEMENTS_THREAD_ID = resolveId(
   "NEWS_ANNOUNCEMENTS_THREAD_ID",
