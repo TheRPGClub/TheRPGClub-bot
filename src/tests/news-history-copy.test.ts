@@ -251,7 +251,8 @@ test("the listing is read from page 1 again after each page, as copies leave it"
   assert.equal(progress.left, 0);
 });
 
-test("an item whose copy fails is logged and skipped; the run goes on and ends", async () => {
+test("an item whose copy fails is logged and skipped; the run goes on and ends", async (t) => {
+  t.mock.method(console, "error", () => {});
   const gone = item(1);
   const refused = item(2);
   const w = world([gone, refused, item(3)], {
@@ -268,7 +269,8 @@ test("an item whose copy fails is logged and skipped; the run goes on and ends",
   assert.equal(w.calls.filter((call) => call[0] === "fetch").length, 3);
 });
 
-test("more failed items than a page: the run reads past them to the next page", async () => {
+test("more failed items than a page: the run reads past them to the next page", async (t) => {
+  t.mock.method(console, "error", () => {});
   const failing = [item(1), item(2), item(3)];
   const w = world([...failing, item(4), item(5)], {
     per: 2,
@@ -283,7 +285,8 @@ test("more failed items than a page: the run reads past them to the next page", 
   assert.equal(w.calls.filter((call) => call[0] === "fetch").length, 5);
 });
 
-test("too many failures in a row stop the run, saying why", async () => {
+test("too many failures in a row stop the run, saying why", async (t) => {
+  t.mock.method(console, "error", () => {});
   const items = [item(1), item(2), item(3), item(4)];
   const w = world(items, { failureLimit: 3, failPost: items.map((i) => i.message_id) });
 

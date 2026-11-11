@@ -25,6 +25,7 @@ import {
   type INewsCopyDeps,
   type INewsPost,
 } from "./NewsCopying.js";
+import { newsCopiesPaused } from "./NewsHistoryCopy.js";
 import { createNewsRecordingDeps, type INewsRecordingDeps } from "./NewsHubRecording.js";
 import type { INewsFilingApi } from "./NewsItemApi.js";
 
@@ -124,18 +125,24 @@ function recordErrorKeeper(api: INewsFilingApi): {
   };
 }
 
+/** Where the share's News Copy is: posted, waiting for a history copy, or failed. */
+type ShareCopyState = "copied" | "waiting" | "failed";
+
 function confirmation(
   post: INewsPost,
   categoryKey: NewsCategoryKey,
   picked: boolean,
-  copied: boolean,
+  copy: ShareCopyState,
 ): string {
   const how = picked ? "The bot filed it under" : "Filed under";
   const lines = [
     `Shared in the News Channel: ${post.url}`,
     `${how} **${NEWS_CATEGORY_NAMES[categoryKey]}**.`,
   ];
-  if (!copied) {
+  if (copy === "waiting") {
+    lines.push("Its copy in the category thread will be posted after the history copy " +
+      "that is running now.");
+  } else if (copy === "failed") {
     lines.push("Its copy in the category thread could not be posted yet; it will be retried.");
   }
   return lines.join("\n");
@@ -184,8 +191,10 @@ export async function shareNewsReply(
       const label = "Could not record your news, so its post was removed again";
       return { text: buildApiErrorMessage(label, keeper.error()), failed: true };
     }
+    let copy: ShareCopyState = "copied";
+    if (outcome.copy === null) copy = deps.copiesPaused?.() ? "waiting" : "failed";
     return {
-      text: confirmation(post, categoryKey, share.categoryKey === null, outcome.copy !== null),
+      text: confirmation(post, categoryKey, share.categoryKey === null, copy),
       failed: false,
     };
   } finally {
@@ -213,6 +222,7 @@ export function createNewsShareDeps(client: Client): INewsShareDeps {
     discord: recording.discord,
     waitForPreview: recording.waitForPreview,
     filing: recording.filing,
+    copiesPaused: newsCopiesPaused,
     postShare: async (channelId, message) => {
       const channel = await client.channels.fetch(channelId);
       if (!channel?.isSendable()) {
