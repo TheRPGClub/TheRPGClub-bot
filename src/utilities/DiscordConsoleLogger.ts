@@ -142,15 +142,22 @@ function buildLogContainer(level: BufferedLevel, description: string): Container
     );
 }
 
+/**
+ * Sends one batch. A Components V2 message cannot carry `content` (Discord refuses the
+ * whole message), so an error batch's dev ping is a text component above the container.
+ */
 async function sendContainerToChannel(
   channel: ILoggerChannel,
   container: ContainerBuilder,
-  content?: string,
+  pingUserId?: string,
 ): Promise<void> {
+  const ping = pingUserId
+    ? [new TextDisplayBuilder().setContent(userMention(pingUserId))]
+    : [];
   await channel.send({
-    components: [container],
+    components: [...ping, container],
     flags: buildComponentsV2EditFlags(),
-    ...(content ? { content } : {}),
+    ...(pingUserId ? { allowedMentions: { users: [pingUserId] } } : {}),
   });
 }
 
@@ -249,9 +256,9 @@ async function flushBufferedLevels(targetLevel?: BufferedLevel): Promise<void> {
         containers.push(buildLogContainer(level, currentDescription));
       }
 
-      const pingContent = level === "error" ? userMention(BOT_DEV_PING_USER_ID) : undefined;
+      const pingUserId = level === "error" ? BOT_DEV_PING_USER_ID : undefined;
       for (let i = 0; i < containers.length; i++) {
-        await sendContainerToChannel(channel, containers[i], i === 0 ? pingContent : undefined);
+        await sendContainerToChannel(channel, containers[i], i === 0 ? pingUserId : undefined);
       }
     }
   } catch {
