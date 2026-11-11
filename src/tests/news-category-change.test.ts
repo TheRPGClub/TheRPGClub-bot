@@ -6,6 +6,8 @@ import type { INewsCopyMessage } from "../functions/NewsCopy.js";
 import { NewsCopyLane } from "../services/NewsCopyLane.js";
 import type { INewsPost } from "../services/NewsCopying.js";
 import {
+  NEWS_CATEGORY_HISTORY_COPY_MESSAGE,
+  NEWS_CATEGORY_LANE_BUSY_MESSAGE,
   changeNewsCategory,
   moveNewsCopies,
   type INewsCategoryApi,
@@ -199,20 +201,77 @@ test("while a history copy runs, a change is refused and nothing changes", async
   assert.equal(reply.text, "A history copy is running; try again when it finishes.");
 });
 
-test("while catch-up copies, the change is recorded and its copy moves once it ends",
+test("while catch-up copies, the change waits for it before asking the API", async () => {
+  const { calls, deps } = setup();
+  const lane = new NewsCopyLane();
+  const hold = await lane.holdForCatchUp();
+  const replying = changeNewsCategory(REQUEST, { ...deps, lane });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  // Catch-up may hold a page listing the item under its old category.
+  assert.deepEqual(calls, []);
+  hold?.release();
+  const reply = await replying;
+  assert.deepEqual(calls.map((call) => call[0]), [
+    "changeCategory", "fetch", "unreact", "react", "delete", "post", "reportCopy",
+  ]);
+  assert.match(reply.text, /Its copy is now in/);
+});
+
+test("no backfill starts while a change is being made", async () => {
+  const { deps } = setup();
+  const lane = new NewsCopyLane();
+  let backfill: string | null = null;
+  const changing = changeNewsCategory(REQUEST, {
+    ...deps,
+    lane,
+    api: {
+      ...deps.api,
+      changeCategory: async (...args) => {
+        void lane.holdForCatchUp().then((hold) => {
+          backfill = backfill ?? "started";
+          hold?.release();
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+        backfill = backfill ?? "waited";
+        return deps.api.changeCategory(...args);
+      },
+    },
+  });
+
+  await changing;
+  assert.equal(backfill, "waited");
+});
+
+test("a wait for catch-up longer than the interaction allows refuses, changing nothing",
   async () => {
     const { calls, deps } = setup();
     const lane = new NewsCopyLane();
-    const hold = lane.holdForCatchUp();
-    const replying = changeNewsCategory(REQUEST, { ...deps, lane });
-    await new Promise((resolve) => setImmediate(resolve));
+    const hold = await lane.holdForCatchUp();
+    const reply = await changeNewsCategory(REQUEST, { ...deps, lane, laneWaitMs: 1 });
 
-    assert.deepEqual(calls.map((call) => call[0]), ["changeCategory", "fetch", "unreact", "react"]);
+    assert.deepEqual(calls, []);
+    assert.equal(reply.failed, false);
+    assert.equal(reply.text, NEWS_CATEGORY_LANE_BUSY_MESSAGE);
+    // The given-up wait does not keep the lane from the next backfill.
     hold?.release();
-    const reply = await replying;
-    assert.deepEqual(calls.slice(4).map((call) => call[0]), ["delete", "post", "reportCopy"]);
-    assert.match(reply.text, /Its copy is now in/);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(await lane.holdForCatchUp());
   });
+
+test("a history copy that takes over while the change waits refuses it", async () => {
+  const { calls, deps } = setup();
+  const lane = new NewsCopyLane();
+  const hold = await lane.holdForCatchUp();
+  const replying = changeNewsCategory(REQUEST, { ...deps, lane });
+  const history = lane.holdForHistory();
+  hold?.release();
+
+  const reply = await replying;
+  assert.deepEqual(calls, []);
+  assert.equal(reply.text, NEWS_CATEGORY_HISTORY_COPY_MESSAGE);
+  (await history).release();
+});
 
 test("an image too large to upload is linked in the moved copy instead", async () => {
   const { calls, deps } = setup({ imageSize: 30 * 1024 * 1024 });

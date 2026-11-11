@@ -281,7 +281,7 @@ test("a link post is recorded, reacted to, copied and its copy reported, in orde
 test("while a backfill copies, a post is recorded and reacted to but not copied", async () => {
   const fake = fakes();
   const lane = new NewsCopyLane();
-  lane.holdForCatchUp();
+  await lane.holdForCatchUp();
   await onNewsMessageCreated(message(), deps(fake, { copyWaits: () => lane.copyWaits() }));
 
   assert.deepEqual(fake.calls, [
@@ -293,7 +293,7 @@ test("while a backfill copies, a post is recorded and reacted to but not copied"
 test("once the backfill ends, a post is copied again", async () => {
   const fake = fakes();
   const lane = new NewsCopyLane();
-  lane.holdForCatchUp()?.release();
+  (await lane.holdForCatchUp())?.release();
   await onNewsMessageCreated(message(), deps(fake, { copyWaits: () => lane.copyWaits() }));
 
   assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "react", "post", "reportCopy"]);

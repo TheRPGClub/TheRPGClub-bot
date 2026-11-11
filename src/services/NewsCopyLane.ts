@@ -2,6 +2,10 @@
 // posted, so only one backfill copier posts at a time, oldest first: the history copy
 // (`/news-import copy`) or catch-up's copy phase. While one runs, every other new copy waits
 // (live posts, corrections, upload moves) and is posted after it, in date order.
+//
+// A category correction holds the lane too, from before it asks the API for the change until
+// its copy has moved: it waits for a running backfill (which may hold a page listing the
+// item under its old category), and backfills wait for it. New copies do not wait for it.
 
 /** A backfill copier: the history copy, or catch-up's copy phase. */
 export type NewsBackfill = "history" | "catch-up";
@@ -32,6 +36,8 @@ export class NewsCopyLane {
   /** A catch-up asked for while one ran: run once more after it, filing missed posts or not. */
   private catchUpAgain: { fileMissed: boolean } | null = null;
   private readonly listeners: ReleaseListener[] = [];
+  /** Category corrections being made; each settles when its correction releases the lane. */
+  private readonly corrections = new Set<Promise<void>>();
 
   /** True while a backfill copier runs (or the history copy waits to take over). */
   paused(): boolean {
@@ -53,10 +59,39 @@ export class NewsCopyLane {
     return true;
   }
 
-  /** Catch-up's copy phase takes the lane; null while another backfill holds it. */
-  holdForCatchUp(): INewsCopyLaneHold | null {
-    if (this.paused()) return null;
-    return this.hold("catch-up");
+  /**
+   * Catch-up's copy phase takes the lane once no category correction is being made; null
+   * while another backfill holds it.
+   */
+  async holdForCatchUp(): Promise<INewsCopyLaneHold | null> {
+    for (;;) {
+      if (this.paused()) return null;
+      if (this.corrections.size === 0) return this.hold("catch-up");
+      await Promise.all(this.corrections);
+    }
+  }
+
+  /**
+   * A category correction takes the lane once no backfill holds it, and keeps backfills
+   * from starting until it calls the release it gets. Null while the history copy runs (or
+   * once it takes over meanwhile): corrections are refused then.
+   */
+  async holdForCorrection(): Promise<(() => void) | null> {
+    for (;;) {
+      if (this.historyRunning()) return null;
+      const busy = this.holder?.released;
+      if (!busy) break;
+      await busy;
+    }
+    let release = (): void => {};
+    const done = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.corrections.add(done);
+    return () => {
+      this.corrections.delete(done);
+      release();
+    };
   }
 
   /**
@@ -75,7 +110,7 @@ export class NewsCopyLane {
     return this.hold("history");
   }
 
-  /** Settles once no backfill holds the lane, nor waits to take it. */
+  /** Settles once no backfill holds the lane, nor waits to take it (corrections aside). */
   async idle(): Promise<void> {
     for (;;) {
       const busy = this.holder?.released ?? this.historyTakingOver;
@@ -116,11 +151,20 @@ export class NewsCopyLane {
     this.listeners.push(listener);
   }
 
-  /** Asks whatever holds the lane to stop, and settles once it has let go. */
+  /**
+   * Asks whatever holds the lane to stop, and settles once it has let go and no category
+   * correction is being made.
+   */
   private async stopCatchUp(): Promise<void> {
-    while (this.holder) {
-      this.holder.stopRequested = true;
-      await this.holder.released;
+    for (;;) {
+      if (this.holder) {
+        this.holder.stopRequested = true;
+        await this.holder.released;
+      } else if (this.corrections.size > 0) {
+        await Promise.all(this.corrections);
+      } else {
+        return;
+      }
     }
   }
 

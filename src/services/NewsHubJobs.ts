@@ -474,7 +474,7 @@ async function catchUp(deps: INewsHubJobDeps, fileMissed: boolean): Promise<Catc
     );
   }
   if (counts.switchedOff) return counts;
-  const hold = deps.lane.holdForCatchUp();
+  const hold = await deps.lane.holdForCatchUp();
   if (!hold) {
     counts.paused = true;
     return counts;

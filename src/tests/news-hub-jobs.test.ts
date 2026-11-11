@@ -810,13 +810,13 @@ test("copy retry: runs right after a history copy finishes", async () => {
   assert.deepEqual(schedule.retries, ["retry"]);
 });
 
-test("copy retry: runs after catch-up's copy phase only when copies waited for it", () => {
+test("copy retry: runs after catch-up's copy phase only when copies waited for it", async () => {
   const lane = new NewsCopyLane();
   const schedule = retrySchedule(lane);
 
-  lane.holdForCatchUp()?.release();
+  (await lane.holdForCatchUp())?.release();
   assert.deepEqual(schedule.retries, []);
-  const hold = lane.holdForCatchUp();
+  const hold = await lane.holdForCatchUp();
   lane.copyWaits();
   hold?.release();
   assert.deepEqual(schedule.retries, ["retry"]);
