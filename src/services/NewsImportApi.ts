@@ -1,4 +1,6 @@
+import type { NewsCategoryKey } from "../config/newsHub.js";
 import type { INewsImportListItem } from "../functions/NewsImportFile.js";
+import type { INewsCopyLocation } from "./NewsItemApi.js";
 import { apiGetOrThrow, apiPostOrThrow } from "./RpgClubApiClient.js";
 
 // The News Import endpoints (spec api#355, api#359, api#367). They are for Admins and
@@ -32,6 +34,15 @@ export interface INewsImportAssignRejection {
   reason: string;
 }
 
+/** An item whose category an assignment changed and that has a News Copy to move. */
+export interface INewsImportMove {
+  messageId: string;
+  categoryKey: NewsCategoryKey;
+  previousCategoryKey: NewsCategoryKey;
+  /** Where the copy lives now, in the previous category's thread. */
+  copy: INewsCopyLocation | null;
+}
+
 export interface INewsImportAssignResult {
   assigned: number;
   /** `skip` rows, including items an earlier `skip` already removed. */
@@ -40,6 +51,8 @@ export interface INewsImportAssignResult {
   /** Imported News Items still unsorted after the request. */
   unsorted: number;
   rejections: INewsImportAssignRejection[];
+  /** Changed items with a News Copy, in row order (spec api#367). */
+  moved: INewsImportMove[];
 }
 
 export interface INewsImportStatus {
@@ -73,8 +86,14 @@ export interface INewsImportApi {
 
 const NEWS_IMPORT_PATH = "/api/v1/news_import";
 
-type AssignResultPayload = Omit<INewsImportAssignResult, "rejections"> & {
+type AssignResultPayload = Omit<INewsImportAssignResult, "rejections" | "moved"> & {
   rejections: { index: number; message_id: string; value: string; reason: string }[];
+  moved?: {
+    message_id: string;
+    category_key: NewsCategoryKey;
+    previous_category_key: NewsCategoryKey;
+    news_copy?: INewsCopyLocation | null;
+  }[];
 };
 
 /**
@@ -132,6 +151,12 @@ export const NEWS_IMPORT_API: INewsImportApi = {
         messageId: row.message_id,
         value: row.value,
         reason: row.reason,
+      })),
+      moved: (result.moved ?? []).map((move) => ({
+        messageId: move.message_id,
+        categoryKey: move.category_key,
+        previousCategoryKey: move.previous_category_key,
+        copy: move.news_copy ?? null,
       })),
     };
   },

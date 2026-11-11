@@ -406,8 +406,8 @@ test("the News Channel listener records the bot's post neither on arrival nor on
       places: new Map([[NEWS_CHANNEL, null]]),
       threads: THREADS,
       featureState: async () => "live",
-      api: fake.api,
-      discord: fake.discord,
+      api: { ...fake.api, find: async () => assert.fail("no News Item lookup expected") },
+      discord: { ...fake.discord, editCopy: async () => assert.fail("no copy edit expected") },
       waitForPreview: async (posted) => posted,
       filing,
     };

@@ -9,11 +9,8 @@ import {
 import { IS_TEST_MODE } from "../config/testMode.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
 import { pickNewsCategory } from "../functions/NewsCategoryPicker.js";
-import { newsItemFrom, type INewsMessage } from "../functions/NewsItem.js";
-import {
-  buildApiErrorMessage,
-  buildDiscordErrorMessage,
-} from "../utilities/ApiErrorUtils.js";
+import { newsItemFrom } from "../functions/NewsItem.js";
+import { buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { getFeatureState } from "./FeaturePostRouting.js";
 import { newsCopiesPaused } from "./NewsHistoryCopy.js";
@@ -21,32 +18,31 @@ import {
   discordNewsCopier,
   fileNewsItem,
   newsCopySourceOf,
-  type INewsCopyDeps,
-  type INewsCopyDiscord,
   type INewsFilingOutcome,
   type INewsPost,
 } from "./NewsCopying.js";
 import {
-  NEWS_ITEM_API,
-  newsItemRecordBody,
-  type INewsFilingApi,
-} from "./NewsItemApi.js";
+  discordNewsCopyEditor,
+  removeNewsItem,
+  syncEditedNewsMessage,
+  type INewsSyncDeps,
+} from "./NewsCopySync.js";
+import { NEWS_ITEM_API } from "./NewsItemApi.js";
 
 // Recording (spec api#367): members share news in the News Channel. A new post is filed:
 // its category picked, recorded, reacted to and copied into the category's thread. Edits
-// and deletes are pushed to the API. Only the bot posts in the category threads.
+// and deletes reach the API and the News Copy (NewsCopySync). Only the bot posts in the
+// category threads.
 
 const LOG_CONTEXT = "NewsHubRecording";
 
-export interface INewsRecordingDeps extends INewsCopyDeps {
+export interface INewsRecordingDeps extends INewsSyncDeps {
   /** A PR preview shares the production API, so test mode sends nothing. */
   testMode: boolean;
   /** The News Channel, whose messages have no category until the bot picks one. */
   places: NewsPlaces;
   /** The News Hub's state. Only Off stops recording; null (unreadable) records. */
   featureState: () => Promise<FeatureState | null>;
-  api: INewsFilingApi;
-  discord: INewsCopyDiscord;
   /**
    * The message once Discord has added a link preview, or as it is when none came within
    * {@link NEWS_PREVIEW_WAIT_MS}.
@@ -56,13 +52,13 @@ export interface INewsRecordingDeps extends INewsCopyDeps {
    * Messages being filed now, each with its latest edit made meanwhile (null for none).
    * The filing records that edit once it ends; an edit during the preview wait (Discord
    * adding the preview) is already in what it files. A delete takes the message out, which
-   * stops the filing after the preview wait.
+   * stops the filing after the preview wait, or removes the item and its copy once filed.
    */
-  filing: Map<string, INewsMessage | null>;
+  filing: Map<string, INewsPost | null>;
 }
 
 /** Messages being filed, shared by every handler of this bot's client. */
-const FILING = new Map<string, INewsMessage | null>();
+const FILING = new Map<string, INewsPost | null>();
 
 /**
  * Waits for the messageUpdate that gives `message` a link preview. discord.js patches the
@@ -92,19 +88,11 @@ export function createNewsRecordingDeps(client: Client): INewsRecordingDeps {
     threads: NEWS_CATEGORY_THREADS,
     featureState: () => getFeatureState(NEWS_HUB_FEATURE_KEY),
     api: NEWS_ITEM_API,
-    discord: discordNewsCopier(client),
+    discord: { ...discordNewsCopier(client), ...discordNewsCopyEditor(client) },
     waitForPreview: previewWaiter(client),
     filing: FILING,
     copiesPaused: newsCopiesPaused,
   };
-}
-
-async function send(label: string, request: () => Promise<unknown>): Promise<void> {
-  try {
-    await request();
-  } catch (error: unknown) {
-    logError(LOG_CONTEXT, buildApiErrorMessage(label, error));
-  }
 }
 
 /** Whether a change in this channel is recorded now: the News Channel, not test mode, not Off. */
@@ -114,7 +102,7 @@ async function isRecording(channelId: string, deps: INewsRecordingDeps): Promise
 }
 
 /** A link Discord has not previewed yet: worth waiting for, since the picker reads it. */
-function awaitsPreview(message: INewsMessage, linked: boolean): boolean {
+function awaitsPreview(message: INewsPost, linked: boolean): boolean {
   return linked && message.embeds.length === 0;
 }
 
@@ -154,9 +142,14 @@ export async function fileNewsMessage(
     }, deps);
     return outcome;
   } finally {
+    const deleted = !deps.filing.has(message.id);
     const edited = deps.filing.get(message.id) ?? null;
     deps.filing.delete(message.id);
-    if (edited && outcome?.recorded) await recordOrRemove(edited, deps);
+    if (outcome?.recorded && deleted) {
+      await removeNewsItem(message.id, "for a deleted message", deps, outcome.copy);
+    } else if (outcome?.recorded && edited) {
+      await recordOrRemove(edited, deps);
+    }
   }
 }
 
@@ -177,40 +170,34 @@ export async function onNewsMessageCreated(
  * bot's message is never a member's News Item and is left alone: the bot's own `/news share`
  * post is recorded by the command, and the edit that adds its link preview must not remove it.
  */
-async function recordOrRemove(message: INewsMessage, deps: INewsRecordingDeps): Promise<void> {
+async function recordOrRemove(message: INewsPost, deps: INewsRecordingDeps): Promise<void> {
   if (message.author.bot) return;
   if (deps.filing.has(message.id)) {
     deps.filing.set(message.id, message);
     return;
   }
-  const item = newsItemFrom(message, deps.places);
-  if (item) {
-    await send(
-      `Could not record News Item ${item.message_id} after an edit`,
-      () => deps.api.record(item.message_id, newsItemRecordBody(item)),
-    );
-    return;
-  }
-  await send(
-    `Could not remove News Item ${message.id} after an edit`,
-    () => deps.api.remove(message.id),
-  );
+  await syncEditedNewsMessage(message, deps);
 }
 
 /**
  * messageUpdate: records the message again on every edit, including Discord adding the
- * link's preview after the filing stopped waiting, or removes the News Item when the edit
- * leaves no link and no image. The category is not sent, so the stored one is kept.
+ * link's preview after the filing stopped waiting, and edits its News Copy to match; or
+ * removes the News Item and its copy when the edit leaves no link and no image. The
+ * category is not sent, so the stored one is kept. A message never recorded is left alone.
  */
 export async function onNewsMessageEdited(
-  message: INewsMessage,
+  message: INewsPost,
   deps: INewsRecordingDeps,
 ): Promise<void> {
   if (!(await isRecording(message.channelId, deps))) return;
   await recordOrRemove(message, deps);
 }
 
-/** messageDelete and messageDeleteBulk: removes the deleted messages' News Items by ID. */
+/**
+ * messageDelete and messageDeleteBulk: removes the deleted messages' News Items and deletes
+ * their News Copies. A message still being filed is left to its filing, which stops or
+ * removes what it filed.
+ */
 export async function onNewsMessagesDeleted(
   channelId: string,
   messageIds: readonly string[],
@@ -218,11 +205,8 @@ export async function onNewsMessagesDeleted(
 ): Promise<void> {
   if (!(await isRecording(channelId, deps))) return;
   for (const messageId of messageIds) {
-    deps.filing.delete(messageId);
-    await send(
-      `Could not remove News Item ${messageId} for a deleted message`,
-      () => deps.api.remove(messageId),
-    );
+    if (deps.filing.delete(messageId)) continue;
+    await removeNewsItem(messageId, "for a deleted message", deps);
   }
 }
 
@@ -236,7 +220,7 @@ async function onUncachedEdit(
   deps: INewsRecordingDeps,
 ): Promise<void> {
   if (!(await isRecording(packet.channel_id, deps))) return;
-  let message: INewsMessage | null = null;
+  let message: INewsPost | null = null;
   try {
     const channel = await client.channels.fetch(packet.channel_id);
     if (channel?.isTextBased()) message = await channel.messages.fetch(packet.id);
