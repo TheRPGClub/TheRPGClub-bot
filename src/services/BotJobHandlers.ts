@@ -233,7 +233,7 @@ export interface IBotJobSurface {
    */
   giveawayHubLeftPreview(state: FeatureState): Promise<void>;
   /**
-   * What the News Hub jobs read and write: the category threads and the Game News Archive,
+   * What the News Hub jobs read and write: the News Channel, the category threads' copies
    * and the News Item endpoints. Optional so fakes for other jobs need not build it.
    */
   newsHub?: INewsHubJobDeps;
@@ -991,9 +991,10 @@ export const handleNewsImagesRenew: BotJobHandler = async (payload, surface, con
 
 /**
  * Payload: `{ from_state: "off", to_state, feature_key: "news_hub" }`. The News Hub left
- * Off, so the category threads are scanned for what was posted, edited or deleted while it
- * was Off. The state is read from the API again, not taken from the dispatcher: the flag
- * cache can still say Off. Fails, after the other threads, when a thread could not be read.
+ * Off, so the News Channel posts made while it was Off are filed and the missing News Copies
+ * posted (see `runNewsCatchUp`). The state is read from the API again, not taken from the
+ * dispatcher: the flag cache can still say Off. Fails, after the other step, when a step
+ * could not run.
  */
 export const handleNewsCatchUp: BotJobHandler = async (_payload, surface) => {
   const outcome = await runNewsCatchUp(newsHubDeps(surface));

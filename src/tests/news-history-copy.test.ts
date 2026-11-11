@@ -218,6 +218,25 @@ test("the copy uploads the images of the original as Discord gives them now", as
   assert.deepEqual(copy.files, [{ attachment: fresh, name: "shot.png" }]);
 });
 
+test("an image too large to upload is linked in the copy instead", async () => {
+  const shot = item(1, { link: null, comment: null });
+  const huge = "https://cdn.discordapp.com/attachments/1/2/huge.png?ex=fresh";
+  const attachment = { url: huge, contentType: "image/png", name: "huge.png", size: 30e6 };
+  const w = world([shot], {
+    originalOf: (messageId) => ({
+      ...original(messageId),
+      attachments: new Map([["1", attachment]]),
+    }),
+  });
+
+  await copyNewsHistory(w.deps);
+
+  const [, , copy] = w.calls.find((call) => call[0] === "post") as
+    ["post", string, INewsCopyMessage];
+  assert.deepEqual(copy.files, []);
+  assert.match(copy.content, new RegExp(`\\n${huge.replace(/[.?]/g, "\\$&")}\\n-# Discuss`));
+});
+
 test("copies are paced about 1.5 seconds apart, the first at once", async () => {
   const w = world([item(1), item(2), item(3)]);
 

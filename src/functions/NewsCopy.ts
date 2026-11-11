@@ -6,12 +6,20 @@
 const MESSAGE_LIMIT = 2000;
 const ELLIPSIS = "…";
 
+/**
+ * What the bot uploads with one message: Discord's default upload limit, which holds in any
+ * server whatever its boost level. Images past it are linked instead (see {@link buildNewsCopy}).
+ */
+export const NEWS_COPY_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024;
+
 /** An image of the original, uploaded again with the copy. */
 export interface INewsCopyImage {
   /** Where to fetch it: the original message's attachment address, freshly read. */
   url: string;
   /** Its file name on the original; a `SPOILER_` prefix keeps it hidden. */
   name: string;
+  /** Its size in bytes, when known. An image of unknown size is uploaded. */
+  size?: number;
 }
 
 /** What a News Copy shows. */
@@ -47,13 +55,42 @@ function fitted(comment: string, room: number): string {
 }
 
 /**
- * The News Copy of a News Item: the sharer's name (no ping; the date too for an imported
- * item), their comment, the link, their images as files and a link to the original. A
- * comment too long for one message is shortened; nothing else is.
+ * The images split into those uploaded with the copy and those linked: in posted order, an
+ * image is uploaded while it fits in what is left of `limit`, so a copy never fails for size.
  */
-export function buildNewsCopy(source: INewsCopySource): INewsCopyMessage {
+function splitBySize(
+  images: readonly INewsCopyImage[],
+  limit: number,
+): { uploaded: INewsCopyImage[]; linked: INewsCopyImage[] } {
+  const uploaded: INewsCopyImage[] = [];
+  const linked: INewsCopyImage[] = [];
+  let left = limit;
+  for (const image of images) {
+    const size = image.size ?? 0;
+    if (size > left) {
+      linked.push(image);
+      continue;
+    }
+    uploaded.push(image);
+    left -= size;
+  }
+  return { uploaded, linked };
+}
+
+/**
+ * The News Copy of a News Item: the sharer's name (no ping; the date too for an imported
+ * item), their comment, the link, their images as files and a link to the original. Images
+ * past the upload limit are linked on their own lines instead (Discord shows them from the
+ * link). A comment too long for one message is shortened; nothing else is.
+ */
+export function buildNewsCopy(
+  source: INewsCopySource,
+  uploadLimit: number = NEWS_COPY_UPLOAD_LIMIT_BYTES,
+): INewsCopyMessage {
+  const { uploaded, linked } = splitBySize(source.images, uploadLimit);
   const head = creditLine(source);
-  const tail = [source.linkUrl, `-# Discuss: ${source.originalUrl}`]
+  const tail = [source.linkUrl, ...linked.map((image) => image.url),
+    `-# Discuss: ${source.originalUrl}`]
     .filter((line): line is string => line !== null);
   let lines = [head, ...tail];
   if (source.comment) {
@@ -62,7 +99,7 @@ export function buildNewsCopy(source: INewsCopySource): INewsCopyMessage {
   }
   return {
     content: lines.join("\n"),
-    files: source.images.map((image) => ({ attachment: image.url, name: image.name })),
+    files: uploaded.map((image) => ({ attachment: image.url, name: image.name })),
     allowedMentions: { parse: [] },
   };
 }

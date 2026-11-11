@@ -2,6 +2,7 @@ import type { Client } from "discord.js";
 import type { NewsCategoryKey, NewsCategoryThreads } from "../config/newsHub.js";
 import {
   buildNewsCopy,
+  type INewsCopyImage,
   type INewsCopyMessage,
   type INewsCopySource,
 } from "../functions/NewsCopy.js";
@@ -53,6 +54,11 @@ export interface INewsCopyDeps {
 /** A message the News Copy can link back to: discord.js's Message has its jump `url`. */
 export type INewsPost = INewsMessage & { url: string };
 
+/** The original's images as a News Copy takes them: fresh addresses, names and sizes. */
+export function newsCopyImagesOf(post: INewsMessage): INewsCopyImage[] {
+  return newsImageAttachments(post).map(({ url, name, size }) => ({ url, name, size }));
+}
+
 /**
  * What the News Copy of `item` shows, read from its original message `post`: fetch the
  * message first when it is old, so its image addresses have not expired. `postedAt` is the
@@ -68,7 +74,7 @@ export function newsCopySourceOf(
     authorId: item.author_id,
     comment: item.comment,
     linkUrl: item.link?.url ?? null,
-    images: newsImageAttachments(post).map(({ url, name }) => ({ url, name })),
+    images: newsCopyImagesOf(post),
     postedAt,
   };
 }
@@ -122,6 +128,11 @@ export interface INewsFiling {
   copy: INewsCopySource;
   /** Whether to react to the original: live posts only, never history. */
   react: boolean;
+  /**
+   * Whether to post the News Copy now (default true). Catch-up files missed posts with
+   * false and copies them afterwards, oldest first, from the listing of uncopied items.
+   */
+  postCopy?: boolean;
 }
 
 export interface INewsFilingOutcome {
@@ -132,8 +143,9 @@ export interface INewsFilingOutcome {
 
 /**
  * Records the News Item with its category and pick, reacts to the original with the
- * category's emoji, posts the News Copy and reports where it lives. An item the API does
- * not record is neither reacted to nor copied; a failed reaction does not stop the copy.
+ * category's emoji, posts the News Copy (unless told not to) and reports where it lives.
+ * An item the API does not record is neither reacted to nor copied; a failed reaction does
+ * not stop the copy.
  * While copies are paused the item is left without a copy, for the history copy to post.
  */
 export async function fileNewsItem(
@@ -160,7 +172,7 @@ export async function fileNewsItem(
       logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
     }
   }
-  if (deps.copiesPaused?.()) return { recorded: true, copy: null };
+  if (filing.postCopy === false || deps.copiesPaused?.()) return { recorded: true, copy: null };
   const copy = await postNewsCopy(item.message_id, categoryKey, filing.copy, deps);
   return { recorded: true, copy };
 }

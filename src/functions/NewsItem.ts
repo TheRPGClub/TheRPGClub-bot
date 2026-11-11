@@ -24,6 +24,8 @@ export interface INewsAttachment {
   url: string;
   contentType: string | null;
   name: string;
+  /** Its size in bytes (discord.js always has it), which decides whether a copy uploads it. */
+  size?: number;
 }
 
 export interface INewsEmbed {

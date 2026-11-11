@@ -56,7 +56,7 @@ function record(overrides: Partial<INewsItemRecord> = {}): INewsItemRecord {
   };
 }
 
-function post(): INewsPost {
+function post(imageSize?: number): INewsPost {
   return {
     id: MESSAGE_ID,
     channelId: NEWS_CHANNEL,
@@ -68,7 +68,12 @@ function post(): INewsPost {
     cleanContent: `Big if true ${LINK}`,
     createdAt: new Date("2026-11-10T09:00:00.000Z"),
     editedAt: null,
-    attachments: new Map([["1", { url: IMAGE_URL, contentType: "image/png", name: "shot.png" }]]),
+    attachments: new Map([["1", {
+      url: IMAGE_URL,
+      contentType: "image/png",
+      name: "shot.png",
+      size: imageSize,
+    }]]),
     embeds: [],
   };
 }
@@ -96,6 +101,8 @@ interface IOptions {
   ownReactions?: string[];
   fetchFails?: boolean;
   postFails?: boolean;
+  /** The original's image size in bytes. */
+  imageSize?: number;
 }
 
 function setup(options: IOptions = {}): { calls: Call[]; deps: INewsCategoryChangeDeps } {
@@ -121,7 +128,10 @@ function setup(options: IOptions = {}): { calls: Call[]; deps: INewsCategoryChan
     fetchPost: async (channelId, messageId) => {
       calls.push(["fetch", channelId, messageId]);
       if (options.fetchFails) throw new Error("Unknown Message");
-      return { post: post(), ownReactions: options.ownReactions ?? [THREADS.releases.emoji] };
+      return {
+        post: post(options.imageSize),
+        ownReactions: options.ownReactions ?? [THREADS.releases.emoji],
+      };
     },
     react: async (channelId, messageId, emoji) => {
       calls.push(["react", channelId, messageId, emoji]);
@@ -175,6 +185,16 @@ test("a change moves the News Copy to the new thread and swaps the reaction", as
   assert.equal(reply.failed, false);
   assert.match(reply.text, /Rumours & Leaks/);
   assert.match(reply.text, new RegExp(`<#${THREADS.rumours.threadId}>`));
+});
+
+test("an image too large to upload is linked in the moved copy instead", async () => {
+  const { calls, deps } = setup({ imageSize: 30 * 1024 * 1024 });
+  await changeNewsCategory(REQUEST, deps);
+
+  const [, , copy] = calls.find((call) => call[0] === "post") as
+    ["post", string, INewsCopyMessage];
+  assert.deepEqual(copy.files, []);
+  assert.ok(copy.content.includes(`\n${IMAGE_URL}\n-# Discuss:`));
 });
 
 test("a message with no category reaction from the bot gets none (history)", async () => {
