@@ -26,9 +26,11 @@ import {
 } from "../functions/NewsCategoryChangePrompt.js";
 import {
   CHANGE_NEWS_CATEGORY_COMMAND,
+  NEWS_CATEGORY_HISTORY_COPY_MESSAGE,
   changeNewsCategory,
   createNewsCategoryDeps,
 } from "../services/NewsCategoryChange.js";
+import { NEWS_COPY_LANE } from "../services/NewsCopyLane.js";
 import { logUnexpectedCustomId } from "../utilities/CustomIdUtils.js";
 
 /**
@@ -53,7 +55,7 @@ export class NewsCategoryCommand {
       NEWS_CHANNEL_PLACES,
       interaction.client.user.id,
       IS_TEST_MODE,
-    );
+    ) ?? (NEWS_COPY_LANE.historyRunning() ? NEWS_CATEGORY_HISTORY_COPY_MESSAGE : null);
     if (refusal) {
       await safeReply(interaction, buildTextReply(refusal, true));
       return;

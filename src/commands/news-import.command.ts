@@ -26,6 +26,7 @@ import {
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
 import { NEWS_CATEGORY_THREADS } from "../config/newsHub.js";
 import { getFeatureState } from "../services/FeaturePostRouting.js";
+import { NEWS_COPY_LANE } from "../services/NewsCopyLane.js";
 import { discordNewsCopier } from "../services/NewsCopying.js";
 import { discordNewsOriginals } from "../services/NewsHistoryCopy.js";
 import { createNewsCategoryDeps, moveNewsCopies } from "../services/NewsCategoryChange.js";
@@ -232,6 +233,7 @@ export class NewsImportCommand {
         // Runs on after the reply; every failed move is logged (NewsCategoryChange).
         moveCopies: (moves) =>
           void moveNewsCopies(moves, createNewsCategoryDeps(interaction.client)),
+        historyCopyRunning: () => NEWS_COPY_LANE.historyRunning(),
       });
     } catch (error: unknown) {
       const text = buildAnyErrorMessage("Could not apply the News Import file", error);

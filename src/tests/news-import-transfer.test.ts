@@ -275,6 +275,27 @@ test("upload moves the News Copies of items whose category changed", async () =>
   assert.match(reply.text, /\*\*1\*\* News Copy moving to its new category's thread/);
 });
 
+test("during a history copy, upload says its copies move once the history copy ends",
+  async () => {
+    const copy = { message_id: "640000000000000001", thread_id: "520000000000000002" };
+    const api = fakeApi([item(1)], {
+      sorted: new Map([[id(1), "releases"]]),
+      copies: new Map([[id(1), copy]]),
+    });
+    const moves: INewsImportMove[] = [];
+
+    const reply = await newsImportUploadReply(uploadStart(api, fileOf([row(id(1), "rumours")]), {
+      moveCopies: (moved) => {
+        moves.push(...moved);
+      },
+      historyCopyRunning: () => true,
+    }));
+
+    assert.equal(moves.length, 1);
+    assert.match(reply.text, /\*\*1\*\* News Copy will move to its new category's thread/);
+    assert.match(reply.text, /when the history copy running now finishes/);
+  });
+
 test("upload with no changed categories moves no copies", async () => {
   const api = fakeApi([item(1)]);
   let called = false;

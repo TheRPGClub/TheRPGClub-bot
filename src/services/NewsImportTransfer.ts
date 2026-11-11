@@ -162,6 +162,8 @@ export interface INewsImportUploadStart {
    * runs on in the background: moving many copies can outlast the interaction.
    */
   moveCopies(moves: readonly INewsImportMove[]): void;
+  /** True while a history copy runs: moved copies wait for it to finish. Absent: never. */
+  historyCopyRunning?: () => boolean;
 }
 
 function isDelimitedFile(file: INewsImportUploadStart["file"]): boolean {
@@ -276,7 +278,12 @@ export async function newsImportUploadReply(
     `- **${problems.length}** rejected`,
   ];
   if (upload.blank) lines.push(`- **${upload.blank}** left blank: still unsorted`);
-  if (totals.moves.length) {
+  if (totals.moves.length && start.historyCopyRunning?.()) {
+    lines.push(`- ${plural(totals.moves.length,
+      "News Copy will move to its new category's thread",
+      "News Copies will move to their new categories' threads")} when the history copy ` +
+      "running now finishes");
+  } else if (totals.moves.length) {
     lines.push(`- ${plural(totals.moves.length, "News Copy moving to its new category's thread",
       "News Copies moving to their new categories' threads")}`);
   }

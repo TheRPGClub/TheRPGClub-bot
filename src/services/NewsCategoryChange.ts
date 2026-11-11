@@ -26,6 +26,7 @@ import {
   type INewsCopyDiscord,
   type INewsPost,
 } from "./NewsCopying.js";
+import { NEWS_COPY_LANE, type NewsCopyLane } from "./NewsCopyLane.js";
 import type { INewsImportMove } from "./NewsImportApi.js";
 import {
   NEWS_ITEM_API,
@@ -46,6 +47,13 @@ export const CHANGE_NEWS_CATEGORY_COMMAND = "Change news category";
 
 export const NEWS_CATEGORY_NOT_AUTHOR_MESSAGE =
   "Only the member who shared this news and staff can change its category.";
+
+/**
+ * The refusal while a history copy runs: it may hold a page listing the item under its old
+ * category, and would post that into the old thread.
+ */
+export const NEWS_CATEGORY_HISTORY_COPY_MESSAGE =
+  "A history copy is running; try again when it finishes.";
 
 /** The parts of the API's NewsItem the move reads. */
 export interface INewsItemRecord {
@@ -115,6 +123,11 @@ export interface INewsCategoryMoveDeps {
   threads: NewsCategoryThreads;
   api: INewsFilingApi;
   discord: INewsCategoryMoveDiscord;
+  /**
+   * The copy lane: a move waits while a backfill copier runs, so the threads stay in date
+   * order, and a correction is refused while a history copy runs. Absent: never waits.
+   */
+  lane?: Pick<NewsCopyLane, "historyRunning" | "idle">;
 }
 
 export interface INewsCategoryChangeDeps extends INewsCategoryMoveDeps {
@@ -155,11 +168,11 @@ export async function swapCategoryReaction(
 }
 
 /**
- * Moves News Item `messageId`'s copy to `categoryKey`'s thread: deletes the old copy (a
- * failure is logged and the move goes on, since the category has already changed), posts
- * the new one and reports it. When the new copy cannot be posted or reported, the item is
- * reported as having no copy, so catch-up posts it in the new thread later. The new
- * location, or null.
+ * Moves News Item `messageId`'s copy to `categoryKey`'s thread, once no backfill copier is
+ * running: deletes the old copy (a failure is logged and the move goes on, since the
+ * category has already changed), posts the new one and reports it. When the new copy
+ * cannot be posted or reported, the item is reported as having no copy, so catch-up posts
+ * it in the new thread later. The new location, or null.
  */
 export async function moveNewsCopy(
   messageId: string,
@@ -168,6 +181,7 @@ export async function moveNewsCopy(
   source: INewsCopySource,
   deps: INewsCategoryMoveDeps,
 ): Promise<INewsCopyLocation | null> {
+  await deps.lane?.idle();
   await tryDiscord(
     `Could not delete the old News Copy ${oldCopy.message_id} of News Item ${messageId} ` +
       `in thread ${oldCopy.thread_id}; delete it by hand`,
@@ -242,6 +256,9 @@ export async function changeNewsCategory(
   deps: INewsCategoryChangeDeps,
 ): Promise<INewsCategoryChangeReply> {
   const { messageId, categoryKey } = request;
+  if (deps.lane?.historyRunning()) {
+    return { text: NEWS_CATEGORY_HISTORY_COPY_MESSAGE, failed: false };
+  }
   let result: INewsCategoryChangeResult;
   try {
     result = await deps.api.changeCategory(messageId, request.actingUserId, categoryKey);
@@ -297,6 +314,8 @@ export async function moveNewsCopies(
   let moved = 0;
   for (const move of moves) {
     if (!move.copy) continue;
+    // Read the original once the lane is free, so its image addresses are fresh.
+    await deps.lane?.idle();
     let fetched: INewsFetchedPost;
     try {
       fetched = await deps.discord.fetchPost(deps.channelId, move.messageId);
@@ -365,5 +384,6 @@ export function createNewsCategoryDeps(
     discord: discordNewsCategoryMover(client),
     channelId: GAME_NEWS_CHANNEL_ID,
     places: NEWS_CHANNEL_PLACES,
+    lane: NEWS_COPY_LANE,
   };
 }
