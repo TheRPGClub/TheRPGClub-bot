@@ -22,8 +22,8 @@ import { logError } from "../utilities/LogUtils.js";
 import {
   discordNewsCopier,
   fetchNewsChannel,
-  newsCopyImagesOf,
   newsCopySourceOf,
+  newsCopySourceOfRecord,
   postNewsCopy,
   type INewsCopyDiscord,
   type INewsPost,
@@ -198,18 +198,6 @@ export async function moveNewsCopy(
   return null;
 }
 
-/** What the new copy of a corrected item shows: the API's item, the original's images. */
-function correctedCopySource(post: INewsPost, item: INewsItemRecord): INewsCopySource {
-  return {
-    originalUrl: post.url,
-    authorId: item.author.user_id,
-    comment: item.comment,
-    linkUrl: item.link?.url ?? null,
-    images: newsCopyImagesOf(post),
-    postedAt: item.origin === "import" ? new Date(item.posted_at) : null,
-  };
-}
-
 export interface INewsCategoryChangeRequest {
   actingUserId: string;
   channelId: string;
@@ -283,7 +271,7 @@ export async function changeNewsCategory(
     return { ...notMoved, text: `${changed} Its copy could not be moved.` };
   }
   await swapCategoryReaction(fetched, categoryKey, deps);
-  const source = correctedCopySource(fetched.post, result.item);
+  const source = newsCopySourceOfRecord(fetched.post, result.item);
   const moved = await moveNewsCopy(messageId, categoryKey, oldCopy, source, deps);
   if (!moved) return notMoved;
   return { text: `${changed} Its copy is now in ${thread}.`, failed: false };

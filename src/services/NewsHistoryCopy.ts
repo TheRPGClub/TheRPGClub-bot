@@ -1,11 +1,10 @@
 import type { Client } from "discord.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
-import type { INewsCopySource } from "../functions/NewsCopy.js";
 import { buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
   fetchNewsChannel,
-  newsCopyImagesOf,
+  newsCopySourceOfRecord,
   postNewsCopy,
   type INewsCopyDeps,
   type INewsPost,
@@ -84,18 +83,6 @@ function emptyProgress(): INewsHistoryCopyProgress {
 const realSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-/** What the item's News Copy shows; an imported item's copy shows its original date. */
-function copySource(item: IUncopiedNewsItem, post: INewsPost): INewsCopySource {
-  return {
-    originalUrl: post.url,
-    authorId: item.author.user_id,
-    comment: item.comment,
-    linkUrl: item.link?.url ?? null,
-    images: newsCopyImagesOf(post),
-    postedAt: item.origin === "import" ? new Date(item.posted_at) : null,
-  };
-}
-
 /** Posts and reports one item's copy; false (logged) when it failed. */
 async function copyOne(item: IUncopiedNewsItem, deps: INewsHistoryCopyDeps): Promise<boolean> {
   let post: INewsPost;
@@ -107,8 +94,8 @@ async function copyOne(item: IUncopiedNewsItem, deps: INewsHistoryCopyDeps): Pro
     logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
     return false;
   }
-  const copy = await postNewsCopy(item.message_id, item.category_key, copySource(item, post),
-    deps);
+  const copy = await postNewsCopy(item.message_id, item.category_key,
+    newsCopySourceOfRecord(post, item), deps);
   return copy !== null;
 }
 

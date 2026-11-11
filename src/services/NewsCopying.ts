@@ -20,6 +20,7 @@ import {
   newsItemRecordBody,
   type INewsCopyLocation,
   type INewsFilingApi,
+  type IUncopiedNewsItem,
 } from "./NewsItemApi.js";
 
 // Filing a News Item (spec api#367): record it with its category, react to the original
@@ -77,6 +78,27 @@ export function newsCopySourceOf(
     linkUrl: item.link?.url ?? null,
     images: newsCopyImagesOf(post),
     postedAt,
+  };
+}
+
+/** What the API holds of a News Item that its News Copy shows. */
+export type INewsCopyRecord = Pick<
+  IUncopiedNewsItem,
+  "comment" | "link" | "author" | "origin" | "posted_at"
+>;
+
+/**
+ * What the News Copy of a recorded News Item shows: the API's comment, link and sharer, the
+ * images of its original `post` (fetched fresh), and an imported item's original date.
+ */
+export function newsCopySourceOfRecord(post: INewsPost, record: INewsCopyRecord): INewsCopySource {
+  return {
+    originalUrl: post.url,
+    authorId: record.author.user_id,
+    comment: record.comment,
+    linkUrl: record.link?.url ?? null,
+    images: newsCopyImagesOf(post),
+    postedAt: record.origin === "import" ? new Date(record.posted_at) : null,
   };
 }
 
