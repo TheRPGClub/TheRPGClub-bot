@@ -10,6 +10,7 @@ import { pickNewsCategory } from "../functions/NewsCategoryPicker.js";
 import {
   isImageAttachment,
   isWebAddress,
+  newsShareHeader,
   sharedNewsItemFrom,
   type INewsShareOrigin,
 } from "../functions/NewsItem.js";
@@ -83,7 +84,7 @@ const DELETED_WHILE_FILING_MESSAGE = "Your news was deleted before it could be f
 
 /** The post crediting the member (no ping), with their comment, the link and the image. */
 export function buildNewsShare(share: INewsShare): INewsShareMessage {
-  const lines = [`<@${share.sharer.id}> shared`, share.comment, share.link]
+  const lines = [newsShareHeader(share.sharer.id), share.comment, share.link]
     .filter((line): line is string => line !== null);
   return {
     content: lines.join("\n"),

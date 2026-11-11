@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { NewsPlaces } from "../config/newsHub.js";
-import { newsItemFrom, type INewsMessage } from "../functions/NewsItem.js";
+import {
+  newsItemFrom,
+  postedNewsItemFrom,
+  type INewsMessage,
+} from "../functions/NewsItem.js";
 
 const RELEASES_THREAD = "500000000000000001";
 const RELEASES_DISCUSSION = "500000000000000002";
@@ -282,4 +286,64 @@ test("the author's name falls back from server name to global name to username",
 
   assert.equal(departed?.author_name, "Pixel Pal");
   assert.equal(noGlobal?.author_name, "pixelpal");
+});
+
+const SHARER_ID = "700000000000000009";
+
+/** The bot's own /news share post in the News Channel, as Discord gives it back. */
+function sharePost(content: string, overrides: Partial<INewsMessage> = {}): INewsMessage {
+  return message({
+    channelId: ARCHIVE_CHANNEL,
+    author: { id: "700000000000000099", bot: true, username: "RPGClubBot", globalName: null },
+    member: { displayName: "RPGClubBot" },
+    content,
+    cleanContent: content.replace(`<@${SHARER_ID}>`, "@Reporter"),
+    ...overrides,
+  });
+}
+
+test("the bot's own /news share post is the sharer's News Item", () => {
+  const post = sharePost(
+    `<@${SHARER_ID}> shared\nBig if true\nhttps://example.com/news/9`,
+    { attachments: new Map([["1", { url: IMAGE_URL, contentType: "image/png", name: "a.png" }]]) },
+  );
+
+  const item = postedNewsItemFrom(post, PLACES);
+
+  assert.equal(newsItemFrom(post, PLACES), null);
+  assert.equal(item?.author_id, SHARER_ID);
+  assert.equal(item?.author_name, "Reporter");
+  assert.equal(item?.comment, "Big if true");
+  assert.equal(item?.link?.url, "https://example.com/news/9");
+  assert.deepEqual(item?.images, [{ url: IMAGE_URL, expires_at: IMAGE_EXPIRES }]);
+  assert.equal(item?.category_key, null);
+});
+
+test("a /news share post without a comment, and a member's post, are read too", () => {
+  const bare = postedNewsItemFrom(
+    sharePost(`<@${SHARER_ID}> shared\nhttps://example.com/news/9`),
+    PLACES,
+  );
+  const member = postedNewsItemFrom(
+    message({ cleanContent: "https://example.com/news/1" }),
+    PLACES,
+  );
+
+  assert.equal(bare?.comment, null);
+  assert.equal(bare?.link?.url, "https://example.com/news/9");
+  assert.equal(member?.author_id, AUTHOR_ID);
+});
+
+test("other bot messages, and share posts outside the News Channel, are not News Items", () => {
+  const notShare = sharePost("Daily reminder https://example.com/news/9");
+  const elsewhere = sharePost(`<@${SHARER_ID}> shared\nhttps://example.com/news/9`, {
+    channelId: OTHER_CHANNEL,
+  });
+  const noText = sharePost(`<@${SHARER_ID}> shared\nhttps://example.com/news/9`, {
+    content: undefined,
+  });
+
+  assert.equal(postedNewsItemFrom(notShare, PLACES), null);
+  assert.equal(postedNewsItemFrom(elsewhere, PLACES), null);
+  assert.equal(postedNewsItemFrom(noText, PLACES), null);
 });

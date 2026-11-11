@@ -3,7 +3,7 @@ import { GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
 import { NEWS_HUB_FEATURE_KEY } from "../config/featureGate.js";
 import type { NewsPlaces } from "../config/newsHub.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
-import { newsItemFrom } from "../functions/NewsItem.js";
+import { postedNewsItemFrom } from "../functions/NewsItem.js";
 import { buildAnyErrorMessage, buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import { FEATURE_ACCESS_API } from "./FeatureAccessService.js";
@@ -214,7 +214,7 @@ async function removeForRenewal(
 /**
  * Fetches a News Item's message again and records it whole, which stores fresh image
  * addresses and expiry times; removes the News Item when the message is gone or no longer
- * qualifies. An imported item keeps its category (the API ignores `category_key` for it).
+ * qualifies. The bot's own `/news share` post is the member's News Item too. An imported item keeps its category (the API ignores `category_key` for it).
  * API and Discord errors are thrown as they are, for the job's error message.
  */
 export async function renewNewsItem(
@@ -229,11 +229,16 @@ export async function renewNewsItem(
   }
   const message = await deps.discord.fetchMessage(channelId, messageId);
   if (!message) return removeForRenewal(messageId, "its message no longer exists", deps);
-  const item = newsItemFrom(message, places);
+  const item = postedNewsItemFrom(message, places);
   if (!item) {
     return removeForRenewal(messageId, "its message no longer has a link or an image", deps);
   }
-  await deps.api.record(messageId, newsItemRecordBody(item));
+  const { data } = newsItemRecordBody(item);
+  if (message.author.bot) {
+    // A /news share post: its mention may not show the member's name, so keep the stored one.
+    delete data.author_name;
+  }
+  await deps.api.record(messageId, { data });
   return `Recorded News Item ${messageId} again with fresh addresses for ` +
     `${plural(item.images.length, "image")}.`;
 }
@@ -339,7 +344,7 @@ type CopyResult = "copied" | "uncopied" | "skipped";
 async function copyItem(item: IUncopiedNewsItem, deps: INewsHubJobDeps): Promise<CopyResult> {
   const message = await deps.discord.fetchMessage(deps.archiveChannelId, item.message_id);
   if (!message) return "skipped";
-  const current = newsItemFrom(message, deps.recording.places);
+  const current = postedNewsItemFrom(message, deps.recording.places);
   if (!current) return "skipped";
   const postedAt = item.origin === "import" ? new Date(item.posted_at) : null;
   const source = newsCopySourceOf(message, current, postedAt);

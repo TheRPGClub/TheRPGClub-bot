@@ -89,6 +89,19 @@ function message(
   };
 }
 
+const SHARER_ID = "710000000000000009";
+
+/** The bot's own /news share post for SHARER_ID in the News Channel. */
+function sharePost(id: string, overrides: Partial<INewsPost> = {}): INewsPost {
+  const content = `<@${SHARER_ID}> shared\nBig if true\nhttps://example.com/news/${id}`;
+  return message(id, NEWS_CHANNEL, {
+    author: { id: "710000000000000099", bot: true, username: "RPGClubBot", globalName: null },
+    content,
+    cleanContent: content.replace(`<@${SHARER_ID}>`, "@Reporter"),
+    ...overrides,
+  });
+}
+
 interface IStored {
   message_id: string;
   origin: "live" | "import";
@@ -324,6 +337,32 @@ test("renewal: a News Channel message is recorded with no category, keeping its 
   assert.deepEqual(api.writes, [`record ${id}`]);
   assert.equal("category_key" in (api.store.get(id)?.body ?? {}), false);
   assert.equal(api.store.get(id)?.body.channel_id, NEWS_CHANNEL);
+});
+
+test("renewal: a /news share post is recorded again as the member's, not removed", async () => {
+  const id = snowflake(10);
+  const fresh = imageUrl("shot.png", FRESH_EXPIRY);
+  const discord = fakeDiscord({
+    [NEWS_CHANNEL]: [sharePost(id, {
+      attachments: new Map([["a", { url: fresh, contentType: "image/png", name: "shot.png" }]]),
+    })],
+  });
+  const api = fakeApi();
+
+  await handleNewsImagesRenew(
+    renewPayload(id, NEWS_CHANNEL),
+    surface(deps(api, discord)),
+    context("live"),
+  );
+
+  assert.deepEqual(api.writes, [`record ${id}`]);
+  const body = api.store.get(id)?.body;
+  assert.equal(body?.author_id, SHARER_ID);
+  assert.equal(body?.comment, "Big if true");
+  assert.equal(body?.link?.url, `https://example.com/news/${id}`);
+  assert.deepEqual(body?.images, [{ url: fresh, expires_at: FRESH_EXPIRY }]);
+  // The post's mention may not resolve to the member's name, so the stored one is kept.
+  assert.equal(body && "author_name" in body, false);
 });
 
 test("renewal: removes the News Item when its message is gone", async () => {
@@ -631,6 +670,18 @@ test("catch-up: many failing copies do not stop the ones after them", async (t) 
   await catchUp(api, discord);
 
   assert.deepEqual(copiedIds(discord), ids(channel.slice(110)));
+});
+
+test("catch-up: a /news share post without a copy is copied, credited to the member", async () => {
+  const shared = sharePost(snowflake(10));
+  const api = fakeApi([recorded(shared, "industry", null)]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: [shared] });
+
+  const text = await catchUp(api, discord);
+
+  assert.deepEqual(copiedIds(discord), [shared.id]);
+  assert.match(discord.posted[0].copy.content, new RegExp(`^<@${SHARER_ID}> shared\nBig if true`));
+  assert.match(text, /1 News Copy posted/);
 });
 
 test("catch-up: an item whose message is gone or no longer news is skipped", async () => {

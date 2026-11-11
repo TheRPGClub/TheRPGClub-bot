@@ -12,12 +12,15 @@ const NEWS_ITEM_PATH = "/api/v1/news_items";
 /**
  * The PUT body's `data`: the path carries the message ID. A missing `category_key` keeps the
  * stored category (an edit does not know a correction); a new live item needs one.
- * `picked_category_key`, the category the bot picked, is sent only when the bot picks.
+ * `picked_category_key`, the category the bot picked, is sent only when the bot picks. A
+ * missing `author_name` keeps the stored name (renewing a `/news share` post).
  */
-export type NewsItemRecordData = Omit<INewsItemPayload, "message_id" | "category_key"> & {
-  category_key?: NewsCategoryKey;
-  picked_category_key?: NewsCategoryKey | null;
-};
+export type NewsItemRecordData =
+  Omit<INewsItemPayload, "message_id" | "category_key" | "author_name"> & {
+    author_name?: string;
+    category_key?: NewsCategoryKey;
+    picked_category_key?: NewsCategoryKey | null;
+  };
 
 export type NewsItemRecordBody = { data: NewsItemRecordData };
 

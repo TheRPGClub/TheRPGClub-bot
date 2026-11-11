@@ -12,7 +12,7 @@ import {
 import { FEATURE_NOT_AVAILABLE_MESSAGE } from "../functions/FeatureGate.js";
 import { NOT_A_NEWS_ITEM_MESSAGE } from "../functions/NewsCategoryChangePrompt.js";
 import type { INewsCopySource } from "../functions/NewsCopy.js";
-import { newsItemFrom } from "../functions/NewsItem.js";
+import { postedNewsItemFrom } from "../functions/NewsItem.js";
 import {
   buildApiErrorMessage,
   buildDiscordErrorMessage,
@@ -325,7 +325,7 @@ export async function moveNewsCopies(
       logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
       continue;
     }
-    const item = newsItemFrom(fetched.post, deps.places);
+    const item = postedNewsItemFrom(fetched.post, deps.places);
     if (!item) {
       logError(LOG_CONTEXT, `News Item ${move.messageId} is no longer news; its News Copy ` +
         `stays in thread ${move.copy.thread_id}`);

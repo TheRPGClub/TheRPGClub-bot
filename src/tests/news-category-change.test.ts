@@ -352,6 +352,32 @@ test("a moved live item's copy shows no date", async (t) => {
   assert.match(posted[2].content, /^<@710000000000000001> shared\n/);
 });
 
+test("an upload move of a /news share post moves its copy, credited to the member", async () => {
+  const { calls, deps } = setup({ ownReactions: [] });
+  const sharerId = "710000000000000009";
+  const content = `<@${sharerId}> shared\nBig if true\n${LINK}`;
+  const shared: INewsPost = {
+    ...post(),
+    author: { id: "710000000000000099", bot: true, username: "RPGClubBot", globalName: null },
+    content,
+    cleanContent: content.replace(`<@${sharerId}>`, "@Reporter"),
+  };
+  const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
+  const moved = await moveNewsCopies([
+    { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
+      origin: "live", copy: oldCopy },
+  ], {
+    ...deps,
+    discord: { ...deps.discord, fetchPost: async () => ({ post: shared, ownReactions: [] }) },
+    channelId: NEWS_CHANNEL,
+    places: new Map([[NEWS_CHANNEL, null]]),
+  });
+
+  assert.equal(moved, 1);
+  const posted = calls.find((call) => call[0] === "post") as ["post", string, INewsCopyMessage];
+  assert.match(posted[2].content, new RegExp(`^<@${sharerId}> shared\nBig if true\n`));
+});
+
 test("an upload move whose original is gone leaves that copy and moves the rest", async (t) => {
   silenceErrors(t);
   const { calls, deps } = setup({ fetchFails: true });
