@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { GatewayDispatchEvents } from "discord.js";
+import { AxiosError, AxiosHeaders } from "axios";
+import { GatewayDispatchEvents, RESTJSONErrorCodes } from "discord.js";
 import type { Client } from "discord.js";
 import type { NewsCategoryThreads, NewsPlaces } from "../config/newsHub.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
 import type { INewsCopyMessage } from "../functions/NewsCopy.js";
 import type { INewsEmbed } from "../functions/NewsItem.js";
-import type { INewsCopyDiscord, INewsPost } from "../services/NewsCopying.js";
+import type { INewsPost } from "../services/NewsCopying.js";
 import {
   onNewsMessageCreated,
   onNewsMessageEdited,
@@ -15,7 +16,12 @@ import {
   registerUncachedNewsListeners,
   type INewsRecordingDeps,
 } from "../services/NewsHubRecording.js";
-import type { INewsFilingApi } from "../services/NewsItemApi.js";
+import type { INewsSyncDiscord } from "../services/NewsCopySync.js";
+import type {
+  INewsCopyLocation,
+  INewsSyncApi,
+  IRecordedNewsItem,
+} from "../services/NewsItemApi.js";
 
 const NEWS_CHANNEL = "510000000000000001";
 const OTHER_CHANNEL = "510000000000000002";
@@ -42,14 +48,62 @@ type Call =
   | ["record", string, unknown]
   | ["remove", string]
   | ["reportCopy", string, unknown]
+  | ["find", string]
   | ["react", string, string, string]
   | ["post", string, INewsCopyMessage]
+  | ["edit", string, string, INewsCopyMessage]
   | ["delete", string, string];
 
 interface IFakes {
   calls: Call[];
-  api: INewsFilingApi;
-  discord: INewsCopyDiscord;
+  api: INewsSyncApi;
+  discord: INewsSyncDiscord;
+  /** The News Items the fake API holds, by message ID. */
+  stored: Map<string, IRecordedNewsItem>;
+}
+
+/** A News Item the fake API already holds, copied into the Releases thread unless told. */
+function storedItem(
+  messageId = MESSAGE_ID,
+  overrides: Partial<IRecordedNewsItem> = {},
+): IRecordedNewsItem {
+  return {
+    message_id: messageId,
+    origin: "live",
+    posted_at: "2026-11-10T09:00:00.000Z",
+    news_copy: { message_id: COPY_ID, thread_id: THREADS.releases.threadId },
+    ...overrides,
+  };
+}
+
+/** The API's refusal to record an edit of a message it never recorded (no category). */
+function unrecordedRefusal(messageId: string, body: unknown): AxiosError {
+  const config = {
+    method: "put",
+    url: `/api/v1/news_items/${messageId}`,
+    data: JSON.stringify(body),
+    headers: new AxiosHeaders(),
+  };
+  return new AxiosError("Request failed with status code 422", "ERR_BAD_REQUEST", config, null, {
+    status: 422,
+    statusText: "Unprocessable Entity",
+    data: {
+      error: "Validation failed: Category key is required unless the News Item is imported",
+    },
+    headers: {},
+    config,
+  });
+}
+
+/** Discord's answer for a message that is gone. */
+function unknownMessage(method: string, url: string): Error {
+  return Object.assign(new Error("Unknown Message"), {
+    method,
+    url,
+    status: 404,
+    code: RESTJSONErrorCodes.UnknownMessage,
+    rawError: { message: "Unknown Message", code: RESTJSONErrorCodes.UnknownMessage },
+  });
 }
 
 /** A Discord REST failure as discord.js throws it. */
@@ -63,23 +117,52 @@ function restError(method: string, url: string): Error {
   });
 }
 
-function fakes(fail: { api?: boolean; post?: boolean; react?: boolean } = {}): IFakes {
+interface IFailures {
+  api?: boolean;
+  find?: boolean;
+  post?: boolean;
+  react?: boolean;
+  /** The copy is gone from its thread (deleted by hand, or never there). */
+  copyGone?: boolean;
+}
+
+/**
+ * A fake API that holds News Items as the real one does: a new live item needs a category,
+ * an edit keeps the stored copy location, and an edit of a message never recorded is refused.
+ */
+function fakes(fail: IFailures = {}, seeded: IRecordedNewsItem[] = []): IFakes {
   const calls: Call[] = [];
-  const api: INewsFilingApi = {
+  const stored = new Map(seeded.map((item) => [item.message_id, item]));
+  const api: INewsSyncApi = {
     record: async (messageId, body) => {
       calls.push(["record", messageId, body]);
       if (fail.api) throw new Error("API down");
+      const known = stored.get(messageId);
+      if (!known && body.data.category_key === undefined) {
+        throw unrecordedRefusal(messageId, body);
+      }
+      const item = known ?? storedItem(messageId, { news_copy: null });
+      stored.set(messageId, item);
+      return { data: item };
     },
     remove: async (messageId) => {
       calls.push(["remove", messageId]);
       if (fail.api) throw new Error("API down");
+      stored.delete(messageId);
     },
     reportCopy: async (messageId, copy) => {
       calls.push(["reportCopy", messageId, copy]);
       if (fail.api) throw new Error("API down");
+      const known = stored.get(messageId);
+      if (known) stored.set(messageId, { ...known, news_copy: copy });
+    },
+    find: async (messageId) => {
+      calls.push(["find", messageId]);
+      if (fail.find) throw new Error("API down");
+      return stored.get(messageId) ?? null;
     },
   };
-  const discord: INewsCopyDiscord = {
+  const discord: INewsSyncDiscord = {
     react: async (channelId, messageId, emoji) => {
       calls.push(["react", channelId, messageId, emoji]);
       if (fail.react) throw restError("PUT", "/channels/1/messages/2/reactions/x/@me");
@@ -89,11 +172,20 @@ function fakes(fail: { api?: boolean; post?: boolean; react?: boolean } = {}): I
       if (fail.post) throw restError("POST", `/channels/${threadId}/messages`);
       return { messageId: COPY_ID };
     },
+    editCopy: async (threadId, messageId, copy) => {
+      calls.push(["edit", threadId, messageId, copy]);
+      if (fail.copyGone) {
+        throw unknownMessage("PATCH", `/channels/${threadId}/messages/${messageId}`);
+      }
+    },
     deleteMessage: async (channelId, messageId) => {
       calls.push(["delete", channelId, messageId]);
+      if (fail.copyGone) {
+        throw unknownMessage("DELETE", `/channels/${channelId}/messages/${messageId}`);
+      }
     },
   };
-  return { calls, api, discord };
+  return { calls, api, discord, stored };
 }
 
 function deps(
@@ -312,7 +404,7 @@ test("a post the API cannot record is neither reacted to nor copied", async (t) 
 test("a copy whose location cannot be reported is deleted, so no retry doubles it", async (t) => {
   t.mock.method(console, "error", () => undefined);
   const fake = fakes();
-  const failingReport: INewsFilingApi = {
+  const failingReport: INewsSyncApi = {
     ...fake.api,
     reportCopy: async (messageId, copy) => {
       fake.calls.push(["reportCopy", messageId, copy]);
@@ -325,7 +417,7 @@ test("a copy whose location cannot be reported is deleted, so no retry doubles i
 });
 
 test("an edit is recorded without a category, so the stored one is kept", async () => {
-  const fake = fakes();
+  const fake = fakes({}, [storedItem()]);
   await onNewsMessageEdited(message({ embeds: [preview("Patch 2.0")] }), deps(fake));
 
   assert.equal(fake.calls.length, 1);
@@ -334,6 +426,78 @@ test("an edit is recorded without a category, so the stored one is kept", async 
   assert.equal(messageId, MESSAGE_ID);
   assert.equal("category_key" in body.data, false);
   assert.equal("picked_category_key" in body.data, false);
+});
+
+const EDITED_AT = new Date("2026-11-10T09:05:00.000Z");
+const FIXED_LINK = "https://example.com/news/2";
+
+test("editing the comment or link updates the item and edits the copy to match", async () => {
+  const fake = fakes({}, [storedItem()]);
+  const edited = message({ cleanContent: `Patch 2 is out ${FIXED_LINK}`, editedAt: EDITED_AT });
+  await onNewsMessageEdited(edited, deps(fake));
+
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "edit"]);
+  const [, threadId, copyId, copy] = fake.calls[1] as ["edit", string, string, INewsCopyMessage];
+  assert.equal(threadId, THREADS.releases.threadId);
+  assert.equal(copyId, COPY_ID);
+  assert.equal(
+    copy.content,
+    `<@${AUTHOR_ID}> shared\nPatch 2 is out\n${FIXED_LINK}\n-# Discuss: ${ORIGINAL_URL}`,
+  );
+  assert.deepEqual(copy.allowedMentions, { parse: [] });
+});
+
+test("the copy of an imported item keeps showing its original date after an edit", async () => {
+  const fake = fakes({}, [storedItem(MESSAGE_ID, {
+    origin: "import",
+    posted_at: "2021-03-04T05:06:07.000Z",
+  })]);
+  await onNewsMessageEdited(message({ editedAt: EDITED_AT }), deps(fake));
+
+  const [, , , copy] = fake.calls[1] as ["edit", string, string, INewsCopyMessage];
+  assert.match(copy.content, /^<@710000000000000001> shared on <t:1614834367:D>\n/);
+});
+
+test("Discord adding a preview to an unedited post leaves the copy alone", async () => {
+  const fake = fakes({}, [storedItem()]);
+  await onNewsMessageEdited(message({ embeds: [preview("Patch 2.0")] }), deps(fake));
+
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["record"]);
+});
+
+test("an edit of an item with no copy yet only updates the item", async () => {
+  const fake = fakes({}, [storedItem(MESSAGE_ID, { news_copy: null })]);
+  await onNewsMessageEdited(message({ editedAt: EDITED_AT }), deps(fake));
+
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["record"]);
+});
+
+test("an edit of a message never recorded is left alone quietly", async (t) => {
+  const errors = t.mock.method(console, "error", () => undefined);
+  const fake = fakes();
+  await onNewsMessageEdited(message({ editedAt: EDITED_AT }), deps(fake));
+
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "find"]);
+  assert.equal(errors.mock.callCount(), 0);
+});
+
+test("a refused edit of a recorded item is logged with request and response", async (t) => {
+  const errors = t.mock.method(console, "error", () => undefined);
+  const fake = fakes({}, [storedItem()]);
+  const refusing: INewsSyncApi = {
+    ...fake.api,
+    record: async (messageId, body) => {
+      fake.calls.push(["record", messageId, body]);
+      throw unrecordedRefusal(messageId, body);
+    },
+  };
+  await onNewsMessageEdited(message({ editedAt: EDITED_AT }), deps({ ...fake, api: refusing }));
+
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "find"]);
+  const logged = errors.mock.calls.map((call) => String(call.arguments[0])).join("\n");
+  assert.match(logged, /PUT/);
+  assert.match(logged, /422/);
+  assert.match(logged, /Category key is required/);
 });
 
 test("Discord's preview arriving while the post is filed is left to the filing", async () => {
@@ -383,7 +547,7 @@ test("an edit made while the post is being copied is recorded once the filing en
   assert.equal("category_key" in body.data, false);
 });
 
-test("a post deleted while waiting for its preview is not filed", async () => {
+test("a post deleted while waiting for its preview is not filed, nor removed", async () => {
   const fake = fakes();
   const recording = deps(fake, {
     preview: async (posted) => {
@@ -393,30 +557,121 @@ test("a post deleted while waiting for its preview is not filed", async () => {
   });
   await onNewsMessageCreated(message(), recording);
 
-  assert.deepEqual(fake.calls, [["remove", MESSAGE_ID]]);
+  assert.deepEqual(fake.calls, []);
 });
 
-test("an edit that removes the only link removes the News Item", async () => {
+test("a post deleted while it is being copied loses its item and copy once filed", async () => {
   const fake = fakes();
-  await onNewsMessageEdited(message({ cleanContent: "never mind" }), deps(fake));
+  const recording = deps(fake);
+  const postCopy = fake.discord.postCopy;
+  recording.discord = {
+    ...fake.discord,
+    postCopy: async (threadId, copy) => {
+      await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID], recording);
+      return postCopy(threadId, copy);
+    },
+  };
+  await onNewsMessageCreated(message(), recording);
 
-  assert.deepEqual(fake.calls, [["remove", MESSAGE_ID]]);
+  assert.deepEqual(fake.calls.map((call) => call[0]), [
+    "record",
+    "react",
+    "post",
+    "reportCopy",
+    "remove",
+    "delete",
+  ]);
+  assert.deepEqual(fake.calls.at(-1), ["delete", THREADS.releases.threadId, COPY_ID]);
 });
 
-test("deleting a message, singly or in bulk, removes its News Item", async () => {
-  const fake = fakes();
-  await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID], deps(fake));
-  await onNewsMessagesDeleted(
-    NEWS_CHANNEL,
-    ["610000000000000002", "610000000000000003"],
-    deps(fake),
-  );
+test("an edit leaving only text removes the item and deletes its copy", async () => {
+  const fake = fakes({}, [storedItem()]);
+  await onNewsMessageEdited(message({ cleanContent: "never mind", editedAt: EDITED_AT }),
+    deps(fake));
 
   assert.deepEqual(fake.calls, [
+    ["find", MESSAGE_ID],
     ["remove", MESSAGE_ID],
-    ["remove", "610000000000000002"],
-    ["remove", "610000000000000003"],
+    ["delete", THREADS.releases.threadId, COPY_ID],
   ]);
+});
+
+const SECOND_ID = "610000000000000002";
+const THIRD_ID = "610000000000000003";
+const copyIn = (thread: keyof NewsCategoryThreads, messageId: string): INewsCopyLocation => ({
+  message_id: messageId,
+  thread_id: THREADS[thread].threadId,
+});
+
+test("deleting a message, singly or in bulk, removes its item and deletes its copy", async () => {
+  const fake = fakes({}, [
+    storedItem(),
+    storedItem(SECOND_ID, { news_copy: copyIn("industry", "620000000000000002") }),
+    storedItem(THIRD_ID, { news_copy: copyIn("rumours", "620000000000000003") }),
+  ]);
+  await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID], deps(fake));
+  await onNewsMessagesDeleted(NEWS_CHANNEL, [SECOND_ID, THIRD_ID], deps(fake));
+
+  assert.deepEqual(fake.calls, [
+    ["find", MESSAGE_ID],
+    ["remove", MESSAGE_ID],
+    ["delete", THREADS.releases.threadId, COPY_ID],
+    ["find", SECOND_ID],
+    ["remove", SECOND_ID],
+    ["delete", THREADS.industry.threadId, "620000000000000002"],
+    ["find", THIRD_ID],
+    ["remove", THIRD_ID],
+    ["delete", THREADS.rumours.threadId, "620000000000000003"],
+  ]);
+});
+
+test("a deleted message with no copy, or none recorded, only has its item removed", async () => {
+  const fake = fakes({}, [storedItem(MESSAGE_ID, { news_copy: null })]);
+  await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID, SECOND_ID], deps(fake));
+
+  assert.deepEqual(fake.calls, [
+    ["find", MESSAGE_ID],
+    ["remove", MESSAGE_ID],
+    ["find", SECOND_ID],
+    ["remove", SECOND_ID],
+  ]);
+});
+
+test("a copy already gone from its thread is not an error", async (t) => {
+  const errors = t.mock.method(console, "error", () => undefined);
+  const fake = fakes({ copyGone: true }, [storedItem(), storedItem(SECOND_ID)]);
+  await onNewsMessageEdited(message({ cleanContent: `Fixed ${LINK}`, editedAt: EDITED_AT }),
+    deps(fake));
+  await onNewsMessagesDeleted(NEWS_CHANNEL, [SECOND_ID], deps(fake));
+
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "edit", "find", "remove",
+    "delete"]);
+  assert.equal(errors.mock.callCount(), 0);
+});
+
+test("a failed copy lookup is logged and the item is still removed", async (t) => {
+  const errors = t.mock.method(console, "error", () => undefined);
+  const fake = fakes({ find: true }, [storedItem()]);
+  await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID], deps(fake));
+
+  assert.deepEqual(fake.calls, [["find", MESSAGE_ID], ["remove", MESSAGE_ID]]);
+  assert.equal(errors.mock.callCount(), 1);
+});
+
+test("an item the API fails to remove keeps its copy, and the failure is logged", async (t) => {
+  const errors = t.mock.method(console, "error", () => undefined);
+  const fake = fakes({}, [storedItem()]);
+  const failingRemove: INewsSyncApi = {
+    ...fake.api,
+    remove: async (messageId) => {
+      fake.calls.push(["remove", messageId]);
+      throw new Error("API down");
+    },
+  };
+  await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID], deps({ ...fake, api: failingRemove }));
+
+  assert.deepEqual(fake.calls, [["find", MESSAGE_ID], ["remove", MESSAGE_ID]]);
+  assert.equal(errors.mock.callCount(), 1);
 });
 
 test("posts in a category thread are no longer recorded", async () => {
@@ -462,9 +717,9 @@ test("test mode sends nothing, since a PR preview shares the production API", as
 test("an API failure on delete is logged, not thrown, and later removals go out", async (t) => {
   const errors = t.mock.method(console, "error", () => undefined);
   const fake = fakes({ api: true });
-  await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID, "610000000000000002"], deps(fake));
+  await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID, SECOND_ID], deps(fake));
 
-  assert.equal(fake.calls.length, 2);
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["find", "remove", "find", "remove"]);
   assert.equal(errors.mock.callCount(), 2);
 });
 
@@ -502,27 +757,35 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("deletes in an uncached News Channel remove the News Items", async () => {
-  const fake = fakes();
+test("deletes in an uncached News Channel remove the News Items and their copies", async () => {
+  const fake = fakes({}, [
+    storedItem(),
+    storedItem(SECOND_ID, { news_copy: copyIn("industry", "620000000000000002") }),
+    storedItem(THIRD_ID, { news_copy: null }),
+  ]);
   const { client, ws } = fakeGateway([]);
   registerUncachedNewsListeners(client, deps(fake));
 
   ws.emit(GatewayDispatchEvents.MessageDelete, { id: MESSAGE_ID, channel_id: NEWS_CHANNEL });
   ws.emit(GatewayDispatchEvents.MessageDeleteBulk, {
-    ids: ["610000000000000002", "610000000000000003"],
+    ids: [SECOND_ID, THIRD_ID],
     channel_id: NEWS_CHANNEL,
   });
   await settle();
 
-  assert.deepEqual(fake.calls, [
+  // The two packets are handled at once, so only the set of writes is fixed.
+  const removed = fake.calls.filter((call) => call[0] === "remove" || call[0] === "delete");
+  assert.deepEqual(removed.map(String).sort(), [
     ["remove", MESSAGE_ID],
-    ["remove", "610000000000000002"],
-    ["remove", "610000000000000003"],
-  ]);
+    ["remove", SECOND_ID],
+    ["delete", THREADS.releases.threadId, COPY_ID],
+    ["delete", THREADS.industry.threadId, "620000000000000002"],
+    ["remove", THIRD_ID],
+  ].map(String).sort());
 });
 
 test("an edit in an uncached News Channel is fetched and recorded", async () => {
-  const fake = fakes();
+  const fake = fakes({}, [storedItem()]);
   const { client, ws, fetched } = fakeGateway([]);
   registerUncachedNewsListeners(client, deps(fake));
 
