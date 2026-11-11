@@ -3,7 +3,6 @@ import {
   type Attachment,
   AttachmentBuilder,
   type CommandInteraction,
-  FileBuilder,
   MessageFlags,
   type SendableChannels,
 } from "discord.js";
@@ -18,6 +17,7 @@ import {
   buildComponentsV2EditFlags,
   buildComponentsV2Flags,
   buildErrorReply,
+  buildFileComponent,
   buildTextContainer,
   buildTextReply,
   buildTextSend,
@@ -68,7 +68,7 @@ async function postScanError(channel: SendableChannels, text: string): Promise<v
   const firstLine = text.split("\n", 1)[0];
   const container = buildTextContainer(
     `${firstLine}\nThe full request and response are in the attached file.`,
-  ).addFileComponents(new FileBuilder().setURL(`attachment://${SCAN_ERROR_FILE}`));
+  ).addFileComponents(buildFileComponent(SCAN_ERROR_FILE));
   await channel.send({
     components: [container],
     flags: buildComponentsV2EditFlags(),
@@ -84,8 +84,7 @@ async function postScanError(channel: SendableChannels, text: string): Promise<v
 function messagePayload(message: INewsImportMessage): object {
   const container = buildTextContainer(message.text);
   if (message.files.length) {
-    container.addFileComponents(message.files.map((file) =>
-      new FileBuilder().setURL(`attachment://${file.name}`)));
+    container.addFileComponents(message.files.map((file) => buildFileComponent(file.name)));
   }
   return {
     components: [container],

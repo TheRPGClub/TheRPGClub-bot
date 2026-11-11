@@ -1,6 +1,7 @@
 import { MessageFlags, MessageFlagsBitField } from "discord.js";
 import {
   ContainerBuilder,
+  FileBuilder,
   SectionBuilder,
   TextDisplayBuilder,
   ThumbnailBuilder,
@@ -23,6 +24,16 @@ export function buildComponentsV2Flags(isEphemeral: boolean): number {
 
 export function buildComponentsV2EditFlags(): number {
   return MessageFlags.IsComponentsV2;
+}
+
+/**
+ * A file component showing the message attachment named `name`. Build file components
+ * here, never with discord.js's `FileBuilder`: discord.js loads the CommonJS copy of
+ * `@discordjs/builders` while this module loads the ES module copy, and a container from
+ * one copy rebuilds a file component from the other without its file, so sending throws.
+ */
+export function buildFileComponent(name: string): FileBuilder {
+  return new FileBuilder().setURL(`attachment://${name}`);
 }
 
 export function buildTextContainer(content: string): ContainerBuilder {
