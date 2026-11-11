@@ -29,6 +29,8 @@ export class NewsCopyLane {
   private historyTakingOver: Promise<void> | null = null;
   private copiesWaited = false;
   private catchUpRunning = false;
+  /** A catch-up asked for while one ran: run once more after it, filing missed posts or not. */
+  private catchUpAgain: { fileMissed: boolean } | null = null;
   private readonly listeners: ReleaseListener[] = [];
 
   /** True while a backfill copier runs (or the history copy waits to take over). */
@@ -82,15 +84,31 @@ export class NewsCopyLane {
     }
   }
 
-  /** Starts a catch-up unless one is running (then false). Call `endCatchUp` after. */
-  beginCatchUp(): boolean {
-    if (this.catchUpRunning) return false;
-    this.catchUpRunning = true;
-    return true;
+  /**
+   * Starts a catch-up unless one is running. Then it is false, and the running catch-up is
+   * asked to run once more when it finishes (several asks make one more run, filing missed
+   * posts when any asked for that). Call `endCatchUp` after.
+   */
+  beginCatchUp(fileMissed: boolean): boolean {
+    if (!this.catchUpRunning) {
+      this.catchUpRunning = true;
+      return true;
+    }
+    this.catchUpAgain = { fileMissed: fileMissed || (this.catchUpAgain?.fileMissed ?? false) };
+    return false;
   }
 
+  /** The running catch-up's next run, if one was asked for meanwhile (taken, so asked once). */
+  nextCatchUp(): { fileMissed: boolean } | null {
+    const next = this.catchUpAgain;
+    this.catchUpAgain = null;
+    return next;
+  }
+
+  /** Ends the running catch-up; a run still asked for is dropped. */
   endCatchUp(): void {
     this.catchUpRunning = false;
+    this.catchUpAgain = null;
   }
 
   /** Calls `listener` each time a backfill frees the lane, saying whether copies waited. */

@@ -62,10 +62,25 @@ test("the history copy takes over: catch-up is asked to stop and it waits for th
 test("one catch-up at a time", () => {
   const lane = new NewsCopyLane();
 
-  assert.equal(lane.beginCatchUp(), true);
-  assert.equal(lane.beginCatchUp(), false);
+  assert.equal(lane.beginCatchUp(true), true);
+  assert.equal(lane.beginCatchUp(true), false);
   lane.endCatchUp();
-  assert.equal(lane.beginCatchUp(), true);
+  assert.equal(lane.beginCatchUp(true), true);
+});
+
+test("catch-ups asked for while one runs make one more run, filing when any asked", () => {
+  const lane = new NewsCopyLane();
+  lane.beginCatchUp(false);
+
+  assert.equal(lane.nextCatchUp(), null);
+  lane.beginCatchUp(true);
+  lane.beginCatchUp(false);
+  assert.deepEqual(lane.nextCatchUp(), { fileMissed: true });
+  assert.equal(lane.nextCatchUp(), null);
+  lane.beginCatchUp(false);
+  lane.endCatchUp();
+  lane.beginCatchUp(false);
+  assert.equal(lane.nextCatchUp(), null);
 });
 
 test("a released backfill is announced, saying whether copies waited meanwhile", async () => {

@@ -400,21 +400,57 @@ async function runStepOrNoteFailure(
  * The catch-up (on startup, and when the News Hub leaves Off): files the News Channel posts
  * missed while the bot was not listening, then posts the live News Items' missing News
  * Copies, oldest first, unless a history copy is running. Does nothing while the News Hub is
- * Off, read from the API (the flag cache can lag behind the change that queued the job), or
- * while another catch-up runs. A step that fails is reported and the next still runs;
- * running it again is safe. `fileMissed: false` runs the copy phase alone (the copy retry).
+ * Off, read from the API (the flag cache can lag behind the change that queued the job). A
+ * catch-up asked for while another runs answers busy and is not lost: the running one runs
+ * once more when it finishes (unless the News Hub is Off by then), and its outcome counts
+ * both runs. A step that fails is reported and the next still runs; running it again is
+ * safe. `fileMissed: false` runs the copy phase alone (the copy retry).
  */
 export async function runNewsCatchUp(
   deps: INewsHubJobDeps,
   options: { fileMissed?: boolean } = {},
 ): Promise<NewsCatchUpOutcome> {
+  const fileMissed = options.fileMissed ?? true;
   if ((await deps.freshFeatureState()) === "off") return { status: "off" };
-  if (!deps.lane.beginCatchUp()) return { status: "busy" };
+  if (!deps.lane.beginCatchUp(fileMissed)) return { status: "busy" };
   try {
-    return { status: "done", ...(await catchUp(deps, options.fileMissed ?? true)) };
+    let counts = await catchUp(deps, fileMissed);
+    for (let next = deps.lane.nextCatchUp(); next; next = deps.lane.nextCatchUp()) {
+      if (await stillOff(deps, counts)) break;
+      counts = addCounts(counts, await catchUp(deps, next.fileMissed));
+    }
+    return { status: "done", ...counts };
   } finally {
     deps.lane.endCatchUp();
   }
+}
+
+/** Whether the News Hub went Off before a run asked for meanwhile (a failed read stops too). */
+async function stillOff(deps: INewsHubJobDeps, counts: CatchUpCounts): Promise<boolean> {
+  try {
+    return (await deps.freshFeatureState()) === "off";
+  } catch (err: unknown) {
+    counts.failures.push(buildAnyErrorMessage(
+      "Could not read the News Hub's state to run the catch-up asked for meanwhile",
+      err,
+      { devPing: false },
+    ));
+    return true;
+  }
+}
+
+/** Two runs' counts together; how the later one ended (paused, switched Off) stands. */
+function addCounts(first: CatchUpCounts, later: CatchUpCounts): CatchUpCounts {
+  return {
+    recorded: first.recorded + later.recorded,
+    unrecorded: first.unrecorded + later.unrecorded,
+    copied: first.copied + later.copied,
+    uncopied: first.uncopied + later.uncopied,
+    skipped: first.skipped + later.skipped,
+    paused: later.paused,
+    switchedOff: later.switchedOff,
+    failures: [...first.failures, ...later.failures],
+  };
 }
 
 async function catchUp(deps: INewsHubJobDeps, fileMissed: boolean): Promise<CatchUpCounts> {
@@ -455,7 +491,9 @@ async function catchUp(deps: INewsHubJobDeps, fileMissed: boolean): Promise<Catc
 /** The catch-up's outcome in plain words, for the job's result and the log. */
 export function newsCatchUpSummary(outcome: NewsCatchUpOutcome): string {
   if (outcome.status === "off") return "Nothing caught up: the News Hub is Off.";
-  if (outcome.status === "busy") return "Nothing caught up: a catch-up is already running.";
+  if (outcome.status === "busy") {
+    return "Nothing caught up yet: a catch-up is already running; it runs once more after.";
+  }
   const unrecorded = outcome.unrecorded > 0 ? ` (${outcome.unrecorded} could not be)` : "";
   const uncopied = outcome.uncopied > 0
     ? `, ${outcome.uncopied} could not be and wait for the next catch-up`
