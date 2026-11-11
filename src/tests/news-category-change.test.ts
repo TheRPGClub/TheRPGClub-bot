@@ -3,6 +3,7 @@ import test from "node:test";
 import { AxiosError, AxiosHeaders, type AxiosResponse } from "axios";
 import type { NewsCategoryKey, NewsCategoryThreads } from "../config/newsHub.js";
 import type { INewsCopyMessage } from "../functions/NewsCopy.js";
+import { NewsCopyLane } from "../services/NewsCopyLane.js";
 import type { INewsPost } from "../services/NewsCopying.js";
 import {
   changeNewsCategory,
@@ -110,7 +111,7 @@ function setup(options: IOptions = {}): { calls: Call[]; deps: INewsCategoryChan
   const answer = options.answer ?? { changed: true, previous: "releases" };
   const api: INewsCategoryApi = {
     record: async () => undefined,
-    remove: async () => undefined,
+    remove: async () => ({ removed: false, newsCopy: null }),
     reportCopy: async (messageId, copy) => {
       calls.push(["reportCopy", messageId, copy]);
     },
@@ -186,6 +187,32 @@ test("a change moves the News Copy to the new thread and swaps the reaction", as
   assert.match(reply.text, /Rumours & Leaks/);
   assert.match(reply.text, new RegExp(`<#${THREADS.rumours.threadId}>`));
 });
+
+test("while a history copy runs, a change is refused and nothing changes", async () => {
+  const { calls, deps } = setup();
+  const lane = new NewsCopyLane();
+  await lane.holdForHistory();
+  const reply = await changeNewsCategory(REQUEST, { ...deps, lane });
+
+  assert.deepEqual(calls, []);
+  assert.equal(reply.failed, false);
+  assert.equal(reply.text, "A history copy is running; try again when it finishes.");
+});
+
+test("while catch-up copies, the change is recorded and its copy moves once it ends",
+  async () => {
+    const { calls, deps } = setup();
+    const lane = new NewsCopyLane();
+    const hold = lane.holdForCatchUp();
+    const replying = changeNewsCategory(REQUEST, { ...deps, lane });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(calls.map((call) => call[0]), ["changeCategory", "fetch", "unreact", "react"]);
+    hold?.release();
+    const reply = await replying;
+    assert.deepEqual(calls.slice(4).map((call) => call[0]), ["delete", "post", "reportCopy"]);
+    assert.match(reply.text, /Its copy is now in/);
+  });
 
 test("an image too large to upload is linked in the moved copy instead", async () => {
   const { calls, deps } = setup({ imageSize: 30 * 1024 * 1024 });
@@ -282,7 +309,7 @@ test("upload moves read each original and move its copy, without adding reaction
   const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
   const moved = await moveNewsCopies([
     { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
-      copy: oldCopy },
+      origin: "import", copy: oldCopy },
   ], { ...deps, channelId: NEWS_CHANNEL, places: new Map([[NEWS_CHANNEL, null]]) });
 
   assert.equal(moved, 1);
@@ -294,13 +321,70 @@ test("upload moves read each original and move its copy, without adding reaction
   assert.match(posted[2].content, /Big if true/);
 });
 
+test("upload moves wait while a backfill copies, then go", async (t) => {
+  silenceErrors(t);
+  const { calls, deps } = setup({ ownReactions: [] });
+  const lane = new NewsCopyLane();
+  const history = await lane.holdForHistory();
+  const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
+  const moving = moveNewsCopies([
+    { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
+      origin: "import", copy: oldCopy },
+  ], { ...deps, lane, channelId: NEWS_CHANNEL, places: new Map([[NEWS_CHANNEL, null]]) });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(calls, []);
+  history.release();
+  assert.equal(await moving, 1);
+  assert.deepEqual(calls.map((call) => call[0]), ["fetch", "delete", "post", "reportCopy"]);
+});
+
+test("a moved live item's copy shows no date", async (t) => {
+  silenceErrors(t);
+  const { calls, deps } = setup({ ownReactions: [] });
+  const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
+  await moveNewsCopies([
+    { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
+      origin: "live", copy: oldCopy },
+  ], { ...deps, channelId: NEWS_CHANNEL, places: new Map([[NEWS_CHANNEL, null]]) });
+
+  const posted = calls.find((call) => call[0] === "post") as ["post", string, INewsCopyMessage];
+  assert.match(posted[2].content, /^<@710000000000000001> shared\n/);
+});
+
+test("an upload move of a /news share post moves its copy, credited to the member", async () => {
+  const { calls, deps } = setup({ ownReactions: [] });
+  const sharerId = "710000000000000009";
+  const content = `<@${sharerId}> shared\nBig if true\n${LINK}`;
+  const shared: INewsPost = {
+    ...post(),
+    author: { id: "710000000000000099", bot: true, username: "RPGClubBot", globalName: null },
+    content,
+    cleanContent: content.replace(`<@${sharerId}>`, "@Reporter"),
+  };
+  const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
+  const moved = await moveNewsCopies([
+    { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
+      origin: "live", copy: oldCopy },
+  ], {
+    ...deps,
+    discord: { ...deps.discord, fetchPost: async () => ({ post: shared, ownReactions: [] }) },
+    channelId: NEWS_CHANNEL,
+    places: new Map([[NEWS_CHANNEL, null]]),
+  });
+
+  assert.equal(moved, 1);
+  const posted = calls.find((call) => call[0] === "post") as ["post", string, INewsCopyMessage];
+  assert.match(posted[2].content, new RegExp(`^<@${sharerId}> shared\nBig if true\n`));
+});
+
 test("an upload move whose original is gone leaves that copy and moves the rest", async (t) => {
   silenceErrors(t);
   const { calls, deps } = setup({ fetchFails: true });
   const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
   const moved = await moveNewsCopies([
     { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
-      copy: oldCopy },
+      origin: "import", copy: oldCopy },
   ], { ...deps, channelId: NEWS_CHANNEL, places: new Map([[NEWS_CHANNEL, null]]) });
   assert.equal(moved, 0);
   assert.deepEqual(calls.map((call) => call[0]), ["fetch"]);

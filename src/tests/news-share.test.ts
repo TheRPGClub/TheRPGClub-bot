@@ -111,6 +111,7 @@ function fakes(fail: { share?: boolean; record?: boolean; copy?: boolean } = {})
     },
     remove: async (messageId) => {
       calls.push(["remove", messageId]);
+      return { removed: true, newsCopy: null };
     },
     reportCopy: async (messageId, copy) => {
       calls.push(["reportCopy", messageId, copy]);
@@ -156,7 +157,7 @@ function previewArrives(title: string): INewsShareDeps["waitForPreview"] {
 function deps(
   fake: IFakes,
   options: Partial<Pick<INewsShareDeps,
-    "testMode" | "waitForPreview" | "filing" | "copiesPaused">> = {},
+    "testMode" | "waitForPreview" | "filing" | "copyWaits">> = {},
 ): INewsShareDeps {
   return {
     testMode: false,
@@ -365,15 +366,15 @@ test("a copy that fails still confirms the share, saying the copy will be retrie
     assert.match(reply.text, /will be retried/);
   });
 
-test("during a history copy the share is filed and its copy waits for the history",
+test("during a backfill copy the share is filed and its copy waits for it",
   async () => {
     const fake = fakes();
-    const reply = await shareNewsReply(share(), deps(fake, { copiesPaused: () => true }));
+    const reply = await shareNewsReply(share(), deps(fake, { copyWaits: () => true }));
 
     assert.deepEqual(fake.calls.map((call) => call[0]), ["share", "record", "react"]);
     assert.equal(reply.failed, false);
     assert.match(reply.text, new RegExp(SHARE_URL));
-    assert.match(reply.text, /after the history copy/);
+    assert.match(reply.text, /after the copies running now/);
     assert.doesNotMatch(reply.text, /could not be posted/);
   });
 
@@ -388,6 +389,36 @@ test("a post deleted while waiting for its preview is not recorded", async () =>
 
   assert.deepEqual(fake.calls.map((call) => call[0]), ["share"]);
   assert.equal(reply.failed, true);
+  assert.equal(filing.size, 0);
+});
+
+test("a post deleted while it is filed has its item removed and its copy deleted", async () => {
+  const fake = fakes();
+  const filing = new Map();
+  const removedCopy = { message_id: COPY_ID, thread_id: THREADS.industry.threadId };
+  const api: INewsFilingApi = {
+    ...fake.api,
+    record: async (messageId, body) => {
+      await fake.api.record(messageId, body);
+      // The News Channel listener sees the delete and leaves it to the filing.
+      filing.delete(messageId);
+    },
+    remove: async (messageId) => {
+      await fake.api.remove(messageId);
+      return { removed: true, newsCopy: removedCopy };
+    },
+  };
+  const reply = await shareNewsReply(
+    share({ categoryKey: "industry" }),
+    { ...deps(fake, { filing }), api },
+  );
+
+  assert.deepEqual(fake.calls.map((call) => call[0]), [
+    "share", "record", "react", "post", "reportCopy", "remove", "delete",
+  ]);
+  assert.deepEqual(fake.calls.at(-1), ["delete", THREADS.industry.threadId, COPY_ID]);
+  assert.equal(reply.failed, true);
+  assert.match(reply.text, /deleted/);
   assert.equal(filing.size, 0);
 });
 
@@ -431,7 +462,7 @@ test("the News Channel listener records the bot's post neither on arrival nor on
 test("/news is gated by the News Hub: staff only in Preview, everyone when Live", async () => {
   const { resolveFeatureGate } = await import("../functions/FeatureGate.js");
   const { NEWS_HUB_FEATURE_KEY } = await import("../config/featureGate.js");
-  const { NEWS_COMMAND } = await import("../services/NewsShare.js");
+  const { NEWS_COMMAND } = await import("../config/newsHub.js");
   const source = (state: "off" | "preview" | "live") => ({
     flags: async () => [{ key: NEWS_HUB_FEATURE_KEY, name: "News Hub", state }],
     isStaff: async (userId: string) => userId === "staff",

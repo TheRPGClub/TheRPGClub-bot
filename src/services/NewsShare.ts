@@ -2,6 +2,8 @@ import type { Client } from "discord.js";
 import {
   NEWS_CATEGORY_NAMES,
   NEWS_CATEGORY_THREADS,
+  NEWS_COMMAND,
+  NEWS_SHARE_SUBCOMMAND,
   type NewsCategoryKey,
 } from "../config/newsHub.js";
 import { GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
@@ -10,9 +12,11 @@ import { pickNewsCategory } from "../functions/NewsCategoryPicker.js";
 import {
   isImageAttachment,
   isWebAddress,
+  newsShareHeader,
   sharedNewsItemFrom,
   type INewsShareOrigin,
 } from "../functions/NewsItem.js";
+import type { IPrivateReply } from "../functions/ComponentsV2Utils.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
 import {
   buildApiErrorMessage,
@@ -20,12 +24,13 @@ import {
 } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
+  fetchNewsChannel,
   fileNewsItem,
   newsCopySourceOf,
   type INewsCopyDeps,
   type INewsPost,
 } from "./NewsCopying.js";
-import { newsCopiesPaused } from "./NewsHistoryCopy.js";
+import { removeNewsItem } from "./NewsCopySync.js";
 import { createNewsRecordingDeps, type INewsRecordingDeps } from "./NewsHubRecording.js";
 import type { INewsFilingApi } from "./NewsItemApi.js";
 
@@ -35,9 +40,6 @@ import type { INewsFilingApi } from "./NewsItemApi.js";
 // The News Channel listener ignores the bot's own messages, so only this records the post.
 
 const LOG_CONTEXT = "NewsShare";
-
-export const NEWS_COMMAND = "news";
-export const NEWS_SHARE_SUBCOMMAND = "share";
 
 /** The image a member attached to `/news share`. */
 export interface INewsShareImage {
@@ -71,17 +73,13 @@ export interface INewsShareDeps extends INewsCopyDeps {
   filing: INewsRecordingDeps["filing"];
 }
 
-/** The private reply; `failed` replies are shown as errors. */
-export interface INewsShareReply {
-  text: string;
-  failed: boolean;
-}
-
 const COMMAND_LABEL = `/${NEWS_COMMAND} ${NEWS_SHARE_SUBCOMMAND}`;
+
+const DELETED_WHILE_FILING_MESSAGE = "Your news was deleted before it could be filed.";
 
 /** The post crediting the member (no ping), with their comment, the link and the image. */
 export function buildNewsShare(share: INewsShare): INewsShareMessage {
-  const lines = [`<@${share.sharer.id}> shared`, share.comment, share.link]
+  const lines = [newsShareHeader(share.sharer.id), share.comment, share.link]
     .filter((line): line is string => line !== null);
   return {
     content: lines.join("\n"),
@@ -125,7 +123,7 @@ function recordErrorKeeper(api: INewsFilingApi): {
   };
 }
 
-/** Where the share's News Copy is: posted, waiting for a history copy, or failed. */
+/** Where the share's News Copy is: posted, waiting for a backfill copier, or failed. */
 type ShareCopyState = "copied" | "waiting" | "failed";
 
 function confirmation(
@@ -140,8 +138,7 @@ function confirmation(
     `${how} **${NEWS_CATEGORY_NAMES[categoryKey]}**.`,
   ];
   if (copy === "waiting") {
-    lines.push("Its copy in the category thread will be posted after the history copy " +
-      "that is running now.");
+    lines.push("Its copy in the category thread will be posted after the copies running now.");
   } else if (copy === "failed") {
     lines.push("Its copy in the category thread could not be posted yet; it will be retried.");
   }
@@ -153,12 +150,13 @@ function confirmation(
  * preview, picks the category when the member chose none, then records it as the member's,
  * reacts and copies it (see {@link fileNewsItem}). Returns the private reply. Every failure
  * is answered with its full request and response; a post that cannot be recorded is
- * deleted again, since nothing else would record a message the bot posted.
+ * deleted again, since nothing else would record a message the bot posted. A post deleted
+ * while it is filed has its News Item and News Copy removed once filed, as a live post's.
  */
 export async function shareNewsReply(
   share: INewsShare,
   deps: INewsShareDeps,
-): Promise<INewsShareReply> {
+): Promise<IPrivateReply> {
   const refusal = shareRefusal(share, deps.testMode);
   if (refusal) return { text: refusal, failed: true };
 
@@ -174,7 +172,7 @@ export async function shareNewsReply(
   try {
     post = await deps.waitForPreview(post);
     if (!deps.filing.has(post.id)) {
-      return { text: "Your news was deleted before it could be filed.", failed: true };
+      return { text: DELETED_WHILE_FILING_MESSAGE, failed: true };
     }
     const item = sharedNewsItemFrom(post, share);
     const categoryKey = share.categoryKey ?? pickNewsCategory(item);
@@ -191,8 +189,13 @@ export async function shareNewsReply(
       const label = "Could not record your news, so its post was removed again";
       return { text: buildApiErrorMessage(label, keeper.error()), failed: true };
     }
+    if (!deps.filing.has(post.id)) {
+      // Deleted while it was filed: the listener left the removal to the filing.
+      await removeNewsItem(post.id, "for a deleted message", deps);
+      return { text: DELETED_WHILE_FILING_MESSAGE, failed: true };
+    }
     let copy: ShareCopyState = "copied";
-    if (outcome.copy === null) copy = deps.copiesPaused?.() ? "waiting" : "failed";
+    if (outcome.copy === null) copy = outcome.waiting ? "waiting" : "failed";
     return {
       text: confirmation(post, categoryKey, share.categoryKey === null, copy),
       failed: false,
@@ -222,13 +225,8 @@ export function createNewsShareDeps(client: Client): INewsShareDeps {
     discord: recording.discord,
     waitForPreview: recording.waitForPreview,
     filing: recording.filing,
-    copiesPaused: newsCopiesPaused,
-    postShare: async (channelId, message) => {
-      const channel = await client.channels.fetch(channelId);
-      if (!channel?.isSendable()) {
-        throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
-      }
-      return channel.send(message);
-    },
+    copyWaits: recording.copyWaits,
+    postShare: async (channelId, message) =>
+      (await fetchNewsChannel(client, channelId)).send(message),
   };
 }

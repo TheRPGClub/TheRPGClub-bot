@@ -1,6 +1,7 @@
 import axios from "axios";
 import { TimestampStyles, time, userMention } from "discord.js";
 
+import { NEWS_IMPORT_COMMAND } from "../config/newsHub.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
 import {
   buildAnyErrorMessage,
@@ -25,9 +26,6 @@ import {
 // Discord user.
 
 const LOG_CONTEXT = "NewsImport";
-
-/** The command's name, as staff type it. The API's Feature coverage names it too. */
-export const NEWS_IMPORT_COMMAND = "news-import";
 
 /** The shortest gap between two edits of the history copy's progress message. */
 export const PROGRESS_EDIT_MS = 5_000;
@@ -132,7 +130,7 @@ function finishedText(
   const reason = progress.failure
     ? `\n${runFailureReason(progress.failure.label, progress.failure.error)}`
     : "";
-  return `**History copy** stopped on an error (${startedLine(run)}).${reason}\n` +
+  return `**History copy** stopped (${startedLine(run)}).${reason}\n` +
     `${copyCountsText(progress)}\n${RERUN_NOTE}`;
 }
 

@@ -6,11 +6,12 @@ import {
 } from "discord.js";
 import { ContextMenu, Discord, SelectMenuComponent } from "discordx";
 
-import { NEWS_CHANNEL_PLACES } from "../config/newsHub.js";
+import { CHANGE_NEWS_CATEGORY_COMMAND, NEWS_CHANNEL_PLACES } from "../config/newsHub.js";
+import { NEWS_CATEGORY_PICK_PREFIX } from "../config/customIdPrefixes.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import {
   buildComponentsV2EditFlags,
-  buildErrorReply,
+  buildPrivateReply,
   buildTextReply,
 } from "../functions/ComponentsV2Utils.js";
 import {
@@ -25,10 +26,11 @@ import {
   parseNewsCategoryPickId,
 } from "../functions/NewsCategoryChangePrompt.js";
 import {
-  CHANGE_NEWS_CATEGORY_COMMAND,
+  NEWS_CATEGORY_HISTORY_COPY_MESSAGE,
   changeNewsCategory,
   createNewsCategoryDeps,
 } from "../services/NewsCategoryChange.js";
+import { NEWS_COPY_LANE } from "../services/NewsCopyLane.js";
 import { logUnexpectedCustomId } from "../utilities/CustomIdUtils.js";
 
 /**
@@ -53,7 +55,7 @@ export class NewsCategoryCommand {
       NEWS_CHANNEL_PLACES,
       interaction.client.user.id,
       IS_TEST_MODE,
-    );
+    ) ?? (NEWS_COPY_LANE.historyRunning() ? NEWS_CATEGORY_HISTORY_COPY_MESSAGE : null);
     if (refusal) {
       await safeReply(interaction, buildTextReply(refusal, true));
       return;
@@ -61,7 +63,7 @@ export class NewsCategoryCommand {
     await safeReply(interaction, buildNewsCategoryPrompt(message.channelId, message.id));
   }
 
-  @SelectMenuComponent({ id: /^news-category-pick-v1:\d+:\d+$/ })
+  @SelectMenuComponent({ id: new RegExp(`^${NEWS_CATEGORY_PICK_PREFIX}:\\d+:\\d+$`) })
   async pickNewsCategory(interaction: StringSelectMenuInteraction): Promise<void> {
     const target = parseNewsCategoryPickId(interaction.customId);
     const [categoryKey] = interaction.values;
@@ -75,9 +77,9 @@ export class NewsCategoryCommand {
       { actingUserId: interaction.user.id, ...target, categoryKey },
       createNewsCategoryDeps(interaction.client),
     );
-    const payload = reply.failed
-      ? buildErrorReply(reply.text, true)
-      : buildTextReply(reply.text, true);
-    await safeEditReply(interaction, { ...payload, flags: buildComponentsV2EditFlags() });
+    await safeEditReply(interaction, {
+      ...buildPrivateReply(reply),
+      flags: buildComponentsV2EditFlags(),
+    });
   }
 }

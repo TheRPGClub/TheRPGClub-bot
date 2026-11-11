@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { NewsCategoryKey, NewsCategoryThreads } from "../config/newsHub.js";
+import type { FeatureState } from "../functions/FeatureGate.js";
 import type { INewsCopyMessage } from "../functions/NewsCopy.js";
+import { NewsCopyLane } from "../services/NewsCopyLane.js";
 import type { INewsCopyDiscord, INewsPost } from "../services/NewsCopying.js";
 import {
   copyNewsHistory,
@@ -97,6 +99,8 @@ function world(
     failureLimit?: number;
     onPost?: (world: IWorld) => void;
     originalOf?: (messageId: string) => INewsPost;
+    /** The News Hub's state, read before each item. */
+    state?: () => FeatureState | null;
   } = {},
 ): IWorld {
   const w: IWorld = { items: [...items], copied: new Map(), calls: [], deps: null as never };
@@ -157,6 +161,7 @@ function world(
     },
     ...(options.per ? { per: options.per } : {}),
     ...(options.failureLimit ? { failureLimit: options.failureLimit } : {}),
+    ...(options.state ? { featureState: async () => options.state?.() ?? null } : {}),
   };
   return w;
 }
@@ -316,6 +321,32 @@ test("too many failures in a row stop the run, saying why", async (t) => {
   assert.match(progress.failure?.label ?? "", /3 News Copies in a row failed/);
 });
 
+test("switching the News Hub Off stops the run before its next item", async () => {
+  let state: FeatureState = "live";
+  const w = world([item(1), item(2), item(3)], {
+    state: () => state,
+    onPost: () => {
+      state = "off";
+    },
+  });
+
+  const progress = await copyNewsHistory(w.deps);
+
+  assert.deepEqual([...w.copied.keys()], [item(1).message_id]);
+  assert.equal(progress.finished, false);
+  assert.match(progress.failure?.label ?? "", /News Hub was switched Off/);
+  assert.equal(progress.failure?.error, null);
+});
+
+test("a run started while the News Hub is Off copies nothing", async () => {
+  const w = world([item(1)], { state: () => "off" });
+
+  const progress = await copyNewsHistory(w.deps);
+
+  assert.equal(posts(w).length, 0);
+  assert.equal(progress.finished, false);
+});
+
 test("a listing the API refuses stops the run, saying which step failed", async () => {
   const w = world([item(1)], { failList: true });
 
@@ -348,7 +379,8 @@ test("one run at a time: a second start is refused, and copies wait while it run
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const runner = new NewsHistoryCopyRunner();
+  const lane = new NewsCopyLane();
+  const runner = new NewsHistoryCopyRunner(lane);
   const w = world([item(1)]);
   const listing = w.deps.listing;
   const gated = {
@@ -360,18 +392,18 @@ test("one run at a time: a second start is refused, and copies wait while it run
       },
     },
   };
-  assert.equal(runner.copiesPaused(), false);
+  assert.equal(lane.paused(), false);
 
   const first = runner.start("staff", new Date(), gated);
   const second = runner.start("staff", new Date(), w.deps);
 
   assert.ok(first);
   assert.equal(second, null);
-  assert.equal(runner.copiesPaused(), true);
+  assert.equal(lane.paused(), true);
   assert.equal(runner.current()?.startedBy, "staff");
   release();
   await first;
-  assert.equal(runner.copiesPaused(), false);
+  assert.equal(lane.paused(), false);
   assert.equal(runner.current(), null);
   const again = runner.start("staff", new Date(), w.deps);
   assert.ok(again);

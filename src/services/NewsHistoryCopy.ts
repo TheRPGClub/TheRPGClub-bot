@@ -1,34 +1,40 @@
 import type { Client } from "discord.js";
-import type { INewsCopySource } from "../functions/NewsCopy.js";
+import type { FeatureState } from "../functions/FeatureGate.js";
 import { buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
-  newsCopyImagesOf,
+  fetchNewsChannel,
+  newsCopySourceOfRecord,
   postNewsCopy,
   type INewsCopyDeps,
   type INewsPost,
 } from "./NewsCopying.js";
-import type { INewsUncopiedApi, IUncopiedNewsItem } from "./NewsItemApi.js";
+import { NEWS_COPY_LANE, type NewsCopyLane } from "./NewsCopyLane.js";
+import {
+  NEWS_LIST_PER,
+  type INewsUncopiedApi,
+  type IUncopiedNewsItem,
+} from "./NewsItemApi.js";
 
 // The history copy (spec api#367, bot#1539): staff copy every News Item that has no News
 // Copy into its category's thread, oldest first, about one every 1.5 seconds. It runs in
 // the bot, one at a time, like the News Import scan it replaces. Its resume point is the
-// API's: the items still without a copy. While it runs, new copies wait (see
-// `newsCopiesPaused`); they are the newest items without a copy, so it posts them last.
+// API's: the items still without a copy. It holds the copy lane (NewsCopyLane), so new
+// copies wait while it runs; they are the newest items without a copy, so it posts them last.
 
 const LOG_CONTEXT = "NewsHistoryCopy";
 
 /** The gap between two copies: about 40 a minute, well inside Discord's limits. */
 export const HISTORY_COPY_INTERVAL_MS = 1_500;
 
-/** The page the runner reads the uncopied listing with. */
-export const HISTORY_COPY_PER = 100;
-
 /**
  * Copies that fail in a row before the run stops: something is wrong for every item (a
  * thread the bot cannot post in, Discord down), so the run stops rather than log each one.
  */
 export const HISTORY_COPY_FAILURE_LIMIT = 10;
+
+/** Why a run stopped when the News Hub went Off while it ran. */
+const NEWS_HUB_OFF_LABEL = "Stopped: the News Hub was switched Off";
 
 /** Reads a News Item's original message, fresh, so its image addresses have not expired. */
 export interface INewsOriginals {
@@ -42,6 +48,8 @@ export interface INewsHistoryCopyDeps extends INewsCopyDeps {
   intervalMs?: number;
   per?: number;
   failureLimit?: number;
+  /** The News Hub's state, read before each item: Off stops the run. Absent: never Off. */
+  featureState?: () => Promise<FeatureState | null>;
   /** Called after each copy. The object is the live progress, so read it at once. */
   onProgress?: (progress: Readonly<INewsHistoryCopyProgress>) => void;
 }
@@ -75,18 +83,6 @@ function emptyProgress(): INewsHistoryCopyProgress {
 const realSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-/** What the item's News Copy shows; an imported item's copy shows its original date. */
-function copySource(item: IUncopiedNewsItem, post: INewsPost): INewsCopySource {
-  return {
-    originalUrl: post.url,
-    authorId: item.author.user_id,
-    comment: item.comment,
-    linkUrl: item.link?.url ?? null,
-    images: newsCopyImagesOf(post),
-    postedAt: item.origin === "import" ? new Date(item.posted_at) : null,
-  };
-}
-
 /** Posts and reports one item's copy; false (logged) when it failed. */
 async function copyOne(item: IUncopiedNewsItem, deps: INewsHistoryCopyDeps): Promise<boolean> {
   let post: INewsPost;
@@ -98,8 +94,8 @@ async function copyOne(item: IUncopiedNewsItem, deps: INewsHistoryCopyDeps): Pro
     logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
     return false;
   }
-  const copy = await postNewsCopy(item.message_id, item.category_key, copySource(item, post),
-    deps);
+  const copy = await postNewsCopy(item.message_id, item.category_key,
+    newsCopySourceOfRecord(post, item), deps);
   return copy !== null;
 }
 
@@ -114,7 +110,7 @@ export async function copyNewsHistory(
 ): Promise<INewsHistoryCopyProgress> {
   const progress = emptyProgress();
   const sleep = deps.sleep ?? realSleep;
-  const per = deps.per ?? HISTORY_COPY_PER;
+  const per = deps.per ?? NEWS_LIST_PER;
   const failureLimit = deps.failureLimit ?? HISTORY_COPY_FAILURE_LIMIT;
   const skipped = new Set<string>();
   let failedInARow = 0;
@@ -136,6 +132,10 @@ export async function copyNewsHistory(
       continue;
     }
     for (const item of fresh) {
+      if ((await deps.featureState?.()) === "off") {
+        progress.failure = { label: NEWS_HUB_OFF_LABEL, error: null };
+        return progress;
+      }
       if (copiedBefore) await sleep(deps.intervalMs ?? HISTORY_COPY_INTERVAL_MS);
       copiedBefore = true;
       if (await copyOne(item, deps)) {
@@ -171,20 +171,18 @@ export interface INewsHistoryCopyRun {
 }
 
 /**
- * Runs one history copy at a time inside the bot. A run does not survive a restart; staff
- * run it again, and it continues with the items still without a copy.
+ * Runs one history copy at a time inside the bot, holding the copy lane: a catch-up copying
+ * when it starts stops after its current item, and the run then begins. A run does not
+ * survive a restart; staff run it again, and it continues with the items still without a copy.
  */
 export class NewsHistoryCopyRunner {
   private run: INewsHistoryCopyRun | null = null;
 
+  constructor(private readonly lane: NewsCopyLane = NEWS_COPY_LANE) {}
+
   /** The run in progress, or null. */
   current(): Readonly<INewsHistoryCopyRun> | null {
     return this.run;
-  }
-
-  /** True while a run is in progress: new News Copies wait for it. */
-  copiesPaused(): boolean {
-    return this.run !== null;
   }
 
   /**
@@ -199,12 +197,18 @@ export class NewsHistoryCopyRunner {
     if (this.run) return null;
     const run: INewsHistoryCopyRun = { startedBy, startedAt, progress: null };
     this.run = run;
-    return copyNewsHistory({
-      ...deps,
-      onProgress: (progress) => {
-        run.progress = progress;
-        deps.onProgress?.(progress);
-      },
+    return this.lane.holdForHistory().then(async (hold) => {
+      try {
+        return await copyNewsHistory({
+          ...deps,
+          onProgress: (progress) => {
+            run.progress = progress;
+            deps.onProgress?.(progress);
+          },
+        });
+      } finally {
+        hold.release();
+      }
     }).finally(() => {
       this.run = null;
     });
@@ -215,24 +219,13 @@ export class NewsHistoryCopyRunner {
 export const NEWS_HISTORY_COPY = new NewsHistoryCopyRunner();
 
 /**
- * Whether new News Copies wait now, because a history copy is running. The live filing
- * flow asks it (through `INewsCopyDeps.copiesPaused`), and so does catch-up.
- */
-export function newsCopiesPaused(): boolean {
-  return NEWS_HISTORY_COPY.copiesPaused();
-}
-
-/**
  * Reads originals from the News Channel, skipping the message cache (a whole-history run
  * would only churn it) and always asking Discord, so image addresses are fresh.
  */
 export function discordNewsOriginals(client: Client, channelId: string): INewsOriginals {
   return {
     async fetch(messageId) {
-      const channel = await client.channels.fetch(channelId);
-      if (!channel?.isTextBased()) {
-        throw new Error(`Channel ${channelId} is not a text channel the bot can read.`);
-      }
+      const channel = await fetchNewsChannel(client, channelId);
       return channel.messages.fetch({ message: messageId, cache: false, force: true });
     },
   };

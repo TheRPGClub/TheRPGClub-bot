@@ -13,6 +13,11 @@ export interface INewsMessage {
   member: { displayName: string } | null;
   /** The text as a reader sees it: mentions and custom emoji resolved. */
   cleanContent: string;
+  /**
+   * The raw text, mentions as `<@id>`. Read only from the bot's own `/news share` posts, to
+   * find who shared them.
+   */
+  content?: string;
   createdAt: Date;
   editedAt: Date | null;
   attachments: ReadonlyMap<string, INewsAttachment>;
@@ -280,5 +285,49 @@ export function sharedNewsItemFrom(
     edited_at: message.editedAt?.toISOString() ?? null,
     link: linkOf(origin.link, previewOf(origin.link, linkCount, message.embeds)),
     images: imagesOf(message),
+  };
+}
+
+/** The first line of a `/news share` post: who shared it, as a mention. */
+export function newsShareHeader(sharerId: string): string {
+  return `<@${sharerId}> shared`;
+}
+
+const SHARE_HEADER = /^<@(\d+)> shared$/;
+
+/**
+ * What a `/news share` post holds, read back from the bot's message: the sharer (their name
+ * as the post shows it), the comment and the link. Null when the message is not one.
+ */
+function newsShareOf(message: INewsMessage): INewsShareOrigin | null {
+  if (!message.author.bot || message.webhookId !== null || message.system) return null;
+  const lines = (message.content ?? "").split("\n");
+  const sharerId = SHARE_HEADER.exec(lines[0] ?? "")?.[1];
+  const link = lines.at(-1) ?? "";
+  if (!sharerId || lines.length < 2 || !isWebAddress(link)) return null;
+  const shownAs = message.cleanContent.split("\n")[0] ?? "";
+  return {
+    sharer: { id: sharerId, name: shownAs.replace(/ shared$/, "").replace(/^@/, "") },
+    link,
+    comment: lines.slice(1, -1).join("\n").trim() || null,
+  };
+}
+
+/**
+ * The News Item a message in a news place is: a member's post ({@link newsItemFrom}), or
+ * the bot's own `/news share` post, credited to the member who shared it. Null for anything
+ * else. For a message the API already holds as a News Item (renewal, catch-up, moves).
+ */
+export function postedNewsItemFrom(
+  message: INewsMessage,
+  places: NewsPlaces,
+): INewsItemPayload | null {
+  const item = newsItemFrom(message, places);
+  if (item || !places.has(message.channelId)) return item;
+  const share = newsShareOf(message);
+  if (!share) return null;
+  return {
+    ...sharedNewsItemFrom(message, share),
+    category_key: places.get(message.channelId) ?? null,
   };
 }

@@ -85,3 +85,13 @@ export const NEWS_PREVIEW_WAIT_MS = 10_000;
  */
 export const NEWS_SHARE_LINK_MAX = 512;
 export const NEWS_SHARE_COMMENT_MAX = 1_200;
+
+/** `/news share`'s command and subcommand names. The feature gate maps the command. */
+export const NEWS_COMMAND = "news";
+export const NEWS_SHARE_SUBCOMMAND = "share";
+
+/** `/news-import`'s name, as staff type it. The API's Feature coverage names it too. */
+export const NEWS_IMPORT_COMMAND = "news-import";
+
+/** The message command's name, as members see it under Apps. The gate maps it too. */
+export const CHANGE_NEWS_CATEGORY_COMMAND = "Change news category";

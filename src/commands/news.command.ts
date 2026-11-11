@@ -9,18 +9,17 @@ import { Discord, Slash, SlashChoice, SlashGroup, SlashOption } from "discordx";
 import {
   NEWS_CATEGORY_KEYS,
   NEWS_CATEGORY_NAMES,
+  NEWS_COMMAND,
   NEWS_SHARE_COMMENT_MAX,
   NEWS_SHARE_LINK_MAX,
+  NEWS_SHARE_SUBCOMMAND,
   type NewsCategoryKey,
 } from "../config/newsHub.js";
-import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.js";
+import { buildPrivateReply, type IPrivateReply } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
 import {
   createNewsShareDeps,
-  NEWS_COMMAND,
-  NEWS_SHARE_SUBCOMMAND,
   shareNewsReply,
-  type INewsShareReply,
 } from "../services/NewsShare.js";
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
 
@@ -84,7 +83,7 @@ export class NewsCommand {
   ): Promise<void> {
     // Waiting for the link preview can take up to 10 seconds.
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
-    let reply: INewsShareReply;
+    let reply: IPrivateReply;
     try {
       reply = await shareNewsReply({
         sharer: { id: interaction.user.id, name: sharerName(interaction) },
@@ -98,9 +97,6 @@ export class NewsCommand {
     } catch (error: unknown) {
       reply = { text: buildAnyErrorMessage("Could not share your news", error), failed: true };
     }
-    const payload = reply.failed
-      ? buildErrorReply(reply.text, true)
-      : buildTextReply(reply.text, true);
-    await safeReply(interaction, payload);
+    await safeReply(interaction, buildPrivateReply(reply));
   }
 }

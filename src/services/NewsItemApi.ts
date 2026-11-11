@@ -5,19 +5,22 @@ import { apiDelete, apiGetOrThrow, apiPutOrThrow } from "./RpgClubApiClient.js";
 
 // The service-only News Item calls (spec api#355, api#367): record, remove, report where a
 // News Item's News Copy lives, list the News Items that have no News Copy yet, and find a
-// recorded News Item, so an edit or delete of its original can reach its News Copy.
+// recorded News Item, so an edit the API refuses can be told apart from one never recorded.
 
 const NEWS_ITEM_PATH = "/api/v1/news_items";
 
 /**
  * The PUT body's `data`: the path carries the message ID. A missing `category_key` keeps the
  * stored category (an edit does not know a correction); a new live item needs one.
- * `picked_category_key`, the category the bot picked, is sent only when the bot picks.
+ * `picked_category_key`, the category the bot picked, is sent only when the bot picks. A
+ * missing `author_name` keeps the stored name (renewing a `/news share` post).
  */
-export type NewsItemRecordData = Omit<INewsItemPayload, "message_id" | "category_key"> & {
-  category_key?: NewsCategoryKey;
-  picked_category_key?: NewsCategoryKey | null;
-};
+export type NewsItemRecordData =
+  Omit<INewsItemPayload, "message_id" | "category_key" | "author_name"> & {
+    author_name?: string;
+    category_key?: NewsCategoryKey;
+    picked_category_key?: NewsCategoryKey | null;
+  };
 
 export type NewsItemRecordBody = { data: NewsItemRecordData };
 
@@ -27,12 +30,27 @@ export interface INewsCopyLocation {
   thread_id: string;
 }
 
+/** What removing a News Item answers: whether it was recorded, and where its copy lived. */
+export interface INewsItemRemoval {
+  removed: boolean;
+  /** The removed item's News Copy, for the caller to delete; null when it had none. */
+  newsCopy: INewsCopyLocation | null;
+}
+
+/** The removal in a DELETE response; an empty answer removed nothing the bot can delete. */
+export function newsItemRemovalOf(response: unknown): INewsItemRemoval {
+  const data = (response as { data?: unknown } | null | undefined)?.data;
+  if (!data || typeof data !== "object") return { removed: false, newsCopy: null };
+  const removal = data as { removed?: unknown; news_copy?: INewsCopyLocation | null };
+  return { removed: removal.removed === true, newsCopy: removal.news_copy ?? null };
+}
+
 /** The News Item writes. All are idempotent by message ID. */
 export interface INewsItemApi {
   /** Creates or replaces the News Item (fields sent are replaced, so send it whole). */
   record: (messageId: string, body: NewsItemRecordBody) => Promise<unknown>;
-  /** Removes it; 204 whether or not it was recorded. */
-  remove: (messageId: string) => Promise<unknown>;
+  /** Removes it for good, whether or not it was recorded, saying where its copy lived. */
+  remove: (messageId: string) => Promise<INewsItemRemoval>;
 }
 
 /** The writes that file a News Item: recording it, and reporting its News Copy. */
@@ -79,8 +97,8 @@ export interface INewsFeedPage {
   meta: { page: number; pages: number };
 }
 
-/** Feed items per page the lookup reads: a delete is nearly always of a recent post. */
-const FEED_LOOKUP_PER = 100;
+/** The page the bot reads News Item listings with (feed, uncopied), in turn. */
+export const NEWS_LIST_PER = 100;
 /** How far a recorded `posted_at` may sit before its message's own time and still match. */
 const POSTED_AT_SLACK_MS = 60_000;
 
@@ -94,7 +112,7 @@ const POSTED_AT_SLACK_MS = 60_000;
 export async function findInNewsFeed(
   messageId: string,
   readPage: (page: number, per: number) => Promise<INewsFeedPage>,
-  per = FEED_LOOKUP_PER,
+  per = NEWS_LIST_PER,
 ): Promise<IRecordedNewsItem | null> {
   const postedAt = SnowflakeUtil.timestampFrom(messageId) - POSTED_AT_SLACK_MS;
   for (let page = 1; ; page += 1) {
@@ -111,7 +129,7 @@ const newsItemPath = (messageId: string): string =>
 
 export const NEWS_ITEM_API: INewsSyncApi = {
   record: (messageId, body) => apiPutOrThrow(newsItemPath(messageId), body),
-  remove: (messageId) => apiDelete(newsItemPath(messageId)),
+  remove: async (messageId) => newsItemRemovalOf(await apiDelete(newsItemPath(messageId))),
   reportCopy: (messageId, copy) =>
     apiPutOrThrow(newsItemPath(messageId), { data: { news_copy: copy } }),
   find: (messageId) => findInNewsFeed(messageId, (page, per) =>
@@ -135,7 +153,7 @@ export interface IUncopiedNewsItem {
   message_id: string;
   category_key: NewsCategoryKey;
   /** `import`: brought in by the News Import, so its copy shows the original date. */
-  origin: "live" | "import";
+  origin: NewsItemOrigin;
   comment: string | null;
   posted_at: string;
   link: { url: string } | null;
@@ -151,22 +169,26 @@ export interface IUncopiedNewsPage {
   next: number | null;
 }
 
-/** The API's largest page of the uncopied listing. */
-export const UNCOPIED_PER_MAX = 500;
+/** The largest page the API's News Item and News Import listings give. */
+export const NEWS_LIST_PER_MAX = 500;
+
+/** Where News Items came from: posted live, or brought in by the News Import. */
+export type NewsItemOrigin = "live" | "import";
 
 export interface INewsUncopiedApi {
   /**
    * GET /api/v1/news_items/uncopied: News Items with a category and no News Copy, oldest
-   * first. A reported copy takes its item out, so a runner that copies as it goes reads
-   * page 1 again rather than the next page.
+   * first, from `origin` only when given (else both). A reported copy takes its item out,
+   * so a runner that copies as it goes reads page 1 again rather than the next page.
    */
-  uncopied: (page: number, per: number) => Promise<IUncopiedNewsPage>;
+  uncopied: (page: number, per: number, origin?: NewsItemOrigin) => Promise<IUncopiedNewsPage>;
 }
 
 export const NEWS_UNCOPIED_API: INewsUncopiedApi = {
-  async uncopied(page, per) {
+  async uncopied(page, per, origin) {
     // The query stays in the path: an error reply shows the request's url, not its params.
     const query = new URLSearchParams({ page: String(page), per: String(per) });
+    if (origin) query.set("origin", origin);
     const payload = await apiGetOrThrow<{
       data: IUncopiedNewsItem[];
       meta: { count: number; next?: number | null };

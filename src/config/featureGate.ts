@@ -4,6 +4,13 @@
  * admin and superadmin commands, help, profile, and shared pickers such as `igdb-select`.
  */
 
+import { NEWS_CATEGORY_PICK_PREFIX } from "./customIdPrefixes.js";
+import {
+  CHANGE_NEWS_CATEGORY_COMMAND,
+  NEWS_COMMAND,
+  NEWS_IMPORT_COMMAND,
+} from "./newsHub.js";
+
 /** Top-level slash command or context menu name -> Feature key. */
 export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   gamedb: "game_index",
@@ -27,12 +34,12 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   suggestion: "suggestions",
   // Admins and Superadmins in Preview and Live, nobody while Off: this gate refuses
   // everyone while Off, and the API refuses anyone but Admins and Superadmins.
-  "news-import": "news_hub",
+  [NEWS_IMPORT_COMMAND]: "news_hub",
   // The message command: the sharer and staff while Live, staff only while Preview (the
   // API also checks author or staff on every change).
-  "Change news category": "news_hub",
+  [CHANGE_NEWS_CATEGORY_COMMAND]: "news_hub",
   // /news share: staff only in Preview, everyone when Live (spec api#367).
-  news: "news_hub",
+  [NEWS_COMMAND]: "news_hub",
 };
 
 /**
@@ -86,7 +93,7 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
   ["suggestion-", "suggestions"],
   ["todo-review-suggestions", "suggestions"],
 
-  ["news-category-pick-v1:", "news_hub"],
+  [`${NEWS_CATEGORY_PICK_PREFIX}:`, "news_hub"],
 ];
 
 /**

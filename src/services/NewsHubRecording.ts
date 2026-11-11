@@ -13,7 +13,6 @@ import { newsItemFrom } from "../functions/NewsItem.js";
 import { buildDiscordErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { getFeatureState } from "./FeaturePostRouting.js";
-import { newsCopiesPaused } from "./NewsHistoryCopy.js";
 import {
   discordNewsCopier,
   fileNewsItem,
@@ -27,6 +26,7 @@ import {
   syncEditedNewsMessage,
   type INewsSyncDeps,
 } from "./NewsCopySync.js";
+import { NEWS_COPY_LANE } from "./NewsCopyLane.js";
 import { NEWS_ITEM_API } from "./NewsItemApi.js";
 
 // Recording (spec api#367): members share news in the News Channel. A new post is filed:
@@ -91,7 +91,7 @@ export function createNewsRecordingDeps(client: Client): INewsRecordingDeps {
     discord: { ...discordNewsCopier(client), ...discordNewsCopyEditor(client) },
     waitForPreview: previewWaiter(client),
     filing: FILING,
-    copiesPaused: newsCopiesPaused,
+    copyWaits: () => NEWS_COPY_LANE.copyWaits(),
   };
 }
 
@@ -146,7 +146,7 @@ export async function fileNewsMessage(
     const edited = deps.filing.get(message.id) ?? null;
     deps.filing.delete(message.id);
     if (outcome?.recorded && deleted) {
-      await removeNewsItem(message.id, "for a deleted message", deps, outcome.copy);
+      await removeNewsItem(message.id, "for a deleted message", deps);
     } else if (outcome?.recorded && edited) {
       await recordOrRemove(edited, deps);
     }

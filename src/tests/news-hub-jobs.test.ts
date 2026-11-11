@@ -11,12 +11,16 @@ import {
   type IBotJobContext,
   type IBotJobSurface,
 } from "../services/BotJobHandlers.js";
+import { NewsCopyLane } from "../services/NewsCopyLane.js";
 import type { INewsPost } from "../services/NewsCopying.js";
+import { NewsHistoryCopyRunner } from "../services/NewsHistoryCopy.js";
 import type { INewsSyncDiscord } from "../services/NewsCopySync.js";
-import type {
-  INewsChannelReader,
-  INewsHubApi,
-  INewsHubJobDeps,
+import {
+  runNewsCatchUp,
+  scheduleNewsCopyRetries,
+  type INewsChannelReader,
+  type INewsHubApi,
+  type INewsHubJobDeps,
 } from "../services/NewsHubJobs.js";
 import type {
   INewsCopyLocation,
@@ -85,6 +89,19 @@ function message(
   };
 }
 
+const SHARER_ID = "710000000000000009";
+
+/** The bot's own /news share post for SHARER_ID in the News Channel. */
+function sharePost(id: string, overrides: Partial<INewsPost> = {}): INewsPost {
+  const content = `<@${SHARER_ID}> shared\nBig if true\nhttps://example.com/news/${id}`;
+  return message(id, NEWS_CHANNEL, {
+    author: { id: "710000000000000099", bot: true, username: "RPGClubBot", globalName: null },
+    content,
+    cleanContent: content.replace(`<@${SHARER_ID}>`, "@Reporter"),
+    ...overrides,
+  });
+}
+
 interface IStored {
   message_id: string;
   origin: "live" | "import";
@@ -97,6 +114,8 @@ interface IStored {
 interface IFakeNewsApi extends INewsHubApi {
   store: Map<string, IStored>;
   writes: string[];
+  /** The `origin` each uncopied listing read asked for (null: both). */
+  listedOrigins: (string | null)[];
 }
 
 const byPostedAt = (a: IStored, b: IStored): number =>
@@ -112,6 +131,7 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
   const api: IFakeNewsApi = {
     store,
     writes,
+    listedOrigins: [],
     record: async (messageId, body) => {
       writes.push(`record ${messageId}`);
       const existing = store.get(messageId);
@@ -128,7 +148,9 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
     },
     remove: async (messageId) => {
       writes.push(`remove ${messageId}`);
+      const known = store.get(messageId);
       store.delete(messageId);
+      return { removed: known !== undefined, newsCopy: known?.news_copy ?? null };
     },
     reportCopy: async (messageId, copy) => {
       writes.push(`reportCopy ${messageId}`);
@@ -150,9 +172,11 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
         .map(({ message_id, origin, posted_at }) => ({ message_id, origin, posted_at }));
       return { items, nextPage: page * per < listed.length ? page + 1 : null };
     },
-    uncopied: async (page, per) => {
+    uncopied: async (page, per, origin) => {
+      if (!api.listedOrigins.includes(origin ?? null)) api.listedOrigins.push(origin ?? null);
       const listed = [...store.values()]
         .filter((item) => item.category_key !== null && item.news_copy === null)
+        .filter((item) => !origin || item.origin === origin)
         .sort(byPostedAt);
       const items: IUncopiedNewsItem[] = listed.slice((page - 1) * per, page * per)
         .map(({ message_id, origin, posted_at, category_key, body }) => ({
@@ -223,7 +247,9 @@ function fakeDiscord(channels: Record<string, INewsPost[]> = {}): IFakeDiscord {
 
 interface IDepOptions {
   state?: FeatureState | null;
-  copiesPaused?: () => boolean;
+  /** The cached flag state, read before each item (defaults to `state`). */
+  cachedState?: () => FeatureState | null;
+  lane?: NewsCopyLane;
   liveSince?: number;
   filing?: Map<string, null>;
   paced?: string[];
@@ -245,14 +271,14 @@ function deps(
       testMode: false,
       places: new Map([[NEWS_CHANNEL, null]]),
       threads: COPY_THREADS,
-      featureState: async () => state,
+      featureState: async () => options.cachedState?.() ?? state,
       api,
       discord,
       // A live post's wait; catch-up must not use it for old messages.
       waitForPreview: () => new Promise<INewsPost>(() => undefined),
       filing: options.filing ?? new Map(),
     },
-    copiesPaused: options.copiesPaused ?? (() => false),
+    lane: options.lane ?? new NewsCopyLane(),
     liveSince: () => options.liveSince ?? CATCH_UP_AT,
     pace: async () => {
       options.paced?.push("pace");
@@ -313,6 +339,32 @@ test("renewal: a News Channel message is recorded with no category, keeping its 
   assert.equal(api.store.get(id)?.body.channel_id, NEWS_CHANNEL);
 });
 
+test("renewal: a /news share post is recorded again as the member's, not removed", async () => {
+  const id = snowflake(10);
+  const fresh = imageUrl("shot.png", FRESH_EXPIRY);
+  const discord = fakeDiscord({
+    [NEWS_CHANNEL]: [sharePost(id, {
+      attachments: new Map([["a", { url: fresh, contentType: "image/png", name: "shot.png" }]]),
+    })],
+  });
+  const api = fakeApi();
+
+  await handleNewsImagesRenew(
+    renewPayload(id, NEWS_CHANNEL),
+    surface(deps(api, discord)),
+    context("live"),
+  );
+
+  assert.deepEqual(api.writes, [`record ${id}`]);
+  const body = api.store.get(id)?.body;
+  assert.equal(body?.author_id, SHARER_ID);
+  assert.equal(body?.comment, "Big if true");
+  assert.equal(body?.link?.url, `https://example.com/news/${id}`);
+  assert.deepEqual(body?.images, [{ url: fresh, expires_at: FRESH_EXPIRY }]);
+  // The post's mention may not resolve to the member's name, so the stored one is kept.
+  assert.equal(body && "author_name" in body, false);
+});
+
 test("renewal: removes the News Item when its message is gone", async () => {
   const id = snowflake(10);
   const api = fakeApi([{
@@ -333,6 +385,30 @@ test("renewal: removes the News Item when its message is gone", async () => {
   assert.deepEqual(api.writes, [`remove ${id}`]);
   assert.equal(api.store.has(id), false);
   assert.match(String(text), /no longer exists/);
+});
+
+test("renewal: a removed item's News Copy is deleted where the removal says it lived", async () => {
+  const id = snowflake(10);
+  const copy = { message_id: "990000000000000001", thread_id: COPY_THREADS.releases.threadId };
+  const api = fakeApi([{
+    message_id: id,
+    origin: "live",
+    category_key: "releases",
+    posted_at: new Date(SnowflakeUtil.timestampFrom(id)).toISOString(),
+    news_copy: copy,
+    body: {},
+  }]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: [] });
+
+  const text = await handleNewsImagesRenew(
+    renewPayload(id, NEWS_CHANNEL),
+    surface(deps(api, discord)),
+    context("live"),
+  );
+
+  assert.deepEqual(api.writes, [`remove ${id}`]);
+  assert.deepEqual(discord.calls, [`delete ${copy.message_id}`]);
+  assert.match(String(text), /News Copy/);
 });
 
 test("renewal: removes the News Item when its message no longer qualifies", async () => {
@@ -529,17 +605,21 @@ test("catch-up: items without a News Copy are copied oldest first", async () => 
   assert.match(text, /3 News Copies posted/);
 });
 
-test("catch-up: an imported item's copy shows its original date and it gets no reaction", async () => {
+test("catch-up: copies live items only, leaving imported ones to the history copy", async () => {
   const old = message(snowflake(-90_000), NEWS_CHANNEL);
-  const api = fakeApi([recorded(old, "emulation", null, "import")]);
-  const discord = fakeDiscord({ [NEWS_CHANNEL]: [old] });
+  const live = message(snowflake(10), NEWS_CHANNEL);
+  const api = fakeApi([
+    recorded(old, "emulation", null, "import"),
+    recorded(live, "releases", null),
+  ]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: [old, live] });
 
-  await catchUp(api, discord);
+  const text = await catchUp(api, discord);
 
-  const seconds = Math.floor(old.createdAt.getTime() / 1000);
-  assert.match(discord.posted[0].copy.content, new RegExp(`shared on <t:${seconds}:D>`));
-  assert.equal(discord.posted[0].threadId, COPY_THREADS.emulation.threadId);
-  assert.equal(discord.calls.some((call) => call.startsWith("react")), false);
+  assert.deepEqual(copiedIds(discord), [live.id]);
+  assert.deepEqual(api.listedOrigins, ["live"]);
+  assert.equal(api.store.get(old.id)?.news_copy, null);
+  assert.match(text, /1 News Copy posted/);
 });
 
 test("catch-up: copies are paced, one wait after each", async () => {
@@ -592,6 +672,18 @@ test("catch-up: many failing copies do not stop the ones after them", async (t) 
   assert.deepEqual(copiedIds(discord), ids(channel.slice(110)));
 });
 
+test("catch-up: a /news share post without a copy is copied, credited to the member", async () => {
+  const shared = sharePost(snowflake(10));
+  const api = fakeApi([recorded(shared, "industry", null)]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: [shared] });
+
+  const text = await catchUp(api, discord);
+
+  assert.deepEqual(copiedIds(discord), [shared.id]);
+  assert.match(discord.posted[0].copy.content, new RegExp(`^<@${SHARER_ID}> shared\nBig if true`));
+  assert.match(text, /1 News Copy posted/);
+});
+
 test("catch-up: an item whose message is gone or no longer news is skipped", async () => {
   const channel = posts(10, 3);
   const api = fakeApi(channel.map((m) => recorded(m, "releases", null)));
@@ -611,7 +703,9 @@ test("catch-up: posts no copies while a history copy runs", async () => {
   const api = fakeApi([recorded(channel[0], "releases"), recorded(channel[1], "releases", null)]);
   const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
 
-  const text = await catchUp(api, discord, { copiesPaused: () => true });
+  const lane = new NewsCopyLane();
+  await lane.holdForHistory();
+  const text = await catchUp(api, discord, { lane });
 
   assert.deepEqual(discord.posted, []);
   // Missed posts are still recorded and reacted to; the history copy copies them later.
@@ -620,14 +714,135 @@ test("catch-up: posts no copies while a history copy runs", async () => {
   assert.match(text, /history copy/);
 });
 
-test("catch-up: stops copying when a history copy starts", async () => {
+test("catch-up: a history copy started meanwhile takes over after the current item", async () => {
   const channel = posts(10, 4);
-  const api = fakeApi(channel.map((m) => recorded(m, "releases", null)));
+  const imported = message(snowflake(-90_000), NEWS_CHANNEL);
+  const api = fakeApi([
+    recorded(imported, "emulation", null, "import"),
+    ...channel.map((m) => recorded(m, "releases", null)),
+  ]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: [imported, ...channel] });
+  const lane = new NewsCopyLane();
+  const runner = new NewsHistoryCopyRunner(lane);
+  const catchUpDeps = deps(api, discord, { lane });
+  let history: Promise<unknown> | null = null;
+  const startsHistory: INewsHubJobDeps = {
+    ...catchUpDeps,
+    pace: async () => {
+      history ??= runner.start("staff", new Date(), {
+        threads: COPY_THREADS,
+        api,
+        discord,
+        listing: api,
+        originals: {
+          fetch: async (id) => (await discord.fetchMessage(NEWS_CHANNEL, id)) as INewsPost,
+        },
+        sleep: async () => undefined,
+      });
+    },
+  };
+
+  const text = String(await handleNewsCatchUp(
+    catchUpPayload(),
+    surface(startsHistory),
+    context("live"),
+  ));
+  await history;
+
+  // Catch-up posted one copy; the history copy posted the rest, the import first.
+  assert.deepEqual(copiedIds(discord), [channel[0].id, imported.id, ...ids(channel.slice(1))]);
+  assert.match(text, /1 News Copy posted/);
+  assert.match(text, /history copy/);
+});
+
+test("copy retry: posts missing live copies without filing missed posts", async () => {
+  const channel = posts(10, 4);
+  const api = fakeApi([recorded(channel[0], "releases"), recorded(channel[1], "releases", null)]);
   const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
 
-  await catchUp(api, discord, { copiesPaused: () => discord.posted.length >= 2 });
+  const outcome = await runNewsCatchUp(deps(api, discord), { fileMissed: false });
 
-  assert.deepEqual(copiedIds(discord), ids(channel.slice(0, 2)));
+  assert.deepEqual(copiedIds(discord), [channel[1].id]);
+  assert.equal(api.store.has(channel[2].id), false);
+  assert.equal(discord.calls.some((call) => call.startsWith("react")), false);
+  assert.equal(outcome.status, "done");
+});
+
+/** A copy retry schedule with its timers in the test's hands. */
+function retrySchedule(lane: NewsCopyLane): {
+  retries: string[];
+  tick: () => void;
+  intervals: number[];
+} {
+  const retries: string[] = [];
+  const intervals: number[] = [];
+  let periodic = (): void => undefined;
+  scheduleNewsCopyRetries({
+    lane,
+    retry: async () => {
+      retries.push("retry");
+    },
+    every: (ms, run) => {
+      intervals.push(ms);
+      periodic = run;
+    },
+    soon: (run) => run(),
+  });
+  return { retries, intervals, tick: () => periodic() };
+}
+
+test("copy retry: runs every 30 minutes", () => {
+  const schedule = retrySchedule(new NewsCopyLane());
+
+  schedule.tick();
+  schedule.tick();
+
+  assert.deepEqual(schedule.intervals, [30 * 60_000]);
+  assert.deepEqual(schedule.retries, ["retry", "retry"]);
+});
+
+test("copy retry: runs right after a history copy finishes", async () => {
+  const lane = new NewsCopyLane();
+  const schedule = retrySchedule(lane);
+
+  (await lane.holdForHistory()).release();
+
+  assert.deepEqual(schedule.retries, ["retry"]);
+});
+
+test("copy retry: runs after catch-up's copy phase only when copies waited for it", () => {
+  const lane = new NewsCopyLane();
+  const schedule = retrySchedule(lane);
+
+  lane.holdForCatchUp()?.release();
+  assert.deepEqual(schedule.retries, []);
+  const hold = lane.holdForCatchUp();
+  lane.copyWaits();
+  hold?.release();
+  assert.deepEqual(schedule.retries, ["retry"]);
+});
+
+test("catch-up: a second catch-up while one runs does nothing", async () => {
+  const channel = posts(10, 2);
+  const api = fakeApi(channel.map((m) => recorded(m, "releases", null)));
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
+  const lane = new NewsCopyLane();
+  let second: string | null = null;
+  const nested: INewsHubJobDeps = {
+    ...deps(api, discord, { lane }),
+    pace: async () => {
+      second ??= String(await handleNewsCatchUp(
+        catchUpPayload(),
+        surface(deps(api, discord, { lane })),
+        context("live"),
+      ));
+    },
+  };
+
+  await handleNewsCatchUp(catchUpPayload(), surface(nested), context("live"));
+
+  assert.deepEqual(copiedIds(discord), ids(channel));
+  assert.match(second ?? "", /already running/);
 });
 
 test("catch-up: posts from when live filing took over are left to it", async () => {
@@ -688,6 +903,50 @@ test("catch-up: does nothing while the News Hub is Off", async () => {
   assert.equal(discord.fetches, 0);
   assert.deepEqual(discord.calls, []);
   assert.match(text, /Off/);
+});
+
+test("catch-up: switching the News Hub Off stops the copies before the next item", async () => {
+  const channel = posts(10, 3);
+  const api = fakeApi(channel.map((m) => recorded(m, "releases", null)));
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
+  let state: FeatureState = "live";
+  const paced: string[] = [];
+  const pacing = deps(api, discord, { cachedState: () => state, paced });
+  const switchingOff: INewsHubJobDeps = {
+    ...pacing,
+    pace: async () => {
+      state = "off";
+    },
+  };
+
+  const text = String(await handleNewsCatchUp(
+    catchUpPayload(),
+    surface(switchingOff),
+    context("live"),
+  ));
+
+  assert.deepEqual(copiedIds(discord), [channel[0].id]);
+  assert.match(text, /switched Off/);
+});
+
+test("catch-up: switching the News Hub Off stops filing missed posts", async () => {
+  const channel = posts(10, 4);
+  const api = fakeApi([recorded(channel[0], "releases")]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
+  let state: FeatureState = "live";
+  const recordOnce: INewsHubApi = {
+    ...api,
+    record: async (messageId, body) => {
+      await api.record(messageId, body);
+      state = "off";
+    },
+  };
+
+  await catchUp(recordOnce, discord, { cachedState: () => state });
+
+  assert.equal(api.store.has(channel[1].id), true);
+  assert.equal(api.store.has(channel[2].id), false);
+  assert.equal(api.store.has(channel[3].id), false);
 });
 
 test("catch-up: reads the News Hub's state afresh, not the job's cached state", async () => {

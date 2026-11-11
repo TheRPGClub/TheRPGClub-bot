@@ -8,6 +8,7 @@ import type { NewsCategoryThreads, NewsPlaces } from "../config/newsHub.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
 import type { INewsCopyMessage } from "../functions/NewsCopy.js";
 import type { INewsEmbed } from "../functions/NewsItem.js";
+import { NewsCopyLane } from "../services/NewsCopyLane.js";
 import type { INewsPost } from "../services/NewsCopying.js";
 import {
   onNewsMessageCreated,
@@ -148,7 +149,9 @@ function fakes(fail: IFailures = {}, seeded: IRecordedNewsItem[] = []): IFakes {
     remove: async (messageId) => {
       calls.push(["remove", messageId]);
       if (fail.api) throw new Error("API down");
+      const known = stored.get(messageId);
       stored.delete(messageId);
+      return { removed: known !== undefined, newsCopy: known?.news_copy ?? null };
     },
     reportCopy: async (messageId, copy) => {
       calls.push(["reportCopy", messageId, copy]);
@@ -194,7 +197,7 @@ function deps(
     state?: FeatureState | null;
     testMode?: boolean;
     preview?: (message: INewsPost) => Promise<INewsPost>;
-    copiesPaused?: () => boolean;
+    copyWaits?: () => boolean;
   } = {},
 ): INewsRecordingDeps {
   return {
@@ -206,7 +209,7 @@ function deps(
     discord,
     waitForPreview: options.preview ?? (async (message) => message),
     filing: new Map(),
-    ...(options.copiesPaused ? { copiesPaused: options.copiesPaused } : {}),
+    ...(options.copyWaits ? { copyWaits: options.copyWaits } : {}),
   };
 }
 
@@ -275,9 +278,11 @@ test("a link post is recorded, reacted to, copied and its copy reported, in orde
   ]);
 });
 
-test("while a history copy runs, a post is recorded and reacted to but not copied", async () => {
+test("while a backfill copies, a post is recorded and reacted to but not copied", async () => {
   const fake = fakes();
-  await onNewsMessageCreated(message(), deps(fake, { copiesPaused: () => true }));
+  const lane = new NewsCopyLane();
+  lane.holdForCatchUp();
+  await onNewsMessageCreated(message(), deps(fake, { copyWaits: () => lane.copyWaits() }));
 
   assert.deepEqual(fake.calls, [
     ["record", MESSAGE_ID, RECORDED_BODY],
@@ -285,9 +290,11 @@ test("while a history copy runs, a post is recorded and reacted to but not copie
   ]);
 });
 
-test("once the history copy ends, a post is copied again", async () => {
+test("once the backfill ends, a post is copied again", async () => {
   const fake = fakes();
-  await onNewsMessageCreated(message(), deps(fake, { copiesPaused: () => false }));
+  const lane = new NewsCopyLane();
+  lane.holdForCatchUp()?.release();
+  await onNewsMessageCreated(message(), deps(fake, { copyWaits: () => lane.copyWaits() }));
 
   assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "react", "post", "reportCopy"]);
 });
@@ -610,7 +617,6 @@ test("an edit leaving only text removes the item and deletes its copy", async ()
     deps(fake));
 
   assert.deepEqual(fake.calls, [
-    ["find", MESSAGE_ID],
     ["remove", MESSAGE_ID],
     ["delete", THREADS.releases.threadId, COPY_ID],
   ]);
@@ -633,13 +639,10 @@ test("deleting a message, singly or in bulk, removes its item and deletes its co
   await onNewsMessagesDeleted(NEWS_CHANNEL, [SECOND_ID, THIRD_ID], deps(fake));
 
   assert.deepEqual(fake.calls, [
-    ["find", MESSAGE_ID],
     ["remove", MESSAGE_ID],
     ["delete", THREADS.releases.threadId, COPY_ID],
-    ["find", SECOND_ID],
     ["remove", SECOND_ID],
     ["delete", THREADS.industry.threadId, "620000000000000002"],
-    ["find", THIRD_ID],
     ["remove", THIRD_ID],
     ["delete", THREADS.rumours.threadId, "620000000000000003"],
   ]);
@@ -650,9 +653,7 @@ test("a deleted message with no copy, or none recorded, only has its item remove
   await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID, SECOND_ID], deps(fake));
 
   assert.deepEqual(fake.calls, [
-    ["find", MESSAGE_ID],
     ["remove", MESSAGE_ID],
-    ["find", SECOND_ID],
     ["remove", SECOND_ID],
   ]);
 });
@@ -664,18 +665,18 @@ test("a copy already gone from its thread is not an error", async (t) => {
     deps(fake));
   await onNewsMessagesDeleted(NEWS_CHANNEL, [SECOND_ID], deps(fake));
 
-  assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "edit", "find", "remove",
-    "delete"]);
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "edit", "remove", "delete"]);
   assert.equal(errors.mock.callCount(), 0);
 });
 
-test("a failed copy lookup is logged and the item is still removed", async (t) => {
-  const errors = t.mock.method(console, "error", () => undefined);
+test("a deleted message's copy is found from the removal, with no lookup", async () => {
   const fake = fakes({ find: true }, [storedItem()]);
   await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID], deps(fake));
 
-  assert.deepEqual(fake.calls, [["find", MESSAGE_ID], ["remove", MESSAGE_ID]]);
-  assert.equal(errors.mock.callCount(), 1);
+  assert.deepEqual(fake.calls, [
+    ["remove", MESSAGE_ID],
+    ["delete", THREADS.releases.threadId, COPY_ID],
+  ]);
 });
 
 test("an item the API fails to remove keeps its copy, and the failure is logged", async (t) => {
@@ -690,7 +691,7 @@ test("an item the API fails to remove keeps its copy, and the failure is logged"
   };
   await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID], deps({ ...fake, api: failingRemove }));
 
-  assert.deepEqual(fake.calls, [["find", MESSAGE_ID], ["remove", MESSAGE_ID]]);
+  assert.deepEqual(fake.calls, [["remove", MESSAGE_ID]]);
   assert.equal(errors.mock.callCount(), 1);
 });
 
@@ -739,7 +740,7 @@ test("an API failure on delete is logged, not thrown, and later removals go out"
   const fake = fakes({ api: true });
   await onNewsMessagesDeleted(NEWS_CHANNEL, [MESSAGE_ID, SECOND_ID], deps(fake));
 
-  assert.deepEqual(fake.calls.map((call) => call[0]), ["find", "remove", "find", "remove"]);
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["remove", "remove"]);
   assert.equal(errors.mock.callCount(), 2);
 });
 

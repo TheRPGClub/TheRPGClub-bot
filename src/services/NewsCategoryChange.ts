@@ -9,10 +9,11 @@ import {
   type NewsCategoryThreads,
   type NewsPlaces,
 } from "../config/newsHub.js";
+import type { IPrivateReply } from "../functions/ComponentsV2Utils.js";
 import { FEATURE_NOT_AVAILABLE_MESSAGE } from "../functions/FeatureGate.js";
 import { NOT_A_NEWS_ITEM_MESSAGE } from "../functions/NewsCategoryChangePrompt.js";
 import type { INewsCopySource } from "../functions/NewsCopy.js";
-import { newsItemFrom } from "../functions/NewsItem.js";
+import { postedNewsItemFrom } from "../functions/NewsItem.js";
 import {
   buildApiErrorMessage,
   buildDiscordErrorMessage,
@@ -20,12 +21,14 @@ import {
 import { logError } from "../utilities/LogUtils.js";
 import {
   discordNewsCopier,
-  newsCopyImagesOf,
+  fetchNewsChannel,
   newsCopySourceOf,
+  newsCopySourceOfRecord,
   postNewsCopy,
   type INewsCopyDiscord,
   type INewsPost,
 } from "./NewsCopying.js";
+import { NEWS_COPY_LANE, type NewsCopyLane } from "./NewsCopyLane.js";
 import type { INewsImportMove } from "./NewsImportApi.js";
 import {
   NEWS_ITEM_API,
@@ -41,11 +44,15 @@ import { apiPutOrThrow } from "./RpgClubApiClient.js";
 
 const LOG_CONTEXT = "NewsCategoryChange";
 
-/** The message command's name, as members see it under Apps. The gate maps it too. */
-export const CHANGE_NEWS_CATEGORY_COMMAND = "Change news category";
-
 export const NEWS_CATEGORY_NOT_AUTHOR_MESSAGE =
   "Only the member who shared this news and staff can change its category.";
+
+/**
+ * The refusal while a history copy runs: it may hold a page listing the item under its old
+ * category, and would post that into the old thread.
+ */
+export const NEWS_CATEGORY_HISTORY_COPY_MESSAGE =
+  "A history copy is running; try again when it finishes.";
 
 /** The parts of the API's NewsItem the move reads. */
 export interface INewsItemRecord {
@@ -115,6 +122,11 @@ export interface INewsCategoryMoveDeps {
   threads: NewsCategoryThreads;
   api: INewsFilingApi;
   discord: INewsCategoryMoveDiscord;
+  /**
+   * The copy lane: a move waits while a backfill copier runs, so the threads stay in date
+   * order, and a correction is refused while a history copy runs. Absent: never waits.
+   */
+  lane?: Pick<NewsCopyLane, "historyRunning" | "idle">;
 }
 
 export interface INewsCategoryChangeDeps extends INewsCategoryMoveDeps {
@@ -155,11 +167,11 @@ export async function swapCategoryReaction(
 }
 
 /**
- * Moves News Item `messageId`'s copy to `categoryKey`'s thread: deletes the old copy (a
- * failure is logged and the move goes on, since the category has already changed), posts
- * the new one and reports it. When the new copy cannot be posted or reported, the item is
- * reported as having no copy, so catch-up posts it in the new thread later. The new
- * location, or null.
+ * Moves News Item `messageId`'s copy to `categoryKey`'s thread, once no backfill copier is
+ * running: deletes the old copy (a failure is logged and the move goes on, since the
+ * category has already changed), posts the new one and reports it. When the new copy
+ * cannot be posted or reported, the item is reported as having no copy, so catch-up posts
+ * it in the new thread later. The new location, or null.
  */
 export async function moveNewsCopy(
   messageId: string,
@@ -168,6 +180,7 @@ export async function moveNewsCopy(
   source: INewsCopySource,
   deps: INewsCategoryMoveDeps,
 ): Promise<INewsCopyLocation | null> {
+  await deps.lane?.idle();
   await tryDiscord(
     `Could not delete the old News Copy ${oldCopy.message_id} of News Item ${messageId} ` +
       `in thread ${oldCopy.thread_id}; delete it by hand`,
@@ -185,29 +198,11 @@ export async function moveNewsCopy(
   return null;
 }
 
-/** What the new copy of a corrected item shows: the API's item, the original's images. */
-function correctedCopySource(post: INewsPost, item: INewsItemRecord): INewsCopySource {
-  return {
-    originalUrl: post.url,
-    authorId: item.author.user_id,
-    comment: item.comment,
-    linkUrl: item.link?.url ?? null,
-    images: newsCopyImagesOf(post),
-    postedAt: item.origin === "import" ? new Date(item.posted_at) : null,
-  };
-}
-
 export interface INewsCategoryChangeRequest {
   actingUserId: string;
   channelId: string;
   messageId: string;
   categoryKey: NewsCategoryKey;
-}
-
-/** The private reply; `failed` replies are shown as errors (with the dev ping allowed). */
-export interface INewsCategoryChangeReply {
-  text: string;
-  failed: boolean;
 }
 
 /** The member-facing reason for an API refusal, or null when it is not one. */
@@ -219,7 +214,7 @@ function refusalText(status: number | undefined, code: unknown): string | null {
     : NEWS_CATEGORY_NOT_AUTHOR_MESSAGE;
 }
 
-function refusalReply(error: unknown): INewsCategoryChangeReply {
+function refusalReply(error: unknown): IPrivateReply {
   if (axios.isAxiosError(error)) {
     const code = (error.response?.data as { error?: unknown } | undefined)?.error;
     const refusal = refusalText(error.response?.status, code);
@@ -240,8 +235,11 @@ const bold = (key: NewsCategoryKey): string => `**${NEWS_CATEGORY_NAMES[key]}**`
 export async function changeNewsCategory(
   request: INewsCategoryChangeRequest,
   deps: INewsCategoryChangeDeps,
-): Promise<INewsCategoryChangeReply> {
+): Promise<IPrivateReply> {
   const { messageId, categoryKey } = request;
+  if (deps.lane?.historyRunning()) {
+    return { text: NEWS_CATEGORY_HISTORY_COPY_MESSAGE, failed: false };
+  }
   let result: INewsCategoryChangeResult;
   try {
     result = await deps.api.changeCategory(messageId, request.actingUserId, categoryKey);
@@ -273,7 +271,7 @@ export async function changeNewsCategory(
     return { ...notMoved, text: `${changed} Its copy could not be moved.` };
   }
   await swapCategoryReaction(fetched, categoryKey, deps);
-  const source = correctedCopySource(fetched.post, result.item);
+  const source = newsCopySourceOfRecord(fetched.post, result.item);
   const moved = await moveNewsCopy(messageId, categoryKey, oldCopy, source, deps);
   if (!moved) return notMoved;
   return { text: `${changed} Its copy is now in ${thread}.`, failed: false };
@@ -297,6 +295,8 @@ export async function moveNewsCopies(
   let moved = 0;
   for (const move of moves) {
     if (!move.copy) continue;
+    // Read the original once the lane is free, so its image addresses are fresh.
+    await deps.lane?.idle();
     let fetched: INewsFetchedPost;
     try {
       fetched = await deps.discord.fetchPost(deps.channelId, move.messageId);
@@ -306,14 +306,15 @@ export async function moveNewsCopies(
       logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
       continue;
     }
-    const item = newsItemFrom(fetched.post, deps.places);
+    const item = postedNewsItemFrom(fetched.post, deps.places);
     if (!item) {
       logError(LOG_CONTEXT, `News Item ${move.messageId} is no longer news; its News Copy ` +
         `stays in thread ${move.copy.thread_id}`);
       continue;
     }
     await swapCategoryReaction(fetched, move.categoryKey, deps);
-    const source = newsCopySourceOf(fetched.post, item, fetched.post.createdAt);
+    const postedAt = move.origin === "import" ? fetched.post.createdAt : null;
+    const source = newsCopySourceOf(fetched.post, item, postedAt);
     if (await moveNewsCopy(move.messageId, move.categoryKey, move.copy, source, deps)) {
       moved += 1;
     }
@@ -326,20 +327,12 @@ function emojiKey(emoji: { id: string | null; name: string | null }): string {
   return emoji.id ? `${emoji.name ?? ""}:${emoji.id}` : emoji.name ?? "";
 }
 
-async function textChannel(client: Client, channelId: string) {
-  const channel = await client.channels.fetch(channelId);
-  if (!channel?.isTextBased()) {
-    throw new Error(`Channel ${channelId} is missing or not a text channel.`);
-  }
-  return channel;
-}
-
 /** The real Discord side of moving a News Copy, through the bot's client. */
 export function discordNewsCategoryMover(client: Client): INewsCategoryMoveDiscord {
   return {
     ...discordNewsCopier(client),
     fetchPost: async (channelId, messageId) => {
-      const channel = await textChannel(client, channelId);
+      const channel = await fetchNewsChannel(client, channelId);
       const post = await channel.messages.fetch({ message: messageId, force: true });
       const ownReactions = post.reactions.cache
         .filter((reacted) => reacted.me)
@@ -347,7 +340,7 @@ export function discordNewsCategoryMover(client: Client): INewsCategoryMoveDisco
       return { post, ownReactions };
     },
     removeOwnReaction: async (channelId, messageId, emoji) => {
-      const channel = await textChannel(client, channelId);
+      const channel = await fetchNewsChannel(client, channelId);
       const post = await channel.messages.fetch(messageId);
       const key = emoji.includes(":") ? emoji.slice(emoji.lastIndexOf(":") + 1) : emoji;
       await post.reactions.resolve(key)?.users.remove();
@@ -365,5 +358,6 @@ export function createNewsCategoryDeps(
     discord: discordNewsCategoryMover(client),
     channelId: GAME_NEWS_CHANNEL_ID,
     places: NEWS_CHANNEL_PLACES,
+    lane: NEWS_COPY_LANE,
   };
 }
