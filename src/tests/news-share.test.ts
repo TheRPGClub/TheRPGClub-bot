@@ -111,6 +111,7 @@ function fakes(fail: { share?: boolean; record?: boolean; copy?: boolean } = {})
     },
     remove: async (messageId) => {
       calls.push(["remove", messageId]);
+      return { removed: true, newsCopy: null };
     },
     reportCopy: async (messageId, copy) => {
       calls.push(["reportCopy", messageId, copy]);

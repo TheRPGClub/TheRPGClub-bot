@@ -146,7 +146,7 @@ export async function fileNewsMessage(
     const edited = deps.filing.get(message.id) ?? null;
     deps.filing.delete(message.id);
     if (outcome?.recorded && deleted) {
-      await removeNewsItem(message.id, "for a deleted message", deps, outcome.copy);
+      await removeNewsItem(message.id, "for a deleted message", deps);
     } else if (outcome?.recorded && edited) {
       await recordOrRemove(edited, deps);
     }

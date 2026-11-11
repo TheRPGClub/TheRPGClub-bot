@@ -18,6 +18,7 @@ import {
   newsItemRecordBody,
   recordedNewsItemOf,
   type INewsCopyLocation,
+  type INewsItemApi,
   type INewsSyncApi,
 } from "./NewsItemApi.js";
 
@@ -114,35 +115,37 @@ export async function syncEditedNewsMessage(
   }
 }
 
-/** Where the News Item's copy lives, or null when it has none or the lookup failed. */
-async function findCopy(
+/**
+ * Deletes the News Copy at `location` of News Item `messageId`, which is gone or no longer
+ * news. A copy already gone is not an error; any other failure is logged.
+ */
+export async function deleteNewsCopy(
   messageId: string,
-  deps: INewsSyncDeps,
-): Promise<INewsCopyLocation | null> {
+  location: INewsCopyLocation,
+  discord: Pick<INewsCopyDiscord, "deleteMessage">,
+): Promise<void> {
   try {
-    return (await deps.api.find(messageId))?.news_copy ?? null;
+    await discord.deleteMessage(location.thread_id, location.message_id);
   } catch (error: unknown) {
-    const label = `Could not look up the News Copy of News Item ${messageId}; ` +
-      "if it has one, it stays in its thread";
-    logError(LOG_CONTEXT, buildApiErrorMessage(label, error));
-    return null;
+    if (isGone(error)) return;
+    const label = `Could not delete the News Copy ${location.message_id} of removed News ` +
+      `Item ${messageId} in thread ${location.thread_id}`;
+    logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
   }
 }
 
 /**
- * Removes the News Item of `messageId` and deletes its News Copy. `copy` is where the copy
- * lives when the caller knows it (a filing that just posted it); otherwise it is looked up
- * first, since the removal forgets it. An item the API keeps keeps its copy too.
+ * Removes the News Item of `messageId` and deletes its News Copy, where the removal says it
+ * lived. An item the API keeps keeps its copy too.
  */
 export async function removeNewsItem(
   messageId: string,
   why: "after an edit" | "for a deleted message",
-  deps: INewsSyncDeps,
-  copy?: INewsCopyLocation | null,
+  deps: { api: INewsItemApi; discord: Pick<INewsCopyDiscord, "deleteMessage"> },
 ): Promise<void> {
-  const location = copy === undefined ? await findCopy(messageId, deps) : copy;
+  let location: INewsCopyLocation | null;
   try {
-    await deps.api.remove(messageId);
+    location = (await deps.api.remove(messageId)).newsCopy;
   } catch (error: unknown) {
     logError(LOG_CONTEXT, buildApiErrorMessage(
       `Could not remove News Item ${messageId} ${why}`,
@@ -150,15 +153,7 @@ export async function removeNewsItem(
     ));
     return;
   }
-  if (!location) return;
-  try {
-    await deps.discord.deleteMessage(location.thread_id, location.message_id);
-  } catch (error: unknown) {
-    if (isGone(error)) return;
-    const label = `Could not delete the News Copy ${location.message_id} of removed News ` +
-      `Item ${messageId} in thread ${location.thread_id}`;
-    logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
-  }
+  if (location) await deleteNewsCopy(messageId, location, deps.discord);
 }
 
 /** The real News Copy edit, through the bot's client. */

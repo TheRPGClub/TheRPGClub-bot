@@ -5,7 +5,7 @@ import { apiDelete, apiGetOrThrow, apiPutOrThrow } from "./RpgClubApiClient.js";
 
 // The service-only News Item calls (spec api#355, api#367): record, remove, report where a
 // News Item's News Copy lives, list the News Items that have no News Copy yet, and find a
-// recorded News Item, so an edit or delete of its original can reach its News Copy.
+// recorded News Item, so an edit the API refuses can be told apart from one never recorded.
 
 const NEWS_ITEM_PATH = "/api/v1/news_items";
 
@@ -27,12 +27,27 @@ export interface INewsCopyLocation {
   thread_id: string;
 }
 
+/** What removing a News Item answers: whether it was recorded, and where its copy lived. */
+export interface INewsItemRemoval {
+  removed: boolean;
+  /** The removed item's News Copy, for the caller to delete; null when it had none. */
+  newsCopy: INewsCopyLocation | null;
+}
+
+/** The removal in a DELETE response; an empty answer removed nothing the bot can delete. */
+export function newsItemRemovalOf(response: unknown): INewsItemRemoval {
+  const data = (response as { data?: unknown } | null | undefined)?.data;
+  if (!data || typeof data !== "object") return { removed: false, newsCopy: null };
+  const removal = data as { removed?: unknown; news_copy?: INewsCopyLocation | null };
+  return { removed: removal.removed === true, newsCopy: removal.news_copy ?? null };
+}
+
 /** The News Item writes. All are idempotent by message ID. */
 export interface INewsItemApi {
   /** Creates or replaces the News Item (fields sent are replaced, so send it whole). */
   record: (messageId: string, body: NewsItemRecordBody) => Promise<unknown>;
-  /** Removes it; 204 whether or not it was recorded. */
-  remove: (messageId: string) => Promise<unknown>;
+  /** Removes it for good, whether or not it was recorded, saying where its copy lived. */
+  remove: (messageId: string) => Promise<INewsItemRemoval>;
 }
 
 /** The writes that file a News Item: recording it, and reporting its News Copy. */
@@ -79,7 +94,7 @@ export interface INewsFeedPage {
   meta: { page: number; pages: number };
 }
 
-/** Feed items per page the lookup reads: a delete is nearly always of a recent post. */
+/** Feed items per page the lookup reads: an edit is nearly always of a recent post. */
 const FEED_LOOKUP_PER = 100;
 /** How far a recorded `posted_at` may sit before its message's own time and still match. */
 const POSTED_AT_SLACK_MS = 60_000;
@@ -111,7 +126,7 @@ const newsItemPath = (messageId: string): string =>
 
 export const NEWS_ITEM_API: INewsSyncApi = {
   record: (messageId, body) => apiPutOrThrow(newsItemPath(messageId), body),
-  remove: (messageId) => apiDelete(newsItemPath(messageId)),
+  remove: async (messageId) => newsItemRemovalOf(await apiDelete(newsItemPath(messageId))),
   reportCopy: (messageId, copy) =>
     apiPutOrThrow(newsItemPath(messageId), { data: { news_copy: copy } }),
   find: (messageId) => findInNewsFeed(messageId, (page, per) =>

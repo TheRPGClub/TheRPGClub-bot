@@ -121,7 +121,7 @@ function copyDeps(
     threads: THREADS,
     api: {
       record: async () => undefined,
-      remove: async () => undefined,
+      remove: async () => ({ removed: false, newsCopy: null }),
       reportCopy: async (messageId) => {
         reported.push(messageId);
       },

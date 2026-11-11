@@ -110,7 +110,7 @@ function setup(options: IOptions = {}): { calls: Call[]; deps: INewsCategoryChan
   const answer = options.answer ?? { changed: true, previous: "releases" };
   const api: INewsCategoryApi = {
     record: async () => undefined,
-    remove: async () => undefined,
+    remove: async () => ({ removed: false, newsCopy: null }),
     reportCopy: async (messageId, copy) => {
       calls.push(["reportCopy", messageId, copy]);
     },

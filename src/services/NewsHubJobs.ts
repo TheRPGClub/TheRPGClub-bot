@@ -9,6 +9,7 @@ import { logError, logInfo } from "../utilities/LogUtils.js";
 import { FEATURE_ACCESS_API } from "./FeatureAccessService.js";
 import { getFeatureState } from "./FeaturePostRouting.js";
 import { newsCopySourceOf, postNewsCopy, type INewsPost } from "./NewsCopying.js";
+import { deleteNewsCopy } from "./NewsCopySync.js";
 import { HISTORY_COPY_INTERVAL_MS, newsCopiesPaused } from "./NewsHistoryCopy.js";
 import {
   createNewsRecordingDeps,
@@ -190,6 +191,18 @@ function plural(count: number, noun: string, plural = `${noun}s`): string {
   return `${count} ${count === 1 ? noun : plural}`;
 }
 
+/** Removes a News Item renewal found gone, and deletes its News Copy (failures logged). */
+async function removeForRenewal(
+  messageId: string,
+  why: string,
+  deps: INewsHubJobDeps,
+): Promise<string> {
+  const { newsCopy } = await deps.api.remove(messageId);
+  if (!newsCopy) return `Removed News Item ${messageId}: ${why}.`;
+  await deleteNewsCopy(messageId, newsCopy, deps.recording.discord);
+  return `Removed News Item ${messageId} and its News Copy: ${why}.`;
+}
+
 /**
  * Fetches a News Item's message again and records it whole, which stores fresh image
  * addresses and expiry times; removes the News Item when the message is gone or no longer
@@ -207,14 +220,10 @@ export async function renewNewsItem(
       `News Archive, so News Item ${messageId} was left as it is.`);
   }
   const message = await deps.discord.fetchMessage(channelId, messageId);
-  if (!message) {
-    await deps.api.remove(messageId);
-    return `Removed News Item ${messageId}: its message no longer exists.`;
-  }
+  if (!message) return removeForRenewal(messageId, "its message no longer exists", deps);
   const item = newsItemFrom(message, places);
   if (!item) {
-    await deps.api.remove(messageId);
-    return `Removed News Item ${messageId}: its message no longer has a link or an image.`;
+    return removeForRenewal(messageId, "its message no longer has a link or an image", deps);
   }
   await deps.api.record(messageId, newsItemRecordBody(item));
   return `Recorded News Item ${messageId} again with fresh addresses for ` +

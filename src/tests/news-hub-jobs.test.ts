@@ -128,7 +128,9 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
     },
     remove: async (messageId) => {
       writes.push(`remove ${messageId}`);
+      const known = store.get(messageId);
       store.delete(messageId);
+      return { removed: known !== undefined, newsCopy: known?.news_copy ?? null };
     },
     reportCopy: async (messageId, copy) => {
       writes.push(`reportCopy ${messageId}`);
@@ -333,6 +335,30 @@ test("renewal: removes the News Item when its message is gone", async () => {
   assert.deepEqual(api.writes, [`remove ${id}`]);
   assert.equal(api.store.has(id), false);
   assert.match(String(text), /no longer exists/);
+});
+
+test("renewal: a removed item's News Copy is deleted where the removal says it lived", async () => {
+  const id = snowflake(10);
+  const copy = { message_id: "990000000000000001", thread_id: COPY_THREADS.releases.threadId };
+  const api = fakeApi([{
+    message_id: id,
+    origin: "live",
+    category_key: "releases",
+    posted_at: new Date(SnowflakeUtil.timestampFrom(id)).toISOString(),
+    news_copy: copy,
+    body: {},
+  }]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: [] });
+
+  const text = await handleNewsImagesRenew(
+    renewPayload(id, NEWS_CHANNEL),
+    surface(deps(api, discord)),
+    context("live"),
+  );
+
+  assert.deepEqual(api.writes, [`remove ${id}`]);
+  assert.deepEqual(discord.calls, [`delete ${copy.message_id}`]);
+  assert.match(String(text), /News Copy/);
 });
 
 test("renewal: removes the News Item when its message no longer qualifies", async () => {
