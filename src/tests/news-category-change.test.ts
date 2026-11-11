@@ -309,7 +309,7 @@ test("upload moves read each original and move its copy, without adding reaction
   const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
   const moved = await moveNewsCopies([
     { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
-      copy: oldCopy },
+      origin: "import", copy: oldCopy },
   ], { ...deps, channelId: NEWS_CHANNEL, places: new Map([[NEWS_CHANNEL, null]]) });
 
   assert.equal(moved, 1);
@@ -329,7 +329,7 @@ test("upload moves wait while a backfill copies, then go", async (t) => {
   const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
   const moving = moveNewsCopies([
     { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
-      copy: oldCopy },
+      origin: "import", copy: oldCopy },
   ], { ...deps, lane, channelId: NEWS_CHANNEL, places: new Map([[NEWS_CHANNEL, null]]) });
   await new Promise((resolve) => setImmediate(resolve));
 
@@ -339,13 +339,26 @@ test("upload moves wait while a backfill copies, then go", async (t) => {
   assert.deepEqual(calls.map((call) => call[0]), ["fetch", "delete", "post", "reportCopy"]);
 });
 
+test("a moved live item's copy shows no date", async (t) => {
+  silenceErrors(t);
+  const { calls, deps } = setup({ ownReactions: [] });
+  const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
+  await moveNewsCopies([
+    { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
+      origin: "live", copy: oldCopy },
+  ], { ...deps, channelId: NEWS_CHANNEL, places: new Map([[NEWS_CHANNEL, null]]) });
+
+  const posted = calls.find((call) => call[0] === "post") as ["post", string, INewsCopyMessage];
+  assert.match(posted[2].content, /^<@710000000000000001> shared\n/);
+});
+
 test("an upload move whose original is gone leaves that copy and moves the rest", async (t) => {
   silenceErrors(t);
   const { calls, deps } = setup({ fetchFails: true });
   const oldCopy = { message_id: OLD_COPY_ID, thread_id: THREADS.releases.threadId };
   const moved = await moveNewsCopies([
     { messageId: MESSAGE_ID, categoryKey: "industry", previousCategoryKey: "releases",
-      copy: oldCopy },
+      origin: "import", copy: oldCopy },
   ], { ...deps, channelId: NEWS_CHANNEL, places: new Map([[NEWS_CHANNEL, null]]) });
   assert.equal(moved, 0);
   assert.deepEqual(calls.map((call) => call[0]), ["fetch"]);

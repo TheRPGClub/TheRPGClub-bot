@@ -332,7 +332,8 @@ export async function moveNewsCopies(
       continue;
     }
     await swapCategoryReaction(fetched, move.categoryKey, deps);
-    const source = newsCopySourceOf(fetched.post, item, fetched.post.createdAt);
+    const postedAt = move.origin === "import" ? fetched.post.createdAt : null;
+    const source = newsCopySourceOf(fetched.post, item, postedAt);
     if (await moveNewsCopy(move.messageId, move.categoryKey, move.copy, source, deps)) {
       moved += 1;
     }

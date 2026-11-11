@@ -1,6 +1,6 @@
 import type { NewsCategoryKey } from "../config/newsHub.js";
 import type { INewsImportListItem } from "../functions/NewsImportFile.js";
-import type { INewsCopyLocation } from "./NewsItemApi.js";
+import type { INewsCopyLocation, NewsItemOrigin } from "./NewsItemApi.js";
 import { apiGetOrThrow, apiPostOrThrow } from "./RpgClubApiClient.js";
 
 // The News Import endpoints (spec api#355, api#359, api#367). They are for Admins and
@@ -39,6 +39,8 @@ export interface INewsImportMove {
   messageId: string;
   categoryKey: NewsCategoryKey;
   previousCategoryKey: NewsCategoryKey;
+  /** Where the item came from: an imported item's copy shows its original date. */
+  origin: NewsItemOrigin;
   /** Where the copy lives now, in the previous category's thread. */
   copy: INewsCopyLocation | null;
 }
@@ -156,6 +158,8 @@ export const NEWS_IMPORT_API: INewsImportApi = {
         messageId: move.message_id,
         categoryKey: move.category_key,
         previousCategoryKey: move.previous_category_key,
+        // An upload changes imported items only, so the API's moves are all imports.
+        origin: "import" as const,
         copy: move.news_copy ?? null,
       })),
     };

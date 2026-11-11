@@ -118,7 +118,13 @@ function fakeApi(items: INewsImportListItem[], options: {
           if (previous && copy && previous !== row.value) {
             const categoryKey = row.value as NewsCategoryKey;
             const previousCategoryKey = previous;
-            result.moved.push({ messageId: row.messageId, categoryKey, previousCategoryKey, copy });
+            result.moved.push({
+              messageId: row.messageId,
+              categoryKey,
+              previousCategoryKey,
+              origin: "import",
+              copy,
+            });
           }
           api.categories.set(row.messageId, row.value);
         }
@@ -270,7 +276,8 @@ test("upload moves the News Copies of items whose category changed", async () =>
   }));
 
   assert.deepEqual(moves, [
-    { messageId: id(1), categoryKey: "rumours", previousCategoryKey: "releases", copy },
+    { messageId: id(1), categoryKey: "rumours", previousCategoryKey: "releases",
+      origin: "import", copy },
   ]);
   assert.match(reply.text, /\*\*1\*\* News Copy moving to its new category's thread/);
 });
