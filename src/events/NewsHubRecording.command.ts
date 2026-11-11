@@ -1,43 +1,55 @@
 import type { ArgsOf } from "discordx";
 import { Discord, On } from "discordx";
-import { NEWS_CATEGORY_THREADS } from "../config/newsHub.js";
+import { NEWS_CHANNEL_PLACES } from "../config/newsHub.js";
 import {
+  createNewsRecordingDeps,
   onNewsMessageCreated,
   onNewsMessageEdited,
   onNewsMessagesDeleted,
 } from "../services/NewsHubRecording.js";
 
 /**
- * Records News Items from the News Category threads (spec api#355). Edits and deletes in
- * threads discord.js has not cached arrive through `registerUncachedNewsListeners`.
+ * Files News Items from the News Channel (spec api#367). Edits and deletes discord.js
+ * dropped for an uncached channel arrive through `registerUncachedNewsListeners`.
  */
 @Discord()
 export class NewsHubRecordingEvents {
   @On({ event: "messageCreate" })
   async recordNewsMessage([message]: ArgsOf<"messageCreate">): Promise<void> {
-    await onNewsMessageCreated(message);
+    if (!NEWS_CHANNEL_PLACES.has(message.channelId)) return;
+    await onNewsMessageCreated(message, createNewsRecordingDeps(message.client));
   }
 
   @On({ event: "messageUpdate" })
   async recordEditedNewsMessage([, newMessage]: ArgsOf<"messageUpdate">): Promise<void> {
-    if (!NEWS_CATEGORY_THREADS.has(newMessage.channelId)) return;
+    if (!NEWS_CHANNEL_PLACES.has(newMessage.channelId)) return;
     // An uncached message arrives partial; a failed fetch means it was deleted meanwhile,
     // and its delete event removes the News Item.
     const message = newMessage.partial
       ? await newMessage.fetch().catch(() => null)
       : newMessage;
-    if (message) await onNewsMessageEdited(message);
+    if (message) await onNewsMessageEdited(message, createNewsRecordingDeps(message.client));
   }
 
   @On({ event: "messageDelete" })
   async removeDeletedNewsMessage([message]: ArgsOf<"messageDelete">): Promise<void> {
-    await onNewsMessagesDeleted(message.channelId, [message.id]);
+    if (!NEWS_CHANNEL_PLACES.has(message.channelId)) return;
+    await onNewsMessagesDeleted(
+      message.channelId,
+      [message.id],
+      createNewsRecordingDeps(message.client),
+    );
   }
 
   @On({ event: "messageDeleteBulk" })
   async removeBulkDeletedNewsMessages(
     [messages, channel]: ArgsOf<"messageDeleteBulk">,
   ): Promise<void> {
-    await onNewsMessagesDeleted(channel.id, [...messages.keys()]);
+    if (!NEWS_CHANNEL_PLACES.has(channel.id)) return;
+    await onNewsMessagesDeleted(
+      channel.id,
+      [...messages.keys()],
+      createNewsRecordingDeps(channel.client),
+    );
   }
 }

@@ -17,7 +17,7 @@ import type {
   INewsHubJobDeps,
   IStoredNewsItem,
 } from "../services/NewsHubJobs.js";
-import type { NewsItemRecordBody } from "../services/NewsHubRecording.js";
+import type { NewsItemRecordBody } from "../services/NewsItemApi.js";
 
 // News Hub bot jobs (bot#1525): image renewal and the catch-up scan, with a fake API that
 // keeps the recorded News Items and a fake Discord that pages the threads like Discord.
@@ -92,7 +92,7 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
         origin: existing?.origin ?? "live",
         category_key: existing?.origin === "import"
           ? existing.category_key
-          : body.data.category_key,
+          : body.data.category_key ?? existing?.category_key ?? null,
         posted_at: body.data.posted_at,
         body: body.data,
       });
@@ -193,7 +193,7 @@ test("renewal: records the message again with fresh image addresses", async () =
   assert.match(String(text), /fresh/);
 });
 
-test("renewal: a message in the Game News Archive is recorded with no category", async () => {
+test("renewal: a News Channel message is recorded with no category, keeping its own", async () => {
   const id = snowflake(-50_000);
   const discord = fakeDiscord({ [ARCHIVE]: [message(id, ARCHIVE)] });
   const api = fakeApi();
@@ -205,7 +205,7 @@ test("renewal: a message in the Game News Archive is recorded with no category",
   );
 
   assert.deepEqual(api.writes, [`record ${id}`]);
-  assert.equal(api.store.get(id)?.body.category_key, null);
+  assert.equal("category_key" in (api.store.get(id)?.body ?? {}), false);
   assert.equal(api.store.get(id)?.body.channel_id, ARCHIVE);
 });
 

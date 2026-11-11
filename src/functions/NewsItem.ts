@@ -166,9 +166,13 @@ function expiresAt(url: string): string | null {
   return Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : null;
 }
 
+/** The message's images: the attachments a News Item stores and its News Copy uploads again. */
+export function newsImageAttachments(message: INewsMessage): INewsAttachment[] {
+  return [...message.attachments.values()].filter(isImage);
+}
+
 function imagesOf(message: INewsMessage): INewsImagePayload[] {
-  return [...message.attachments.values()]
-    .filter(isImage)
+  return newsImageAttachments(message)
     .map((image) => ({ url: image.url, expires_at: expiresAt(image.url) }));
 }
 
@@ -217,8 +221,8 @@ function authorName(message: INewsMessage): string {
 /**
  * The News Item a message is, or null when it is not one. `places` maps each channel where
  * news is posted to the News Category its messages take (see {@link NewsPlaces}): live
- * recording and catch-up pass `NEWS_CATEGORY_THREADS`, and the News Import passes the Game
- * News Archive with no category. Pure: a fetched discord.js Message is a valid `message`.
+ * recording passes the News Channel and the News Import its archive, both with no category
+ * (null), which the bot picks or staff assign. Pure: a fetched discord.js Message is a valid `message`.
  */
 export function newsItemFrom(
   message: INewsMessage,
