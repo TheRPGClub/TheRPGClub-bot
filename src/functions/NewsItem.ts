@@ -31,8 +31,11 @@ export interface INewsEmbed {
   title: string | null;
   description: string | null;
   provider: { name?: string } | null;
-  thumbnail: { url: string } | null;
-  image: { url: string } | null;
+  /** Who posted it, for a social post (X, Bluesky), whose preview has no title. */
+  author?: { name?: string } | null;
+  /** `proxyURL` is Discord's copy of the image, which loads where the site's own may not. */
+  thumbnail: { url: string; proxyURL?: string } | null;
+  image: { url: string; proxyURL?: string } | null;
 }
 
 export interface INewsLinkPayload {
@@ -121,11 +124,20 @@ function previewOf(
   return linkCount === 1 ? (embeds[0] ?? null) : null;
 }
 
+/**
+ * The preview's image. Discord's proxied copy comes first: many sites (Gematsu among them)
+ * refuse their images to a page on another site, while Discord's copy always loads.
+ */
+function previewImageOf(preview: INewsEmbed | null): string | null {
+  const asset = preview?.thumbnail ?? preview?.image ?? null;
+  return asset?.proxyURL || asset?.url || null;
+}
+
 function linkOf(url: string, preview: INewsEmbed | null): INewsLinkPayload {
-  const imageUrl = preview?.thumbnail?.url ?? preview?.image?.url ?? null;
+  const imageUrl = previewImageOf(preview);
   return {
     url,
-    title: preview?.title || null,
+    title: preview?.title || preview?.author?.name || null,
     site_name: preview?.provider?.name || null,
     description: preview?.description || null,
     image_url: imageUrl && isWebAddress(imageUrl) ? imageUrl : null,
