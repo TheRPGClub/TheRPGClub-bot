@@ -15,10 +15,12 @@ import { NewsCopyLane } from "../services/NewsCopyLane.js";
 import type { INewsPost } from "../services/NewsCopying.js";
 import { NewsHistoryCopyRunner } from "../services/NewsHistoryCopy.js";
 import type { INewsSyncDiscord } from "../services/NewsCopySync.js";
-import type {
-  INewsChannelReader,
-  INewsHubApi,
-  INewsHubJobDeps,
+import {
+  runNewsCatchUp,
+  scheduleNewsCopyRetries,
+  type INewsChannelReader,
+  type INewsHubApi,
+  type INewsHubJobDeps,
 } from "../services/NewsHubJobs.js";
 import type {
   INewsCopyLocation,
@@ -700,6 +702,73 @@ test("catch-up: a history copy started meanwhile takes over after the current it
   assert.deepEqual(copiedIds(discord), [channel[0].id, imported.id, ...ids(channel.slice(1))]);
   assert.match(text, /1 News Copy posted/);
   assert.match(text, /history copy/);
+});
+
+test("copy retry: posts missing live copies without filing missed posts", async () => {
+  const channel = posts(10, 4);
+  const api = fakeApi([recorded(channel[0], "releases"), recorded(channel[1], "releases", null)]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
+
+  const outcome = await runNewsCatchUp(deps(api, discord), { fileMissed: false });
+
+  assert.deepEqual(copiedIds(discord), [channel[1].id]);
+  assert.equal(api.store.has(channel[2].id), false);
+  assert.equal(discord.calls.some((call) => call.startsWith("react")), false);
+  assert.equal(outcome.status, "done");
+});
+
+/** A copy retry schedule with its timers in the test's hands. */
+function retrySchedule(lane: NewsCopyLane): {
+  retries: string[];
+  tick: () => void;
+  intervals: number[];
+} {
+  const retries: string[] = [];
+  const intervals: number[] = [];
+  let periodic = (): void => undefined;
+  scheduleNewsCopyRetries({
+    lane,
+    retry: async () => {
+      retries.push("retry");
+    },
+    every: (ms, run) => {
+      intervals.push(ms);
+      periodic = run;
+    },
+    soon: (run) => run(),
+  });
+  return { retries, intervals, tick: () => periodic() };
+}
+
+test("copy retry: runs every 30 minutes", () => {
+  const schedule = retrySchedule(new NewsCopyLane());
+
+  schedule.tick();
+  schedule.tick();
+
+  assert.deepEqual(schedule.intervals, [30 * 60_000]);
+  assert.deepEqual(schedule.retries, ["retry", "retry"]);
+});
+
+test("copy retry: runs right after a history copy finishes", async () => {
+  const lane = new NewsCopyLane();
+  const schedule = retrySchedule(lane);
+
+  (await lane.holdForHistory()).release();
+
+  assert.deepEqual(schedule.retries, ["retry"]);
+});
+
+test("copy retry: runs after catch-up's copy phase only when copies waited for it", () => {
+  const lane = new NewsCopyLane();
+  const schedule = retrySchedule(lane);
+
+  lane.holdForCatchUp()?.release();
+  assert.deepEqual(schedule.retries, []);
+  const hold = lane.holdForCatchUp();
+  lane.copyWaits();
+  hold?.release();
+  assert.deepEqual(schedule.retries, ["retry"]);
 });
 
 test("catch-up: a second catch-up while one runs does nothing", async () => {

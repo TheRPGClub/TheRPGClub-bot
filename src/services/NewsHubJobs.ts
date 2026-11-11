@@ -407,19 +407,22 @@ async function step(
  * Copies, oldest first, unless a history copy is running. Does nothing while the News Hub is
  * Off, read from the API (the flag cache can lag behind the change that queued the job), or
  * while another catch-up runs. A step that fails is reported and the next still runs;
- * running it again is safe.
+ * running it again is safe. `fileMissed: false` runs the copy phase alone (the copy retry).
  */
-export async function runNewsCatchUp(deps: INewsHubJobDeps): Promise<NewsCatchUpOutcome> {
+export async function runNewsCatchUp(
+  deps: INewsHubJobDeps,
+  options: { fileMissed?: boolean } = {},
+): Promise<NewsCatchUpOutcome> {
   if ((await deps.freshFeatureState()) === "off") return { status: "off" };
   if (!deps.lane.beginCatchUp()) return { status: "busy" };
   try {
-    return { status: "done", ...(await catchUp(deps)) };
+    return { status: "done", ...(await catchUp(deps, options.fileMissed ?? true)) };
   } finally {
     deps.lane.endCatchUp();
   }
 }
 
-async function catchUp(deps: INewsHubJobDeps): Promise<CatchUpCounts> {
+async function catchUp(deps: INewsHubJobDeps, fileMissed: boolean): Promise<CatchUpCounts> {
   const counts: CatchUpCounts = {
     recorded: 0,
     unrecorded: 0,
@@ -432,11 +435,13 @@ async function catchUp(deps: INewsHubJobDeps): Promise<CatchUpCounts> {
   };
   if (deps.archiveChannelId === "") return counts;
   const ceiling = deps.liveSince();
-  await step(
-    `Could not record the posts missed in the News Channel ${deps.archiveChannelId}`,
-    counts,
-    () => recordMissed(deps, ceiling, counts),
-  );
+  if (fileMissed) {
+    await step(
+      `Could not record the posts missed in the News Channel ${deps.archiveChannelId}`,
+      counts,
+      () => recordMissed(deps, ceiling, counts),
+    );
+  }
   if (counts.switchedOff) return counts;
   const hold = deps.lane.holdForCatchUp();
   if (!hold) {
@@ -489,5 +494,62 @@ export function startNewsCatchUp(client: Client): void {
     }
   }, (err: unknown) => {
     logError(LOG_CONTEXT, buildAnyErrorMessage("The News Hub catch-up failed", err));
+  });
+}
+
+/** How often catch-up's copy phase runs on its own, so a failed copy is retried in time. */
+export const NEWS_COPY_RETRY_INTERVAL_MS = 30 * 60_000;
+
+export interface INewsCopyRetrySchedule {
+  lane: NewsCopyLane;
+  /** Runs catch-up's copy phase once: live items, paced, in the copy lane. */
+  retry: () => Promise<void>;
+  /** Runs `run` every `ms`. */
+  every: (ms: number, run: () => void) => void;
+  /** Runs `run` once the current work has unwound (the catch-up that released the lane). */
+  soon: (run: () => void) => void;
+}
+
+/**
+ * Retries missing News Copies without a restart (story 43): catch-up's copy phase runs every
+ * {@link NEWS_COPY_RETRY_INTERVAL_MS}, right after a history copy finishes, and after
+ * catch-up's own copy phase when live copies waited for it. The lane keeps it to one copier.
+ */
+export function scheduleNewsCopyRetries(schedule: INewsCopyRetrySchedule): void {
+  const run = (): void => {
+    void schedule.retry();
+  };
+  schedule.every(NEWS_COPY_RETRY_INTERVAL_MS, run);
+  schedule.lane.onRelease((kind, copiesWaited) => {
+    if (kind === "history" || copiesWaited) schedule.soon(run);
+  });
+}
+
+/** Whether a copy retry did anything worth a log line. */
+function retryDidWork(outcome: NewsCatchUpOutcome): boolean {
+  if (outcome.status !== "done") return false;
+  return outcome.copied + outcome.uncopied + outcome.skipped + outcome.failures.length > 0;
+}
+
+/** Startup: schedules the copy retries for this bot's client (see scheduleNewsCopyRetries). */
+export function startNewsCopyRetries(client: Client): void {
+  scheduleNewsCopyRetries({
+    lane: NEWS_COPY_LANE,
+    retry: async () => {
+      try {
+        const outcome = await runNewsCatchUp(createNewsHubJobDeps(client), { fileMissed: false });
+        if (retryDidWork(outcome)) logInfo(LOG_CONTEXT, newsCatchUpSummary(outcome));
+        if (outcome.status !== "done") return;
+        for (const failure of outcome.failures) logError(LOG_CONTEXT, failure);
+      } catch (err: unknown) {
+        logError(LOG_CONTEXT, buildAnyErrorMessage("The News Copy retry failed", err));
+      }
+    },
+    every: (ms, run) => {
+      setInterval(run, ms).unref();
+    },
+    soon: (run) => {
+      setTimeout(run, 0).unref();
+    },
   });
 }
