@@ -514,7 +514,7 @@ function copiedIds(discord: IFakeDiscord): string[] {
   return discord.posted.map(({ copy }) => /\/(\d+)$/.exec(copy.content)?.[1] ?? "?");
 }
 
-test("catch-up: posts missed while the bot was away are recorded, reacted to and copied", async () => {
+test("catch-up: posts missed while the bot was away are recorded, reacted to, copied", async () => {
   const channel = posts(10, 5);
   const api = fakeApi(channel.slice(0, 2).map((m) => recorded(m, "releases")));
   const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
@@ -810,13 +810,13 @@ test("copy retry: runs right after a history copy finishes", async () => {
   assert.deepEqual(schedule.retries, ["retry"]);
 });
 
-test("copy retry: runs after catch-up's copy phase only when copies waited for it", () => {
+test("copy retry: runs after catch-up's copy phase only when copies waited for it", async () => {
   const lane = new NewsCopyLane();
   const schedule = retrySchedule(lane);
 
-  lane.holdForCatchUp()?.release();
+  (await lane.holdForCatchUp())?.release();
   assert.deepEqual(schedule.retries, []);
-  const hold = lane.holdForCatchUp();
+  const hold = await lane.holdForCatchUp();
   lane.copyWaits();
   hold?.release();
   assert.deepEqual(schedule.retries, ["retry"]);
@@ -844,6 +844,72 @@ test("catch-up: a second catch-up while one runs does nothing", async () => {
   assert.deepEqual(copiedIds(discord), ids(channel));
   assert.match(second ?? "", /already running/);
 });
+
+test("catch-up: one asked for while another runs is run once after it, however often asked",
+  async () => {
+    const channel = posts(10, 4);
+    const store = fakeApi([
+      recorded(channel[0], "releases"),
+      recorded(channel[1], "releases", null),
+    ]);
+    let filingRuns = 0;
+    const api: INewsHubApi = {
+      ...store,
+      listRecent: async (page, per) => {
+        filingRuns += 1;
+        return store.listRecent(page, per);
+      },
+    };
+    const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
+    const lane = new NewsCopyLane();
+    const answers: string[] = [];
+    // A copy retry runs (no filing); the News Hub leaves Off twice while it copies.
+    const retry: INewsHubJobDeps = {
+      ...deps(api, discord, { lane }),
+      pace: async () => {
+        if (answers.length > 0) return;
+        for (let ask = 0; ask < 2; ask += 1) {
+          answers.push(String(await handleNewsCatchUp(
+            catchUpPayload(),
+            surface(deps(api, discord, { lane })),
+            context("live"),
+          )));
+        }
+      },
+    };
+
+    const outcome = await runNewsCatchUp(retry, { fileMissed: false });
+
+    assert.equal(answers.length, 2);
+    for (const answer of answers) assert.match(answer, /already running.*once more/);
+    assert.equal(filingRuns, 1);
+    assert.equal(store.store.has(channel[2].id), true);
+    assert.equal(store.store.has(channel[3].id), true);
+    assert.deepEqual(copiedIds(discord), ids(channel.slice(1)));
+    assert.equal(outcome.status, "done");
+  });
+
+test("catch-up: one asked for while another runs is dropped when the News Hub went Off",
+  async () => {
+    const channel = posts(10, 3);
+    const api = fakeApi([recorded(channel[0], "releases"), recorded(channel[1], "releases", null)]);
+    const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });
+    const lane = new NewsCopyLane();
+    let state: FeatureState = "live";
+    const base = deps(api, discord, { lane });
+    const running: INewsHubJobDeps = {
+      ...base,
+      freshFeatureState: async () => state,
+      pace: async () => {
+        await runNewsCatchUp(deps(api, discord, { lane }));
+        state = "off";
+      },
+    };
+
+    await runNewsCatchUp(running, { fileMissed: false });
+
+    assert.equal(api.store.has(channel[2].id), false);
+  });
 
 test("catch-up: posts from when live filing took over are left to it", async () => {
   const channel = posts(10, 4);

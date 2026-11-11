@@ -13,9 +13,9 @@ test("new copies go at once while no backfill runs", () => {
   assert.equal(lane.paused(), false);
 });
 
-test("new copies wait while catch-up's copy phase runs, and go again once it ends", () => {
+test("new copies wait while catch-up's copy phase runs, and go again once it ends", async () => {
   const lane = new NewsCopyLane();
-  const hold = lane.holdForCatchUp();
+  const hold = await lane.holdForCatchUp();
 
   assert.ok(hold);
   assert.equal(lane.copyWaits(), true);
@@ -27,16 +27,16 @@ test("catch-up's copy phase does not start while the history copy runs", async (
   const lane = new NewsCopyLane();
   const history = await lane.holdForHistory();
 
-  assert.equal(lane.holdForCatchUp(), null);
+  assert.equal(await lane.holdForCatchUp(), null);
   assert.equal(lane.historyRunning(), true);
   history.release();
   assert.equal(lane.historyRunning(), false);
-  assert.ok(lane.holdForCatchUp());
+  assert.ok(await lane.holdForCatchUp());
 });
 
 test("the history copy takes over: catch-up is asked to stop and it waits for that", async () => {
   const lane = new NewsCopyLane();
-  const catchUp = lane.holdForCatchUp();
+  const catchUp = await lane.holdForCatchUp();
   assert.ok(catchUp);
 
   let held = false;
@@ -54,7 +54,7 @@ test("the history copy takes over: catch-up is asked to stop and it waits for th
   catchUp.release();
   const history = await taking;
   assert.equal(held, true);
-  assert.equal(lane.holdForCatchUp(), null);
+  assert.equal(await lane.holdForCatchUp(), null);
   history.release();
   assert.equal(lane.paused(), false);
 });
@@ -62,10 +62,25 @@ test("the history copy takes over: catch-up is asked to stop and it waits for th
 test("one catch-up at a time", () => {
   const lane = new NewsCopyLane();
 
-  assert.equal(lane.beginCatchUp(), true);
-  assert.equal(lane.beginCatchUp(), false);
+  assert.equal(lane.beginCatchUp(true), true);
+  assert.equal(lane.beginCatchUp(true), false);
   lane.endCatchUp();
-  assert.equal(lane.beginCatchUp(), true);
+  assert.equal(lane.beginCatchUp(true), true);
+});
+
+test("catch-ups asked for while one runs make one more run, filing when any asked", () => {
+  const lane = new NewsCopyLane();
+  lane.beginCatchUp(false);
+
+  assert.equal(lane.nextCatchUp(), null);
+  lane.beginCatchUp(true);
+  lane.beginCatchUp(false);
+  assert.deepEqual(lane.nextCatchUp(), { fileMissed: true });
+  assert.equal(lane.nextCatchUp(), null);
+  lane.beginCatchUp(false);
+  lane.endCatchUp();
+  lane.beginCatchUp(false);
+  assert.equal(lane.nextCatchUp(), null);
 });
 
 test("a released backfill is announced, saying whether copies waited meanwhile", async () => {
@@ -73,8 +88,8 @@ test("a released backfill is announced, saying whether copies waited meanwhile",
   const heard: [NewsBackfill, boolean][] = [];
   lane.onRelease((kind, copiesWaited) => heard.push([kind, copiesWaited]));
 
-  lane.holdForCatchUp()?.release();
-  const busy = lane.holdForCatchUp();
+  (await lane.holdForCatchUp())?.release();
+  const busy = await lane.holdForCatchUp();
   lane.copyWaits();
   busy?.release();
   (await lane.holdForHistory()).release();
@@ -85,7 +100,7 @@ test("a released backfill is announced, saying whether copies waited meanwhile",
 test("idle() settles once no backfill holds the lane", async () => {
   const lane = new NewsCopyLane();
   await lane.idle();
-  const hold = lane.holdForCatchUp();
+  const hold = await lane.holdForCatchUp();
   let settled = false;
   const waiting = lane.idle().then(() => {
     settled = true;
@@ -98,11 +113,59 @@ test("idle() settles once no backfill holds the lane", async () => {
   assert.equal(settled, true);
 });
 
-test("releasing twice is harmless", () => {
+test("a correction waits for a backfill, then holds the lane", async () => {
   const lane = new NewsCopyLane();
-  const hold = lane.holdForCatchUp();
+  const catchUp = await lane.holdForCatchUp();
+  let corrected = false;
+  const correcting = lane.holdForCorrection().then((release) => {
+    corrected = true;
+    return release;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(corrected, false);
+  catchUp?.release();
+  assert.ok(await correcting);
+});
+
+test("backfills wait for a correction being made, without pausing new copies", async () => {
+  const lane = new NewsCopyLane();
+  const release = await lane.holdForCorrection();
+  const held: string[] = [];
+  const catchUp = lane.holdForCatchUp().then((hold) => {
+    held.push("catch-up");
+    hold?.release();
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(held.length, 0);
+  assert.equal(lane.copyWaits(), false);
+  release?.();
+  await catchUp;
+  const history = lane.holdForHistory().then((hold) => {
+    held.push("history");
+    return hold;
+  });
+  const correction = await lane.holdForCorrection();
+  assert.equal(correction, null);
+  (await history).release();
+  assert.deepEqual(held, ["catch-up", "history"]);
+});
+
+test("a correction is refused while the history copy runs", async () => {
+  const lane = new NewsCopyLane();
+  const history = await lane.holdForHistory();
+
+  assert.equal(await lane.holdForCorrection(), null);
+  history.release();
+  assert.ok(await lane.holdForCorrection());
+});
+
+test("releasing twice is harmless", async () => {
+  const lane = new NewsCopyLane();
+  const hold = await lane.holdForCatchUp();
   hold?.release();
-  const next = lane.holdForCatchUp();
+  const next = await lane.holdForCatchUp();
   hold?.release();
 
   assert.ok(next);

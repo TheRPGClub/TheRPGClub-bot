@@ -54,6 +54,17 @@ export const NEWS_CATEGORY_NOT_AUTHOR_MESSAGE =
 export const NEWS_CATEGORY_HISTORY_COPY_MESSAGE =
   "A history copy is running; try again when it finishes.";
 
+/** The refusal when catch-up's copies outlast {@link NEWS_CATEGORY_LANE_WAIT_MS}. */
+export const NEWS_CATEGORY_LANE_BUSY_MESSAGE =
+  "Missing news copies are being posted right now, so nothing changed. Try again in a few " +
+  "minutes.";
+
+/**
+ * How long a change waits for a running catch-up to finish copying before it is refused:
+ * under the 15 minutes Discord allows for editing the reply, with room for the move.
+ */
+export const NEWS_CATEGORY_LANE_WAIT_MS = 10 * 60_000;
+
 /** The parts of the API's NewsItem the move reads. */
 export interface INewsItemRecord {
   message_id: string;
@@ -123,14 +134,21 @@ export interface INewsCategoryMoveDeps {
   api: INewsFilingApi;
   discord: INewsCategoryMoveDiscord;
   /**
-   * The copy lane: a move waits while a backfill copier runs, so the threads stay in date
-   * order, and a correction is refused while a history copy runs. Absent: never waits.
+   * The copy lane: an upload move waits while a backfill copier runs, so the threads stay in
+   * date order. Absent: never waits.
    */
-  lane?: Pick<NewsCopyLane, "historyRunning" | "idle">;
+  lane?: Pick<NewsCopyLane, "idle">;
 }
 
 export interface INewsCategoryChangeDeps extends INewsCategoryMoveDeps {
   api: INewsCategoryApi;
+  /**
+   * The copy lane: a correction holds it from before the API call until the copy has
+   * moved, and is refused while a history copy runs. Absent: never waits.
+   */
+  lane?: Pick<NewsCopyLane, "idle" | "holdForCorrection">;
+  /** How long to wait for the lane; {@link NEWS_CATEGORY_LANE_WAIT_MS} when absent. */
+  laneWaitMs?: number;
 }
 
 async function tryDiscord(label: string, action: () => Promise<void>): Promise<boolean> {
@@ -167,8 +185,8 @@ export async function swapCategoryReaction(
 }
 
 /**
- * Moves News Item `messageId`'s copy to `categoryKey`'s thread, once no backfill copier is
- * running: deletes the old copy (a failure is logged and the move goes on, since the
+ * Moves News Item `messageId`'s copy to `categoryKey`'s thread (the caller waits for the
+ * copy lane first): deletes the old copy (a failure is logged and the move goes on, since the
  * category has already changed), posts the new one and reports it. When the new copy
  * cannot be posted or reported, the item is reported as having no copy, so catch-up posts
  * it in the new thread later. The new location, or null.
@@ -180,7 +198,6 @@ export async function moveNewsCopy(
   source: INewsCopySource,
   deps: INewsCategoryMoveDeps,
 ): Promise<INewsCopyLocation | null> {
-  await deps.lane?.idle();
   await tryDiscord(
     `Could not delete the old News Copy ${oldCopy.message_id} of News Item ${messageId} ` +
       `in thread ${oldCopy.thread_id}; delete it by hand`,
@@ -228,18 +245,54 @@ function refusalReply(error: unknown): IPrivateReply {
 const bold = (key: NewsCategoryKey): string => `**${NEWS_CATEGORY_NAMES[key]}**`;
 
 /**
- * "Change news category": asks the API to change the category for the acting member (it
- * refuses anyone but the author and staff, and follows the Feature Flag), then swaps the
- * reaction and moves the News Copy. Nothing is thrown; the reply says what happened.
+ * Waits for the copy lane and holds it, so no backfill copier holds a page read before the
+ * change (it would post the item into the old category's thread). The release, or the
+ * refusal: a history copy runs, or the wait outlasted `laneWaitMs` (a hold won later is
+ * let go at once).
+ */
+async function holdLaneForChange(
+  deps: INewsCategoryChangeDeps,
+): Promise<(() => void) | string> {
+  if (!deps.lane) return () => undefined;
+  const holding = deps.lane.holdForCorrection();
+  let timer: NodeJS.Timeout | undefined;
+  const timedOut = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), deps.laneWaitMs ?? NEWS_CATEGORY_LANE_WAIT_MS);
+    timer.unref();
+  });
+  const won = await Promise.race([holding, timedOut]);
+  clearTimeout(timer);
+  if (won === "timeout") {
+    void holding.then((release) => release?.());
+    return NEWS_CATEGORY_LANE_BUSY_MESSAGE;
+  }
+  return won ?? NEWS_CATEGORY_HISTORY_COPY_MESSAGE;
+}
+
+/**
+ * "Change news category": once the copy lane is free (see {@link holdLaneForChange}), asks
+ * the API to change the category for the acting member (it refuses anyone but the author
+ * and staff, and follows the Feature Flag), then swaps the reaction and moves the News
+ * Copy, holding the lane throughout. Nothing is thrown; the reply says what happened.
  */
 export async function changeNewsCategory(
   request: INewsCategoryChangeRequest,
   deps: INewsCategoryChangeDeps,
 ): Promise<IPrivateReply> {
-  const { messageId, categoryKey } = request;
-  if (deps.lane?.historyRunning()) {
-    return { text: NEWS_CATEGORY_HISTORY_COPY_MESSAGE, failed: false };
+  const release = await holdLaneForChange(deps);
+  if (typeof release === "string") return { text: release, failed: false };
+  try {
+    return await changeHoldingLane(request, deps);
+  } finally {
+    release();
   }
+}
+
+async function changeHoldingLane(
+  request: INewsCategoryChangeRequest,
+  deps: INewsCategoryChangeDeps,
+): Promise<IPrivateReply> {
+  const { messageId, categoryKey } = request;
   let result: INewsCategoryChangeResult;
   try {
     result = await deps.api.changeCategory(messageId, request.actingUserId, categoryKey);
@@ -247,7 +300,8 @@ export async function changeNewsCategory(
     return refusalReply(error);
   }
   if (!result.changed) {
-    return { text: `This news is already in ${bold(categoryKey)}. Nothing changed.`, failed: false };
+    const text = `This news is already in ${bold(categoryKey)}. Nothing changed.`;
+    return { text, failed: false };
   }
 
   const was = result.previousCategoryKey ? ` (was ${bold(result.previousCategoryKey)})` : "";
