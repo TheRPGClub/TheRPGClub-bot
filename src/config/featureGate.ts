@@ -31,6 +31,8 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   // The message command: the sharer and staff while Live, staff only while Preview (the
   // API also checks author or staff on every change).
   "Change news category": "news_hub",
+  // /news share: staff only in Preview, everyone when Live (spec api#367).
+  news: "news_hub",
 };
 
 /**
