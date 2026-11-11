@@ -79,10 +79,8 @@ function fakeApi(items: INewsImportListItem[], options: {
       if (options.error) throw options.error;
       const values = [...api.categories.values()];
       const unsorted = values.filter((value) => value === null).length;
-      return { sorted: values.length - unsorted, unsorted, removed: 0, oldestMessageId: null };
-    },
-    async recordBatch() {
-      throw new Error("not used");
+      const sorted = values.length - unsorted;
+      return { sorted, unsorted, removed: 0, copied: 0, uncopied: 0 };
     },
     async list(actingUserId, page) {
       api.pagesRead.push({ actingUserId, page });

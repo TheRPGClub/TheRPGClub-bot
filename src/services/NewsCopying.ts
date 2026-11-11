@@ -43,6 +43,11 @@ export interface INewsCopyDeps {
   threads: NewsCategoryThreads;
   api: INewsFilingApi;
   discord: INewsCopyDiscord;
+  /**
+   * True while a history copy runs (bot#1539): new copies wait, and the history copy posts
+   * them after the history, keeping the threads in date order. Absent: never paused.
+   */
+  copiesPaused?: () => boolean;
 }
 
 /** A message the News Copy can link back to: discord.js's Message has its jump `url`. */
@@ -129,6 +134,7 @@ export interface INewsFilingOutcome {
  * Records the News Item with its category and pick, reacts to the original with the
  * category's emoji, posts the News Copy and reports where it lives. An item the API does
  * not record is neither reacted to nor copied; a failed reaction does not stop the copy.
+ * While copies are paused the item is left without a copy, for the history copy to post.
  */
 export async function fileNewsItem(
   filing: INewsFiling,
@@ -154,6 +160,7 @@ export async function fileNewsItem(
       logError(LOG_CONTEXT, buildDiscordErrorMessage(label, error));
     }
   }
+  if (deps.copiesPaused?.()) return { recorded: true, copy: null };
   const copy = await postNewsCopy(item.message_id, categoryKey, filing.copy, deps);
   return { recorded: true, copy };
 }

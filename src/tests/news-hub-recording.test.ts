@@ -102,6 +102,7 @@ function deps(
     state?: FeatureState | null;
     testMode?: boolean;
     preview?: (message: INewsPost) => Promise<INewsPost>;
+    copiesPaused?: () => boolean;
   } = {},
 ): INewsRecordingDeps {
   return {
@@ -113,6 +114,7 @@ function deps(
     discord,
     waitForPreview: options.preview ?? (async (message) => message),
     filing: new Map(),
+    ...(options.copiesPaused ? { copiesPaused: options.copiesPaused } : {}),
   };
 }
 
@@ -179,6 +181,23 @@ test("a link post is recorded, reacted to, copied and its copy reported, in orde
     }],
     ["reportCopy", MESSAGE_ID, { message_id: COPY_ID, thread_id: THREADS.releases.threadId }],
   ]);
+});
+
+test("while a history copy runs, a post is recorded and reacted to but not copied", async () => {
+  const fake = fakes();
+  await onNewsMessageCreated(message(), deps(fake, { copiesPaused: () => true }));
+
+  assert.deepEqual(fake.calls, [
+    ["record", MESSAGE_ID, RECORDED_BODY],
+    ["react", NEWS_CHANNEL, MESSAGE_ID, "📦"],
+  ]);
+});
+
+test("once the history copy ends, a post is copied again", async () => {
+  const fake = fakes();
+  await onNewsMessageCreated(message(), deps(fake, { copiesPaused: () => false }));
+
+  assert.deepEqual(fake.calls.map((call) => call[0]), ["record", "react", "post", "reportCopy"]);
 });
 
 test("a link with no preview yet waits for it, then picks from the preview", async () => {
