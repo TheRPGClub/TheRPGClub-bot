@@ -154,6 +154,32 @@ test("a preview with a large image and no thumbnail uses the large image", () =>
   assert.equal(item?.link?.image_url, "https://example.com/big.jpg");
 });
 
+test("a preview image is Discord's proxied copy when it has one", () => {
+  // Many sites refuse images loaded from another site; Discord's copy always loads.
+  const url = "https://example.com/news/1";
+  const proxied = "https://images-ext-1.discordapp.net/external/abc/https/example.com/cover.jpg";
+  const preview = embed(url, {
+    thumbnail: { url: "https://example.com/cover.jpg", proxyURL: proxied },
+  });
+  const item = newsItemFrom(message({ cleanContent: url, embeds: [preview] }), PLACES);
+
+  assert.equal(item?.link?.image_url, proxied);
+});
+
+test("a preview with no title, like a post on X or Bluesky, takes its author as title", () => {
+  const url = "https://x.com/wario64/status/1";
+  const preview = embed(url, {
+    title: null,
+    provider: null,
+    author: { name: "Wario64 (@Wario64)" },
+    description: "Persona 3 Reload is $29.99 today",
+  });
+  const item = newsItemFrom(message({ cleanContent: url, embeds: [preview] }), PLACES);
+
+  assert.equal(item?.link?.title, "Wario64 (@Wario64)");
+  assert.equal(item?.link?.description, "Persona 3 Reload is $29.99 today");
+});
+
 test("with several links the first is the item's link and the rest stay in the comment", () => {
   const first = "https://example.com/news/1";
   const second = "https://other.example/story";
