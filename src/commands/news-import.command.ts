@@ -24,7 +24,7 @@ import {
   buildTextSend,
 } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
-import { NEWS_CATEGORY_THREADS } from "../config/newsHub.js";
+import { NEWS_CATEGORY_THREADS, NEWS_IMPORT_COMMAND } from "../config/newsHub.js";
 import { getFeatureState } from "../services/FeaturePostRouting.js";
 import { NEWS_COPY_LANE } from "../services/NewsCopyLane.js";
 import { discordNewsCopier } from "../services/NewsCopying.js";
@@ -32,7 +32,6 @@ import { discordNewsOriginals } from "../services/NewsHistoryCopy.js";
 import { createNewsCategoryDeps, moveNewsCopies } from "../services/NewsCategoryChange.js";
 import {
   DEFAULT_NEWS_IMPORT_DEPS,
-  NEWS_IMPORT_COMMAND,
   newsImportStatusReply,
   startNewsHistoryCopyReply,
   type IProgressMessage,

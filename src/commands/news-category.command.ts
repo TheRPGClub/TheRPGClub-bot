@@ -6,7 +6,8 @@ import {
 } from "discord.js";
 import { ContextMenu, Discord, SelectMenuComponent } from "discordx";
 
-import { NEWS_CHANNEL_PLACES } from "../config/newsHub.js";
+import { CHANGE_NEWS_CATEGORY_COMMAND, NEWS_CHANNEL_PLACES } from "../config/newsHub.js";
+import { NEWS_CATEGORY_PICK_PREFIX } from "../config/customIdPrefixes.js";
 import { IS_TEST_MODE } from "../config/testMode.js";
 import {
   buildComponentsV2EditFlags,
@@ -25,7 +26,6 @@ import {
   parseNewsCategoryPickId,
 } from "../functions/NewsCategoryChangePrompt.js";
 import {
-  CHANGE_NEWS_CATEGORY_COMMAND,
   NEWS_CATEGORY_HISTORY_COPY_MESSAGE,
   changeNewsCategory,
   createNewsCategoryDeps,
@@ -63,7 +63,7 @@ export class NewsCategoryCommand {
     await safeReply(interaction, buildNewsCategoryPrompt(message.channelId, message.id));
   }
 
-  @SelectMenuComponent({ id: /^news-category-pick-v1:\d+:\d+$/ })
+  @SelectMenuComponent({ id: new RegExp(`^${NEWS_CATEGORY_PICK_PREFIX}:\\d+:\\d+$`) })
   async pickNewsCategory(interaction: StringSelectMenuInteraction): Promise<void> {
     const target = parseNewsCategoryPickId(interaction.customId);
     const [categoryKey] = interaction.values;

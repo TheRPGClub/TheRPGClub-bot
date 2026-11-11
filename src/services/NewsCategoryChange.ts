@@ -42,9 +42,6 @@ import { apiPutOrThrow } from "./RpgClubApiClient.js";
 
 const LOG_CONTEXT = "NewsCategoryChange";
 
-/** The message command's name, as members see it under Apps. The gate maps it too. */
-export const CHANGE_NEWS_CATEGORY_COMMAND = "Change news category";
-
 export const NEWS_CATEGORY_NOT_AUTHOR_MESSAGE =
   "Only the member who shared this news and staff can change its category.";
 

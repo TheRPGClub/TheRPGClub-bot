@@ -339,7 +339,7 @@ test("the progress message is edited at most once per interval, then with the co
 test("/news-import belongs to the News Hub Feature", async () => {
   const { featureKeyFor } = await import("../functions/FeatureGate.js");
   const { NEWS_HUB_FEATURE_KEY } = await import("../config/featureGate.js");
-  const { NEWS_IMPORT_COMMAND } = await import("../services/NewsImport.js");
+  const { NEWS_IMPORT_COMMAND } = await import("../config/newsHub.js");
 
   assert.equal(NEWS_IMPORT_COMMAND, "news-import");
   assert.equal(featureKeyFor({ type: "command", name: NEWS_IMPORT_COMMAND }), NEWS_HUB_FEATURE_KEY);

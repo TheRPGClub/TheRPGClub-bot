@@ -1,3 +1,4 @@
+import { NEWS_IMPORT_COMMAND } from "../config/newsHub.js";
 import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { writeDelimited } from "../functions/DelimitedText.js";
 import {
@@ -9,7 +10,7 @@ import {
 } from "../functions/NewsImportFile.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
-import { NEWS_IMPORT_COMMAND, newsImportRefusal } from "./NewsImport.js";
+import { newsImportRefusal } from "./NewsImport.js";
 import {
   NEWS_IMPORT_ASSIGN_MAX,
   NEWS_IMPORT_LIST_PER,

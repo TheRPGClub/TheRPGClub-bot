@@ -462,7 +462,7 @@ test("the News Channel listener records the bot's post neither on arrival nor on
 test("/news is gated by the News Hub: staff only in Preview, everyone when Live", async () => {
   const { resolveFeatureGate } = await import("../functions/FeatureGate.js");
   const { NEWS_HUB_FEATURE_KEY } = await import("../config/featureGate.js");
-  const { NEWS_COMMAND } = await import("../services/NewsShare.js");
+  const { NEWS_COMMAND } = await import("../config/newsHub.js");
   const source = (state: "off" | "preview" | "live") => ({
     flags: async () => [{ key: NEWS_HUB_FEATURE_KEY, name: "News Hub", state }],
     isStaff: async (userId: string) => userId === "staff",

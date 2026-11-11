@@ -1,9 +1,9 @@
+import { DISCORD_MESSAGE_CONTENT_MAX } from "../config/suggestions.js";
+
 // The News Copy (spec api#367): the bot's copy of a News Item in its News Category's thread.
 // A plain message, not a Components V2 container, so Discord shows the link's preview as it
 // does on the original. Pure: posting it is the caller's job.
 
-/** Discord's limit on a message's text. */
-const MESSAGE_LIMIT = 2000;
 const ELLIPSIS = "…";
 
 /**
@@ -94,7 +94,7 @@ export function buildNewsCopy(
     .filter((line): line is string => line !== null);
   let lines = [head, ...tail];
   if (source.comment) {
-    const room = MESSAGE_LIMIT - lines.join("\n").length - 1;
+    const room = DISCORD_MESSAGE_CONTENT_MAX - lines.join("\n").length - 1;
     lines = [head, fitted(source.comment, room), ...tail];
   }
   return {

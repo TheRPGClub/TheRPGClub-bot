@@ -9,16 +9,16 @@ import { Discord, Slash, SlashChoice, SlashGroup, SlashOption } from "discordx";
 import {
   NEWS_CATEGORY_KEYS,
   NEWS_CATEGORY_NAMES,
+  NEWS_COMMAND,
   NEWS_SHARE_COMMENT_MAX,
   NEWS_SHARE_LINK_MAX,
+  NEWS_SHARE_SUBCOMMAND,
   type NewsCategoryKey,
 } from "../config/newsHub.js";
 import { buildErrorReply, buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeReply } from "../functions/InteractionUtils.js";
 import {
   createNewsShareDeps,
-  NEWS_COMMAND,
-  NEWS_SHARE_SUBCOMMAND,
   shareNewsReply,
   type INewsShareReply,
 } from "../services/NewsShare.js";

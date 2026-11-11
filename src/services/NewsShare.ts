@@ -2,6 +2,8 @@ import type { Client } from "discord.js";
 import {
   NEWS_CATEGORY_NAMES,
   NEWS_CATEGORY_THREADS,
+  NEWS_COMMAND,
+  NEWS_SHARE_SUBCOMMAND,
   type NewsCategoryKey,
 } from "../config/newsHub.js";
 import { GAME_NEWS_CHANNEL_ID } from "../config/channels.js";
@@ -36,9 +38,6 @@ import type { INewsFilingApi } from "./NewsItemApi.js";
 // The News Channel listener ignores the bot's own messages, so only this records the post.
 
 const LOG_CONTEXT = "NewsShare";
-
-export const NEWS_COMMAND = "news";
-export const NEWS_SHARE_SUBCOMMAND = "share";
 
 /** The image a member attached to `/news share`. */
 export interface INewsShareImage {

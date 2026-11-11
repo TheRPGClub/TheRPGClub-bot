@@ -11,6 +11,7 @@ import {
 } from "../config/newsHub.js";
 import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { parseCustomIdSegments, validateCustomId } from "../utilities/CustomIdUtils.js";
+import { isSnowflake } from "../utilities/ValidationUtils.js";
 import { buildComponentsV2Flags, safeV2TextContent } from "./ComponentsV2Utils.js";
 import { newsItemFrom, type INewsMessage } from "./NewsItem.js";
 import { sharedStateCommandRefusal } from "./SharedStateCommandGuard.js";
@@ -42,8 +43,7 @@ export function buildNewsCategoryPickId(channelId: string, messageId: string): s
 export function parseNewsCategoryPickId(customId: string): INewsCategoryPickTarget | null {
   if (!customId.startsWith(`${NEWS_CATEGORY_PICK_PREFIX}:`)) return null;
   const [channelId, messageId] = parseCustomIdSegments(customId, 2) ?? [];
-  const snowflake = /^\d+$/;
-  if (!snowflake.test(channelId ?? "") || !snowflake.test(messageId ?? "")) return null;
+  if (!isSnowflake(channelId ?? "") || !isSnowflake(messageId ?? "")) return null;
   return { channelId, messageId };
 }
 
