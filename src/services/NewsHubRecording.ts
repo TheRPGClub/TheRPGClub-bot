@@ -16,6 +16,7 @@ import {
 } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { getFeatureState } from "./FeaturePostRouting.js";
+import { newsCopiesPaused } from "./NewsHistoryCopy.js";
 import {
   discordNewsCopier,
   fileNewsItem,
@@ -94,6 +95,7 @@ export function createNewsRecordingDeps(client: Client): INewsRecordingDeps {
     discord: discordNewsCopier(client),
     waitForPreview: previewWaiter(client),
     filing: FILING,
+    copiesPaused: newsCopiesPaused,
   };
 }
 

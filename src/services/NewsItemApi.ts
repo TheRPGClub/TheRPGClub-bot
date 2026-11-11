@@ -1,9 +1,9 @@
 import type { NewsCategoryKey } from "../config/newsHub.js";
 import type { INewsItemPayload } from "../functions/NewsItem.js";
-import { apiDelete, apiPutOrThrow } from "./RpgClubApiClient.js";
+import { apiDelete, apiGetOrThrow, apiPutOrThrow } from "./RpgClubApiClient.js";
 
-// The service-only News Item writes (spec api#355, api#367): record, remove, and report
-// where a News Item's News Copy lives.
+// The service-only News Item calls (spec api#355, api#367): record, remove, report where a
+// News Item's News Copy lives, and list the News Items that have no News Copy yet.
 
 const NEWS_ITEM_PATH = "/api/v1/news_items";
 
@@ -60,3 +60,51 @@ export function newsItemRecordBody(item: INewsItemPayload): NewsItemRecordBody {
   const { message_id: _id, category_key: categoryKey, ...rest } = item;
   return { data: categoryKey === null ? rest : { ...rest, category_key: categoryKey } };
 }
+
+/**
+ * A News Item with no News Copy, as the uncopied listing gives it: the parts of the API's
+ * `NewsItem` a copy is built from. It always has a category (unsorted imports are left out).
+ */
+export interface IUncopiedNewsItem {
+  message_id: string;
+  category_key: NewsCategoryKey;
+  /** `import`: brought in by the News Import, so its copy shows the original date. */
+  origin: "live" | "import";
+  comment: string | null;
+  posted_at: string;
+  link: { url: string } | null;
+  author: { user_id: string };
+}
+
+/** One page of the uncopied listing. */
+export interface IUncopiedNewsPage {
+  items: IUncopiedNewsItem[];
+  /** Every News Item without a News Copy, on this page or not. */
+  count: number;
+  /** The next page number; null on the last page. */
+  next: number | null;
+}
+
+/** The API's largest page of the uncopied listing. */
+export const UNCOPIED_PER_MAX = 500;
+
+export interface INewsUncopiedApi {
+  /**
+   * GET /api/v1/news_items/uncopied: News Items with a category and no News Copy, oldest
+   * first. A reported copy takes its item out, so a runner that copies as it goes reads
+   * page 1 again rather than the next page.
+   */
+  uncopied: (page: number, per: number) => Promise<IUncopiedNewsPage>;
+}
+
+export const NEWS_UNCOPIED_API: INewsUncopiedApi = {
+  async uncopied(page, per) {
+    // The query stays in the path: an error reply shows the request's url, not its params.
+    const query = new URLSearchParams({ page: String(page), per: String(per) });
+    const payload = await apiGetOrThrow<{
+      data: IUncopiedNewsItem[];
+      meta: { count: number; next?: number | null };
+    }>(`${NEWS_ITEM_PATH}/uncopied?${query.toString()}`);
+    return { items: payload.data, count: payload.meta.count, next: payload.meta.next ?? null };
+  },
+};
