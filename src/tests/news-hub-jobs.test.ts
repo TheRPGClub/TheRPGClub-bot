@@ -97,6 +97,8 @@ interface IStored {
 interface IFakeNewsApi extends INewsHubApi {
   store: Map<string, IStored>;
   writes: string[];
+  /** The `origin` each uncopied listing read asked for (null: both). */
+  listedOrigins: (string | null)[];
 }
 
 const byPostedAt = (a: IStored, b: IStored): number =>
@@ -112,6 +114,7 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
   const api: IFakeNewsApi = {
     store,
     writes,
+    listedOrigins: [],
     record: async (messageId, body) => {
       writes.push(`record ${messageId}`);
       const existing = store.get(messageId);
@@ -152,9 +155,11 @@ function fakeApi(seed: readonly IStored[] = []): IFakeNewsApi {
         .map(({ message_id, origin, posted_at }) => ({ message_id, origin, posted_at }));
       return { items, nextPage: page * per < listed.length ? page + 1 : null };
     },
-    uncopied: async (page, per) => {
+    uncopied: async (page, per, origin) => {
+      if (!api.listedOrigins.includes(origin ?? null)) api.listedOrigins.push(origin ?? null);
       const listed = [...store.values()]
         .filter((item) => item.category_key !== null && item.news_copy === null)
+        .filter((item) => !origin || item.origin === origin)
         .sort(byPostedAt);
       const items: IUncopiedNewsItem[] = listed.slice((page - 1) * per, page * per)
         .map(({ message_id, origin, posted_at, category_key, body }) => ({
@@ -555,17 +560,21 @@ test("catch-up: items without a News Copy are copied oldest first", async () => 
   assert.match(text, /3 News Copies posted/);
 });
 
-test("catch-up: an imported item's copy shows its original date and it gets no reaction", async () => {
+test("catch-up: copies live items only, leaving imported ones to the history copy", async () => {
   const old = message(snowflake(-90_000), NEWS_CHANNEL);
-  const api = fakeApi([recorded(old, "emulation", null, "import")]);
-  const discord = fakeDiscord({ [NEWS_CHANNEL]: [old] });
+  const live = message(snowflake(10), NEWS_CHANNEL);
+  const api = fakeApi([
+    recorded(old, "emulation", null, "import"),
+    recorded(live, "releases", null),
+  ]);
+  const discord = fakeDiscord({ [NEWS_CHANNEL]: [old, live] });
 
-  await catchUp(api, discord);
+  const text = await catchUp(api, discord);
 
-  const seconds = Math.floor(old.createdAt.getTime() / 1000);
-  assert.match(discord.posted[0].copy.content, new RegExp(`shared on <t:${seconds}:D>`));
-  assert.equal(discord.posted[0].threadId, COPY_THREADS.emulation.threadId);
-  assert.equal(discord.calls.some((call) => call.startsWith("react")), false);
+  assert.deepEqual(copiedIds(discord), [live.id]);
+  assert.deepEqual(api.listedOrigins, ["live"]);
+  assert.equal(api.store.get(old.id)?.news_copy, null);
+  assert.match(text, /1 News Copy posted/);
 });
 
 test("catch-up: copies are paced, one wait after each", async () => {

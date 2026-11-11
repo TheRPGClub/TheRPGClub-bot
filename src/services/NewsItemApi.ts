@@ -150,7 +150,7 @@ export interface IUncopiedNewsItem {
   message_id: string;
   category_key: NewsCategoryKey;
   /** `import`: brought in by the News Import, so its copy shows the original date. */
-  origin: "live" | "import";
+  origin: NewsItemOrigin;
   comment: string | null;
   posted_at: string;
   link: { url: string } | null;
@@ -169,19 +169,23 @@ export interface IUncopiedNewsPage {
 /** The API's largest page of the uncopied listing. */
 export const UNCOPIED_PER_MAX = 500;
 
+/** Where News Items came from: posted live, or brought in by the News Import. */
+export type NewsItemOrigin = "live" | "import";
+
 export interface INewsUncopiedApi {
   /**
    * GET /api/v1/news_items/uncopied: News Items with a category and no News Copy, oldest
-   * first. A reported copy takes its item out, so a runner that copies as it goes reads
-   * page 1 again rather than the next page.
+   * first, from `origin` only when given (else both). A reported copy takes its item out,
+   * so a runner that copies as it goes reads page 1 again rather than the next page.
    */
-  uncopied: (page: number, per: number) => Promise<IUncopiedNewsPage>;
+  uncopied: (page: number, per: number, origin?: NewsItemOrigin) => Promise<IUncopiedNewsPage>;
 }
 
 export const NEWS_UNCOPIED_API: INewsUncopiedApi = {
-  async uncopied(page, per) {
+  async uncopied(page, per, origin) {
     // The query stays in the path: an error reply shows the request's url, not its params.
     const query = new URLSearchParams({ page: String(page), per: String(per) });
+    if (origin) query.set("origin", origin);
     const payload = await apiGetOrThrow<{
       data: IUncopiedNewsItem[];
       meta: { count: number; next?: number | null };

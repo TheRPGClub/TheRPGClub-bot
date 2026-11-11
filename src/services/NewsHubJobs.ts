@@ -328,8 +328,9 @@ async function copyItem(item: IUncopiedNewsItem, deps: INewsHubJobDeps): Promise
 }
 
 /**
- * Posts the News Copies still missing, oldest first, from the API's listing of items without
- * one: it retries copies that failed earlier and copies the posts {@link recordMissed} filed.
+ * Posts the live News Items' missing News Copies, oldest first, from the API's listing of
+ * items without one: it retries copies that failed earlier and copies the posts
+ * {@link recordMissed} filed. Imported items are left to the history copy (`/news-import copy`).
  * Each item is tried once per catch-up. Stops when a history copy starts, and leaves items
  * from when live filing took over, and any being filed now, to the live listener.
  *
@@ -344,7 +345,7 @@ async function copyMissing(
   const tried = new Set<string>();
   let page: number | null = 1;
   while (page !== null) {
-    const listing = await deps.api.uncopied(page, API_PAGE);
+    const listing = await deps.api.uncopied(page, API_PAGE, "live");
     const fresh = listing.items.filter((item) => !tried.has(item.message_id));
     if (fresh.length === 0) {
       page = listing.next;
