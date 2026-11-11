@@ -514,7 +514,7 @@ function copiedIds(discord: IFakeDiscord): string[] {
   return discord.posted.map(({ copy }) => /\/(\d+)$/.exec(copy.content)?.[1] ?? "?");
 }
 
-test("catch-up: posts missed while the bot was away are recorded, reacted to and copied", async () => {
+test("catch-up: posts missed while the bot was away are recorded, reacted to, copied", async () => {
   const channel = posts(10, 5);
   const api = fakeApi(channel.slice(0, 2).map((m) => recorded(m, "releases")));
   const discord = fakeDiscord({ [NEWS_CHANNEL]: channel });

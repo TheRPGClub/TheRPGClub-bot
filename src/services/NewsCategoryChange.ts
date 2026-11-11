@@ -300,7 +300,8 @@ async function changeHoldingLane(
     return refusalReply(error);
   }
   if (!result.changed) {
-    return { text: `This news is already in ${bold(categoryKey)}. Nothing changed.`, failed: false };
+    const text = `This news is already in ${bold(categoryKey)}. Nothing changed.`;
+    return { text, failed: false };
   }
 
   const was = result.previousCategoryKey ? ` (was ${bold(result.previousCategoryKey)})` : "";

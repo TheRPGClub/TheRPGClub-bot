@@ -230,7 +230,8 @@ function authorName(message: INewsMessage): string {
  * The News Item a message is, or null when it is not one. `places` maps each channel where
  * news is posted to the News Category its messages take (see {@link NewsPlaces}): live
  * recording passes the News Channel and the News Import its archive, both with no category
- * (null), which the bot picks or staff assign. Pure: a fetched discord.js Message is a valid `message`.
+ * (null), which the bot picks or staff assign. Pure: a fetched discord.js Message is a
+ * valid `message`.
  */
 export function newsItemFrom(
   message: INewsMessage,

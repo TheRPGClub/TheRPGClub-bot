@@ -368,7 +368,7 @@ test("an image post is filed in General with its images uploaded again", async (
   }]);
 });
 
-test("an image larger than the bot may upload is linked in the copy, which still posts", async () => {
+test("an image too large to upload is linked in the copy, which still posts", async () => {
   const fake = fakes();
   const huge = {
     url: "https://cdn.discordapp.com/a/1/huge.png?ex=6a000000",
