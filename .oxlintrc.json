@@ -144,6 +144,7 @@
           }
         ],
         "local/no-djs-button-in-v2-accessory": "error",
+        "local/v2-builders-from-discordjs-builders": "error",
         "local/no-discordjs-modalbuilder-for-new-modal-components": "error",
         "local/prefer-safe-interaction-methods": "warn",
         "local/no-direct-interaction-response-methods": "error",

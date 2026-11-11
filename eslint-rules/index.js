@@ -78,6 +78,19 @@ const MESSAGE_SEND_METHODS = new Set(["send"]);
 const ASSET_PATH_HELPER_NAME = "resolveAssetPath";
 const ATTACHMENT_BUILDER_NAME = "AttachmentBuilder";
 const MODAL_COMPONENT_BUILDER_SOURCE = "@discordjs/builders";
+// Components V2 builders the bot takes from @discordjs/builders. discord.js re-exports the
+// CommonJS copy of that package while the bot loads its ES module copy, and a container
+// from one copy rebuilds a component from the other from its data, losing fields.
+const V2_BUILDER_NAMES = new Set([
+  "ContainerBuilder",
+  "TextDisplayBuilder",
+  "SectionBuilder",
+  "ThumbnailBuilder",
+  "MediaGalleryBuilder",
+  "MediaGalleryItemBuilder",
+  "SeparatorBuilder",
+  "FileBuilder",
+]);
 const NEW_MODAL_COMPONENT_TYPE_NAMES = new Set([
   "Label",
   "RadioGroup",
@@ -3999,6 +4012,38 @@ export default {
               messageId: "noFullMemberFetch",
               data: { target: context.sourceCode.getText(target) },
             });
+          },
+        };
+      },
+    },
+    "v2-builders-from-discordjs-builders": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Import Components V2 builders from @discordjs/builders, never from discord.js.",
+        },
+        schema: [],
+        messages: {
+          useBuildersPackage:
+            "Import {{name}} from @discordjs/builders, not discord.js. discord.js re-exports " +
+            "the CommonJS copy of the builders while the bot loads the ES module copy, and a " +
+            "container from one copy drops the fields of a component from the other (the " +
+            "/news-import download FileBuilder failure).",
+        },
+      },
+      create(context) {
+        return {
+          ImportDeclaration(node) {
+            if (node.source.value !== DISCORD_JS_SOURCE || node.importKind === "type") return;
+            for (const specifier of node.specifiers) {
+              if (specifier.type !== "ImportSpecifier" || specifier.importKind === "type") {
+                continue;
+              }
+              const name = specifier.imported.name;
+              if (!V2_BUILDER_NAMES.has(name)) continue;
+              context.report({ node: specifier, messageId: "useBuildersPackage", data: { name } });
+            }
           },
         };
       },
