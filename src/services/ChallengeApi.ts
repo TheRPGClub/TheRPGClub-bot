@@ -8,6 +8,7 @@ import {
   apiPostOrThrow,
   apiPutOrThrow,
 } from "./RpgClubApiClient.js";
+import type { IChallengeEditionSummary } from "./ChallengeEditionApi.js";
 
 // The Challenge endpoints the bot calls (spec api#376, tickets api#377 and api#378). The
 // shapes are the API's own (snake_case), as its swagger serves them. Every call that acts
@@ -44,6 +45,8 @@ export interface IChallengeAssignment {
   signup_cutoff: string;
   pick_deadline: string;
   reveal: string;
+  /** The latest Edition; null before the first one opens. Served, never sent. */
+  edition?: IChallengeEditionSummary | null;
 }
 
 export interface IChallenge {
@@ -64,6 +67,8 @@ export interface IChallenge {
   run_count?: number | null;
   hidden: boolean;
   ended_at?: string | null;
+  /** The Challenge's colours (`#rrggbb`), served on every Challenge. */
+  tint?: { fill: string; hi: string } | null;
 }
 
 export interface IChallengeWarning {
@@ -135,6 +140,14 @@ export interface IChallengeRun {
   entries?: IChallengeRunEntry[];
   /** Slots only. */
   slots?: IChallengeRunSlots | null;
+  /** Assignment only: the Edition the Run was drawn in. */
+  edition?: { id: number; year: number } | null;
+  /** Assignment only: the game picked (null before the reveal) and the Santa (hidden). */
+  assignment?: {
+    game?: IGameSummary | null;
+    picked_randomly?: boolean | null;
+    santa?: IChallengeMember | null;
+  } | null;
 }
 
 /** What the member should know about a Run they just started (`birth_year_shown`). */
@@ -191,6 +204,7 @@ export interface IChallengeApi {
   listChallenges(params: {
     actingUserId: string;
     open?: boolean;
+    challengeFormat?: ChallengeFormat;
     page: number;
     per: number;
   }): Promise<IPage<IChallenge>>;
@@ -269,11 +283,12 @@ const CHALLENGES_PATH = "/api/v1/challenges";
 const RUNS_PATH = "/api/v1/challenge_runs";
 
 export const CHALLENGE_API: IChallengeApi = {
-  async listChallenges({ actingUserId, open, page, per }) {
+  async listChallenges({ actingUserId, open, challengeFormat, page, per }) {
     const payload = await apiGetOrThrow<{ data: IChallenge[]; meta?: PageMeta }>(
       withQuery(CHALLENGES_PATH, {
         acting_user_id: actingUserId,
         open: open === undefined ? undefined : String(open),
+        challenge_format: challengeFormat,
         page,
         per,
       }),

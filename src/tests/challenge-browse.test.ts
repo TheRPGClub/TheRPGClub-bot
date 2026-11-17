@@ -115,7 +115,12 @@ test("show by game: each Pool game with who Cleared it and who has it In Progres
     "-# Pool · 38 games · Clear 3 · Seasonal, 22 September to 21 December · " +
       `Open, closes <t:${closes}:R>`,
   ), text);
-  assert.match(text, /^-# Hosted by <@111>$/m);
+  // The Host is the header's button, linking to their profile.
+  assert.doesNotMatch(text, /Hosted by/);
+  assert.deepEqual(
+    buttonsOf(view.components).map((b) => [b.label, b.url]).slice(0, 1),
+    [["Kaiserkaze", "https://the-rpg-club-www.vercel.app/members/111"]],
+  );
   assert.match(text, /^### By game · 1 to 4 of 4$/m);
   assert.match(text, /^\*\*Final Fantasy\*\* `1987`\n-# Cleared by ashtear$/m);
   assert.match(text, /^\*\*Final Fantasy IV\*\* `1991`\n-# Cleared by ashtear, tenpenny$/m);
@@ -145,6 +150,7 @@ test("show by game: the buttons flip the view and page through the Pool", async 
   assert.deepEqual(
     buttonsOf(view.components).map((b) => [b.label, b.customId, b.disabled]),
     [
+      ["Kaiserkaze", null, false],
       ["By game", "challenge-show-v1:7:g:2:u", true],
       ["By member", "challenge-show-v1:7:m:1:u", false],
       ["Previous", "challenge-show-v1:7:g:1:u", false],
@@ -162,7 +168,7 @@ test("show by member: each Run with its status and progress", async () => {
   assert.match(text, /^\*\*tenpenny\*\* · Active · 1 of 3 Cleared · 1 In Progress$/m);
   assert.match(text, /^\*\*Zeal\*\* · Abandoned · 1 of 3 Cleared · 1 In Progress$/m);
   const labels = buttonsOf(view.components).map((b) => [b.label, b.disabled]);
-  assert.deepEqual(labels.slice(0, 2), [["By game", false], ["By member", true]]);
+  assert.deepEqual(labels.slice(1, 3), [["By game", false], ["By member", true]]);
 });
 
 test("show by member: no Runs yet says so", async () => {
@@ -186,6 +192,14 @@ test("show: a Closed Seasonal Challenge says when it opens", async () => {
 
   const opens = Math.floor(Date.parse("2027-06-21T04:00:00Z") / 1000);
   assert.ok(textOf(view.components).includes(`Closed, opens <t:${opens}:R>`));
+});
+
+test("show: a club-hosted Challenge names the club, with no Host button", async () => {
+  const challenge = poolChallenge({ hosted_by_club: true, host: null });
+  const view = await show(fakeApi({ challenge, games }));
+
+  assert.match(textOf(view.components), /^-# Hosted by the club$/m);
+  assert.equal(buttonsOf(view.components)[0]?.label, "By game");
 });
 
 test("show: a hidden Challenge is marked for those who may see it", async () => {

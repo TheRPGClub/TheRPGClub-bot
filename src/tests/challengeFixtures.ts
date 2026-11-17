@@ -5,6 +5,7 @@ import type {
   IChallengeRunEntry,
   IGameSummary,
 } from "../services/ChallengeApi.js";
+import type { IChallengeEdition } from "../services/ChallengeEditionApi.js";
 
 // Shared fixtures for the Challenge tests: a Pool Challenge as the API serves it, and a
 // reader for the Components V2 JSON the Challenge views and posts are built from.
@@ -63,6 +64,59 @@ export function poolRun(overrides: Partial<IChallengeRun> = {}): IChallengeRun {
   };
 }
 
+/** The club's Secret Santa: an Assignment Challenge whose 2026 Edition takes sign-ups. */
+export function santaChallenge(overrides: Partial<IChallenge> = {}): IChallenge {
+  return poolChallenge({
+    id: 9,
+    name: "Secret Santa",
+    description: "The club's yearly gift exchange.",
+    challenge_format: "assignment",
+    hosted_by_club: true,
+    host: null,
+    schedule: "always_open",
+    season: null,
+    pool: null,
+    assignment: {
+      signup_cutoff: "12-01",
+      pick_deadline: "12-15",
+      reveal: "12-25",
+      edition: {
+        id: 12,
+        year: 2026,
+        phase: "signup",
+        signup_opens_on: "2025-12-26",
+        signup_cutoff_on: "2026-12-01",
+        pick_deadline_on: "2026-12-15",
+        reveal_on: "2026-12-25",
+        ends_on: "2027-12-25",
+      },
+    },
+    tint: { fill: "#1c6545", hi: "#3fbf8a" },
+    ...overrides,
+  });
+}
+
+/** Secret Santa's 2026 Edition, in sign-up with 14 members. */
+export function santaEdition(overrides: Partial<IChallengeEdition> = {}): IChallengeEdition {
+  return {
+    id: 12,
+    year: 2026,
+    phase: "signup",
+    challenge: { id: 9, name: "Secret Santa" },
+    signup_opens_on: "2025-12-26",
+    signup_cutoff_on: "2026-12-01",
+    pick_deadline_on: "2026-12-15",
+    reveal_on: "2026-12-25",
+    ends_on: "2027-12-25",
+    signup_open: true,
+    signed_up_count: 14,
+    signed_up: false,
+    members: [],
+    drawn_at: null,
+    ...overrides,
+  };
+}
+
 /** Years Alive: a club-hosted Slots Challenge from each member's birth year to now. */
 export function slotsChallenge(overrides: Partial<IChallenge> = {}): IChallenge {
   return poolChallenge({
@@ -81,7 +135,8 @@ export function slotsChallenge(overrides: Partial<IChallenge> = {}): IChallenge 
 }
 
 /**
- * Tamsin's Run of Years Alive from 1994: every year Cleared but the years in `open` (titles are "Game <year>", game IDs the year), plus an In Progress game.
+ * Tamsin's Run of Years Alive from 1994: every year Cleared but the years in `open` (titles
+ * are "Game <year>", game IDs the year), plus an In Progress game.
  */
 export function slotsRun(
   options: { first?: number; last?: number; open?: number[]; growing?: boolean } = {},

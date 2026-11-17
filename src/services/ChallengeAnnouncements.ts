@@ -11,7 +11,7 @@ import {
   MessageFlags,
   type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
-import type { Client } from "discord.js";
+import type { Client, MessageCreateOptions } from "discord.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
   clubToday,
@@ -34,6 +34,7 @@ import { DISCORD_SELECT_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimi
 import { logError } from "../utilities/LogUtils.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { composeYearStrip, stripTiles } from "./ChallengeSlotsImage.js";
+import { getUserEmojiString } from "./UserEmojiService.js";
 import {
   CHALLENGE_API,
   poolDefinitionOf,
@@ -42,10 +43,17 @@ import {
   type IPage,
   type IPoolDefinition,
 } from "./ChallengeApi.js";
+import { CHALLENGE_EDITION_API, type ISignupPost } from "./ChallengeEditionApi.js";
+import {
+  buildSignUpButton,
+  editionRuleLine,
+  signupEditionOf,
+  storeSignupPost,
+} from "./ChallengeSignupPosts.js";
 
 // The #challenges posts (spec api#376). This file holds the new-Challenge post
-// (`challenge_created`, design 1B "Cover wall", with a year strip for Slots); later
-// tickets add the other events.
+// (`challenge_created`, design 1B "Cover wall", with a year strip for Slots), the post
+// type and the jobs' deps; the other events live in their own files.
 
 /** A Components V2 post; mentions in it never ping. */
 export interface IChallengePost {
@@ -54,16 +62,42 @@ export interface IChallengePost {
   allowedMentions: { parse: [] };
   /** Images the post shows by `attachment://<name>`. */
   files?: { name: string; data: Buffer }[];
+  /** A message in the same channel to reply to; posts plainly when it is gone. */
+  replyTo?: string;
 }
 
-/** What the Challenge jobs may do: post in a channel and read games and their covers. */
+/**
+ * What the Challenge jobs may do: post in a channel, DM a member, read games, their
+ * covers and members' avatar emojis, and store an Edition's sign-up post.
+ */
 export interface IChallengeJobDeps {
-  /** Posts to a text channel. Throws the discord.js error, or when it can't hold posts. */
-  postMessage(channelId: string, post: IChallengePost): Promise<void>;
+  /**
+   * Posts to a text channel and returns the posted message's ID. Throws the discord.js
+   * error, or when the channel can't hold posts.
+   */
+  postMessage(channelId: string, post: IChallengePost): Promise<string | void>;
+  /** Stores where an Edition's sign-up opening post is (PUT .../signup_post). */
+  storeSignupPost(editionId: number, post: ISignupPost): Promise<void>;
   /** The games a Pool resolves to, for its covers when the payload carries none. */
   poolPreview(pool: IPoolDefinition, page: number, per: number): Promise<IPage<IGameSummary>>;
   /** A game's cover image, or null without one (errors logged, never thrown). */
   coverImage(gameId: number): Promise<Buffer | null>;
+  /** DMs a member. Throws the discord.js error (closed DMs: code 50007). */
+  sendDm(userId: string, post: IChallengePost): Promise<void>;
+  /** The member's avatar emoji (`<:name:id>`), or null when they have none yet. */
+  memberEmoji(userId: string): string | null;
+}
+
+/** A post as discord.js sends it: files attached, and a reply that never fails the send. */
+function discordMessage(post: IChallengePost): MessageCreateOptions {
+  const { files, replyTo, ...message } = post;
+  return {
+    ...message,
+    ...(files?.length
+      ? { files: files.map((file) => ({ attachment: file.data, name: file.name })) }
+      : {}),
+    ...(replyTo ? { reply: { messageReference: replyTo, failIfNotExists: false } } : {}),
+  };
 }
 
 export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
@@ -73,16 +107,18 @@ export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
       if (!channel || !channel.isSendable()) {
         throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
       }
-      const { files, ...message } = post;
-      await channel.send({
-        ...message,
-        ...(files?.length
-          ? { files: files.map((file) => ({ attachment: file.data, name: file.name })) }
-          : {}),
-      });
+      const sent = await channel.send(discordMessage(post));
+      return sent.id;
     },
+    storeSignupPost: (editionId, post) =>
+      CHALLENGE_EDITION_API.storeSignupPost(editionId, post),
     poolPreview: (pool, page, per) => CHALLENGE_API.poolPreview(pool, page, per),
     coverImage: async (gameId) => (await fetchGameCoverBuffer(gameId))?.buffer ?? null,
+    sendDm: async (userId, post) => {
+      const user = await client.users.fetch(userId);
+      await user.send(discordMessage(post));
+    },
+    memberEmoji: (userId) => getUserEmojiString(userId),
   };
 }
 
@@ -114,10 +150,10 @@ function payloadGames(payload: Record<string, unknown>): IGameSummary[] | null {
 
 /**
  * The Pool's first games for the cover wall: the payload's `pool_games` when it has them
- * (the API adds them to `challenge_created`), else the Pool preview's first page. A failed
+ * (`challenge_created` and `season_opened`), else the Pool preview's first page. A failed
  * preview is logged and posts without covers.
  */
-async function coverGames(
+export async function coverGames(
   challenge: IChallenge,
   payload: Record<string, unknown>,
   deps: IChallengeJobDeps,
@@ -163,6 +199,8 @@ export function challengeRuleLines(challenge: IChallenge): string[] {
   const schedule = describeSchedule(challenge);
   lines.push(`**${schedule.label}** ${schedule.value}`);
   if (challenge.slots?.counts_past_play) lines.push(`**Counts past play** ${COUNTS_PAST_PLAY_LINE}`);
+  const edition = signupEditionOf(challenge);
+  if (edition) lines.push(editionRuleLine(edition));
   return lines;
 }
 
@@ -203,6 +241,8 @@ export function buildNewChallengePost(
       .setLabel("Start a Run")
       .setStyle(ButtonStyle.Primary));
   }
+  const signupEdition = signupEditionOf(challenge);
+  if (signupEdition) buttons.push(buildSignUpButton(signupEdition.id));
   const gameCount = challenge.pool?.game_count;
   const hasGames = !!challenge.pool && typeof gameCount === "number" && gameCount > 0;
   if (hasGames) {
@@ -259,6 +299,12 @@ export async function announceNewChallenge(
   const challenge = payloadChallenge(payload);
   const games = await coverGames(challenge, payload, deps);
   const strip = await yearStripOf(challenge);
-  await deps.postMessage(channelId, buildNewChallengePost(challenge, games, strip));
-  return `Announced the new Challenge "${challenge.name}" (${challenge.id}).`;
+  const messageId = await deps.postMessage(
+    channelId,
+    buildNewChallengePost(challenge, games, strip),
+  );
+  // A Secret Santa's first Edition opens with it: this post is its sign-up post.
+  const edition = signupEditionOf(challenge);
+  const note = edition ? await storeSignupPost(edition.id, channelId, messageId, deps) : "";
+  return `Announced the new Challenge "${challenge.name}" (${challenge.id}).${note}`;
 }

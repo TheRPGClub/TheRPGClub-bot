@@ -15,8 +15,8 @@ import {
   listJoin,
   memberName,
 } from "../functions/ChallengeCopy.js";
-import { buildChallengeShowId } from "../functions/ChallengeCustomIds.js";
 import { DISCORD_BUTTON_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
+import { memberProfileUrl } from "../config/website.js";
 import { logError } from "../utilities/LogUtils.js";
 import type { IChallenge, IChallengeRun, IChallengeRunEntry } from "./ChallengeApi.js";
 import {
@@ -117,7 +117,10 @@ async function shelfImage(
   }
 }
 
-/** The post: heading and Challenge, the member's button, the shelf, and the Run in words. */
+/**
+ * The post: heading and Challenge, the member's name linking to their profile, the shelf,
+ * and the Run in words.
+ */
 export function buildRunFinishedPost(
   challenge: Pick<IChallenge, "id" | "name">,
   run: IChallengeRun,
@@ -125,14 +128,9 @@ export function buildRunFinishedPost(
 ): IChallengePost {
   const fileName = `run-finished-${run.id}.png`;
   const member = new ButtonBuilder()
-    .setCustomId(buildChallengeShowId({
-      challengeId: challenge.id,
-      view: "member",
-      page: 1,
-      reply: "new",
-    }))
+    .setURL(memberProfileUrl(run.user.user_id))
     .setLabel(memberName(run.user).slice(0, DISCORD_BUTTON_LABEL_MAX))
-    .setStyle(ButtonStyle.Secondary);
+    .setStyle(ButtonStyle.Link);
   const heading = new SectionBuilder().addTextDisplayComponents(text(
     `## Run Finished\n**${escapeChallengeText(challenge.name)}**`,
   ));

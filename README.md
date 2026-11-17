@@ -106,6 +106,10 @@ Backblaze, and GitHub issues all use the same configuration they use in
 production, so point them at staging values yourself if you do not want a test
 run touching them.
 
+Links to the club website in posts and DMs (a member's profile, a Challenge page)
+use `WEBSITE_BASE_URL`, which defaults to the production site
+(`src/config/website.ts`). Set it to point those links at another deployment.
+
 A pull request is deployed into the test guild by a self-hosted runner only when
 you ask for it with the `/test-guild <pr>` skill in Claude Code, one PR at a time.
 Setup and manual controls are in `docs/pr-preview.md`. The conductor, a

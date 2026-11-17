@@ -7,6 +7,7 @@ import {
   BOT_JOB_MAX_ATTEMPTS,
   BOT_JOB_POLL_INTERVAL_MS,
   BOT_JOB_RESULT_TEXT_MAX,
+  DM_ONLY_JOB_KINDS,
 } from "../config/botJobs.js";
 import { buildAnyErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { isTemporaryJobError } from "./BotJobErrors.js";
@@ -175,7 +176,8 @@ async function performJob(
   const feature = featureKey
     ? { key: featureKey, state: await surface.featureState(featureKey) }
     : null;
-  const posts = feature !== null && routesPosts(feature.key);
+  const posts = feature !== null && routesPosts(feature.key) &&
+    !DM_ONLY_JOB_KINDS.has(job.kind);
   const destination = featurePostDestination(feature?.state ?? null);
   if (posts && destination === "suppressed") {
     logInfo("BotJobService", `Running ${label} with its posts held: ${feature.key} is Off.`);

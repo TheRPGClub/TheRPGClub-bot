@@ -2,6 +2,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ContainerBuilder,
+  SectionBuilder,
   SeparatorBuilder,
   StringSelectMenuBuilder,
   TextDisplayBuilder,
@@ -31,7 +32,12 @@ import {
   type ChallengeShowView,
 } from "../functions/ChallengeCustomIds.js";
 import { CHALLENGE_LIST_PREFIX } from "../config/customIdPrefixes.js";
-import { DISCORD_SELECT_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
+import {
+  DISCORD_BUTTON_LABEL_MAX,
+  DISCORD_SELECT_LABEL_MAX,
+  MAX_CONTAINER_TEXT,
+} from "../config/textLimits.js";
+import { memberProfileUrl } from "../config/website.js";
 import {
   CHALLENGE_API,
   poolDefinitionOf,
@@ -115,13 +121,28 @@ function summaryLine(challenge: IChallenge, now: Date): string {
   return parts.join(" · ");
 }
 
-function headerText(challenge: IChallenge, now: Date): string {
-  const lines = [`## ${escapeChallengeText(challenge.name)}`];
-  if (challenge.description.trim()) lines.push(challenge.description.trim());
-  lines.push(`-# ${summaryLine(challenge, now)}`);
-  lines.push(`-# Hosted by ${hostLabel(challenge)}`);
-  if (challenge.hidden) lines.push("-# Hidden from members by a Moderator");
-  return lines.join("\n");
+/**
+ * The header: name and description, with the Host as a button linking to their profile
+ * (a club-hosted Challenge says so in the subtext instead), then the summary.
+ */
+function addHeader(container: ContainerBuilder, challenge: IChallenge, now: Date): void {
+  const heading = [`## ${escapeChallengeText(challenge.name)}`];
+  if (challenge.description.trim()) heading.push(challenge.description.trim());
+  const sub = [`-# ${summaryLine(challenge, now)}`];
+  const host = challenge.hosted_by_club ? null : challenge.host;
+  if (host) {
+    const section = new SectionBuilder().addTextDisplayComponents(text(heading.join("\n")));
+    section.setButtonAccessory(new ButtonBuilder()
+      .setURL(memberProfileUrl(host.user_id))
+      .setLabel(memberName(host).slice(0, DISCORD_BUTTON_LABEL_MAX))
+      .setStyle(ButtonStyle.Link));
+    container.addSectionComponents(section);
+  } else {
+    container.addTextDisplayComponents(text(heading.join("\n")));
+    sub.push(`-# Hosted by ${hostLabel(challenge)}`);
+  }
+  if (challenge.hidden) sub.push("-# Hidden from members by a Moderator");
+  container.addTextDisplayComponents(text(sub.join("\n")));
 }
 
 async function allRuns(
@@ -286,8 +307,9 @@ export async function buildChallengeShowView(
     ? await byGameText(challenge, page, target.actingUserId, api)
     : await byMemberText(challenge, page, target.actingUserId, api);
 
-  const container = new ContainerBuilder()
-    .addTextDisplayComponents(text(headerText(challenge, now)))
+  const container = new ContainerBuilder();
+  addHeader(container, challenge, now);
+  container
     .addSeparatorComponents(separator())
     .addTextDisplayComponents(text(body.text));
   const id = challenge.id;

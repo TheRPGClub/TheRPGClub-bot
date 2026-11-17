@@ -69,3 +69,5 @@ export const CHALLENGE_RUN_PREFIX = "challenge-run-v1";
 export const CHALLENGE_EDIT_PREFIX = "challenge-edit-v1";
 /** A Slots Run: its decade pages, and moving games or picking past play into its years. */
 export const CHALLENGE_SLOTS_PREFIX = "challenge-slots-v1";
+/** Secret Santa sign-up: join, leave, and confirm leaving after the draw, with the Edition ID. */
+export const CHALLENGE_SANTA_PREFIX = "challenge-santa-v1";

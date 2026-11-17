@@ -248,6 +248,7 @@ function myRunsDeps(runs: IChallengeRun[], covers: Record<number, string> = {}) 
     deps: {
       api,
       now: () => NOW,
+      santaSignups: async () => [],
       coverUrl: async (gameId: number) => {
         coverLookups.push(gameId);
         return covers[gameId] ?? null;

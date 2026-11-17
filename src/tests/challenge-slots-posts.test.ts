@@ -63,6 +63,11 @@ function fakeDeps(options: { covered?: number[] } = {}): IFakeDeps {
     poolPreview: async () => {
       throw new Error("A Slots Challenge has no Pool to preview.");
     },
+    storeSignupPost: async () => {},
+    sendDm: async () => {
+      throw new Error("Slots posts send no DMs.");
+    },
+    memberEmoji: () => null,
   };
   return deps;
 }

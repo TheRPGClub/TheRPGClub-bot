@@ -2,6 +2,7 @@ import {
   CHALLENGE_EDIT_PREFIX,
   CHALLENGE_LIST_PREFIX,
   CHALLENGE_RUN_PREFIX,
+  CHALLENGE_SANTA_PREFIX,
   CHALLENGE_SHOW_PREFIX,
   CHALLENGE_SLOTS_PREFIX,
   CHALLENGE_WIZARD_PREFIX,
@@ -202,4 +203,33 @@ export function parseChallengeSlotsId(customId: string): IChallengeSlotsTarget |
     return null;
   }
   return reply ? { action: known, ids, reply } : { action: known, ids };
+}
+
+/**
+ * Secret Santa sign-up actions, each on an Edition ID: `join` (the posts' Sign up button),
+ * `leave` (asks first once the draw is done), `withdraw` (leaving after the draw, confirmed)
+ * and `stay` (keeping the place after all). Each custom ID is `<prefix>:<action>:<ID>`; the
+ * clicking member is who acts.
+ */
+export const CHALLENGE_SANTA_ACTIONS = ["join", "leave", "withdraw", "stay"] as const;
+
+export type ChallengeSantaAction = (typeof CHALLENGE_SANTA_ACTIONS)[number];
+
+export function buildChallengeSantaId(action: ChallengeSantaAction, editionId: number): string {
+  return `${CHALLENGE_SANTA_PREFIX}:${action}:${editionId}`;
+}
+
+export function parseChallengeSantaId(
+  customId: string,
+): { action: ChallengeSantaAction; editionId: number } | null {
+  const [prefix, action, raw, ...rest] = customId.split(":");
+  const editionId = Number(raw);
+  if (
+    prefix !== CHALLENGE_SANTA_PREFIX || rest.length ||
+    !Number.isInteger(editionId) || editionId < 1
+  ) {
+    return null;
+  }
+  const known = (CHALLENGE_SANTA_ACTIONS as readonly string[]).includes(action ?? "");
+  return known ? { action: action as ChallengeSantaAction, editionId } : null;
 }
