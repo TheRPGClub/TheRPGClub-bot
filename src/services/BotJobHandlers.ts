@@ -1111,9 +1111,8 @@ export const handleChallengeDm: BotJobHandler = async (payload, surface, context
       logError("BotJobHandlers.challenge_dm", err);
       return `Not delivered: member ${dm.userId}'s DMs are closed, so ${dm.about} was not sent.`;
     }
-    throw new Error(`Could not DM member ${dm.userId}: ${describeRequestError(err)}`, {
-      cause: err,
-    });
+    // Temporary (Discord 5xx, rate limited) stays temporary, so the lease retries the DM.
+    throw stepFailed(`DM to member ${dm.userId}`, err);
   }
   return `DMed member ${dm.userId} ${dm.about}.`;
 };

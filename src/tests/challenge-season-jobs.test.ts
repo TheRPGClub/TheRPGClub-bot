@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import sharp from "sharp";
 import { RESTJSONErrorCodes } from "discord-api-types/v10";
+import { DiscordAPIError } from "discord.js";
 import type { IBotJob, IBotJobApi } from "../classes/BotJobs.js";
 import { BOT_DEV_CHANNEL_ID, CHALLENGES_CHANNEL_ID } from "../config/channels.js";
 import type { FeatureState } from "../functions/FeatureGate.js";
@@ -302,6 +303,23 @@ test("season_ending: another DM failure fails the job", async (t) => {
   const acks = await run(deps, "challenge_dm", ending());
 
   assert.equal(acks[0]?.status, "failed");
+});
+
+test("season_ending: a temporary DM failure is left for the lease to retry", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  t.mock.method(console, "log", () => undefined);
+  const discordDown = new DiscordAPIError(
+    { code: 0, message: "Service Unavailable" },
+    0,
+    503,
+    "POST",
+    "https://discord.com/api/v10/channels/1/messages",
+    { body: {}, files: [] },
+  );
+  const deps = fakeDeps({ dmError: discordDown });
+  const acks = await run(deps, "challenge_dm", ending());
+
+  assert.deepEqual(acks, []);
 });
 
 test("challenge_dm: an event this bot does not send fails with its name", async (t) => {
