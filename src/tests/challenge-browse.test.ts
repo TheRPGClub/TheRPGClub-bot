@@ -8,16 +8,14 @@ import {
 import type {
   IChallenge,
   IChallengeRun,
-  IGameSummary,
   IPage,
-  IPoolDefinition,
+  IPoolGameProgress,
 } from "../services/ChallengeApi.js";
 import { describeOpen } from "../functions/ChallengeCopy.js";
 import { buttonsOf, game, poolChallenge, selectsOf, textOf } from "./challengeFixtures.js";
 
 interface IFakeBrowseApi extends IChallengeBrowseApi {
   calls: string[];
-  previews: { pool: IPoolDefinition; page: number; per: number }[];
 }
 
 function page<T>(items: T[], pageNumber: number, per: number): IPage<T> {
@@ -34,11 +32,10 @@ function fakeApi(options: {
   challenge?: IChallenge | null;
   challenges?: IChallenge[];
   runs?: IChallengeRun[];
-  games?: IGameSummary[];
+  games?: IPoolGameProgress[];
 } = {}): IFakeBrowseApi {
   const api: IFakeBrowseApi = {
     calls: [],
-    previews: [],
     getChallenge: async (id, actingUserId) => {
       api.calls.push(`get ${id} as ${actingUserId}`);
       return options.challenge === undefined ? poolChallenge() : options.challenge;
@@ -51,8 +48,8 @@ function fakeApi(options: {
       api.calls.push(`runs ${challengeId} page=${p} per=${per} as ${actingUserId}`);
       return page(options.runs ?? [], p, per);
     },
-    poolPreview: async (pool, p, per) => {
-      api.previews.push({ pool, page: p, per });
+    poolProgress: async (challengeId, actingUserId, p, per) => {
+      api.calls.push(`progress ${challengeId} page=${p} per=${per} as ${actingUserId}`);
       return page(options.games ?? [], p, per);
     },
   };
@@ -79,11 +76,29 @@ function run(
 
 const NOW = new Date("2026-11-17T15:00:00Z");
 
-const games = [
-  game(1, "Final Fantasy", 1987),
-  game(4, "Final Fantasy IV", 1991),
-  game(5, "Final Fantasy V", 1992),
-  game(10, "Final Fantasy X", 2001),
+function member(name: string, runId: number) {
+  return {
+    user_id: String(100 + runId),
+    username: name.toLowerCase(),
+    global_name: name,
+    run_id: runId,
+  };
+}
+
+/** The Pool's progress as the API serves it: who Cleared each game, who plays it. */
+const games: IPoolGameProgress[] = [
+  { ...game(1, "Final Fantasy", 1987), cleared_by: [member("ashtear", 1)], in_progress: [] },
+  {
+    ...game(4, "Final Fantasy IV", 1991),
+    cleared_by: [member("ashtear", 1), member("tenpenny", 2)],
+    in_progress: [],
+  },
+  {
+    ...game(5, "Final Fantasy V", 1992),
+    cleared_by: [member("ashtear", 1), member("Zeal", 3)],
+    in_progress: [member("moogle_mail", 4)],
+  },
+  { ...game(10, "Final Fantasy X", 2001), cleared_by: [], in_progress: [member("tenpenny", 2)] },
 ];
 
 const runs = [
@@ -125,22 +140,16 @@ test("show by game: each Pool game with who Cleared it and who has it In Progres
   assert.match(text, /^### By game · 1 to 4 of 4$/m);
   assert.match(text, /^\*\*Final Fantasy\*\* `1987`\n-# Cleared by ashtear$/m);
   assert.match(text, /^\*\*Final Fantasy IV\*\* `1991`\n-# Cleared by ashtear, tenpenny$/m);
-  // Zeal abandoned, but Cleared it; moogle_mail is still playing it.
   assert.match(
     text,
     /^\*\*Final Fantasy V\*\* `1992`\n-# Cleared by ashtear, Zeal · In Progress: moogle\\_mail$/m,
   );
-  // In Progress counts only on Active Runs.
   assert.match(
     text,
     /^\*\*Final Fantasy X\*\* `2001`\n-# Cleared by nobody yet · In Progress: tenpenny$/m,
   );
-  assert.deepEqual(api.calls, ["get 7 as 42", "runs 7 page=1 per=100 as 42"]);
-  assert.deepEqual(api.previews, [{
-    pool: { franchise_ids: [5], collection_ids: [], included_game_ids: [], excluded_game_ids: [] },
-    page: 1,
-    per: 10,
-  }]);
+  // One page of the Pool's progress: no Runs are read.
+  assert.deepEqual(api.calls, ["get 7 as 42", "progress 7 page=1 per=10 as 42"]);
 });
 
 test("show by game: the buttons flip the view and page through the Pool", async () => {

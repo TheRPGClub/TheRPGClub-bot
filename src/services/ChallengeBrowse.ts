@@ -35,8 +35,6 @@ import { DISCORD_BUTTON_LABEL_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/te
 import { memberProfileUrl } from "../config/website.js";
 import {
   CHALLENGE_API,
-  poolDefinitionOf,
-  readRunPages,
   type IChallenge,
   type IChallengeApi,
   type IChallengeRun,
@@ -45,11 +43,12 @@ import {
 import { plural } from "../utilities/TextUtils.js";
 
 // /challenge list and /challenge show (spec api#376). Show is design 4D "Flip the view":
-// a Pool by game (who Cleared what) or by member (each Run's progress), one page at a time.
+// a Pool by game (who Cleared what, the API's pool_progress) or by member (each Run's
+// progress), one page at a time.
 
 export type IChallengeBrowseApi = Pick<
   IChallengeApi,
-  "getChallenge" | "listChallenges" | "listRuns" | "poolPreview"
+  "getChallenge" | "listChallenges" | "listRuns" | "poolProgress"
 >;
 
 export interface IChallengeBrowseDeps {
@@ -134,40 +133,9 @@ function addHeader(container: ContainerBuilder, challenge: IChallenge, now: Date
   container.addTextDisplayComponents(buildTextDisplay(sub.join("\n")));
 }
 
-function allRuns(
-  api: IChallengeBrowseApi,
-  challengeId: number,
-  actingUserId: string,
-): Promise<IChallengeRun[]> {
-  return readRunPages((page, per) => api.listRuns(challengeId, actingUserId, page, per));
-}
-
 function releaseYear(date: string | null | undefined): string | null {
   const year = date ? new Date(date).getUTCFullYear() : NaN;
   return Number.isFinite(year) ? String(year) : null;
-}
-
-/**
- * Who Cleared each game (on any Run, whatever its status: they did Clear it) and who has
- * it In Progress (Active Runs only: a closed Run's Now Playing is no longer followed).
- */
-function playersByGame(runs: readonly IChallengeRun[]): Map<number, {
-  cleared: string[];
-  inProgress: string[];
-}> {
-  const byGame = new Map<number, { cleared: string[]; inProgress: string[] }>();
-  for (const run of runs) {
-    const name = memberName(run.user);
-    for (const entry of run.entries ?? []) {
-      const players = byGame.get(entry.game_id) ?? { cleared: [], inProgress: [] };
-      const list = entry.state === "cleared"
-        ? players.cleared
-        : run.status === "active" ? players.inProgress : null;
-      if (list && !list.includes(name)) list.push(name);
-      byGame.set(entry.game_id, players);
-    }
-  }
-  return byGame;
 }
 
 function rangeLabel(page: number, shown: number, count: number): string {
@@ -181,16 +149,14 @@ async function byGameText(
   actingUserId: string,
   api: IChallengeBrowseApi,
 ): Promise<{ text: string; pages: number }> {
-  const pool = challenge.pool!;
-  const [games, runs] = await Promise.all([
-    api.poolPreview(poolDefinitionOf(pool), page, CHALLENGE_PAGE_SIZE),
-    allRuns(api, challenge.id, actingUserId),
-  ]);
-  const players = playersByGame(runs);
+  // The API decides who counts: Cleared on a Run of any status, In Progress while the Run
+  // still counts play, for this Season (or the last while Closed).
+  const games = await api.poolProgress(challenge.id, actingUserId, page, CHALLENGE_PAGE_SIZE);
   const lines = [`### By game · ${rangeLabel(page, games.items.length, games.count)}`];
   for (const item of games.items) {
     const year = releaseYear(item.initial_release_date);
-    const { cleared, inProgress } = players.get(item.game_id) ?? { cleared: [], inProgress: [] };
+    const cleared = (item.cleared_by ?? []).map(memberName);
+    const inProgress = (item.in_progress ?? []).map(memberName);
     const who = [`Cleared by ${cleared.length ? names(cleared) : "nobody yet"}`];
     if (inProgress.length) who.push(`In Progress: ${names(inProgress)}`);
     lines.push(

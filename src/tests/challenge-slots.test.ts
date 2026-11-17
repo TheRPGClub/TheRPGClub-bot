@@ -74,7 +74,7 @@ function fakeApi(options: {
       const items = options.runs ?? [];
       return { items, page, pages: 1, count: items.length };
     },
-    poolPreview: async () => ({ items: [], page: 1, pages: 1, count: 0 }),
+    poolProgress: async () => ({ items: [], page: 1, pages: 1, count: 0 }),
     listMemberRuns: async (userId, actingUserId, page) => {
       api.calls.push(`runs of ${userId} as ${actingUserId} page ${page}`);
       const items = options.memberRuns ?? [];
