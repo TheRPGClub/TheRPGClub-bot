@@ -106,12 +106,16 @@ import {
 } from "./ChallengeAnnouncements.js";
 import { announceRunFinished } from "./ChallengeRunFinished.js";
 import {
+  announceSeasonOpened,
+  seasonEndingDm,
+  type IChallengeDm,
+} from "./ChallengeSeasons.js";
+import {
   announceEditionCancelled,
   announceSignupClosed,
   announceSignupClosing,
   announceSignupOpened,
   leftOutOfDrawDm,
-  type IChallengeDm,
 } from "./ChallengeSignupPosts.js";
 
 /**
@@ -1040,6 +1044,7 @@ const CHALLENGE_ANNOUNCERS: Readonly<Record<
 >> = {
   challenge_created: announceNewChallenge,
   run_finished: announceRunFinished,
+  season_opened: announceSeasonOpened,
   signup_opened: announceSignupOpened,
   signup_closing: announceSignupClosing,
   signup_closed: announceSignupClosed,
@@ -1071,33 +1076,40 @@ export const handleChallengeAnnounce: BotJobHandler = async (payload, surface, c
 /** The Challenge DMs, by the payload's `event`; later tickets add their events here. */
 const CHALLENGE_DMS: Readonly<Record<
   string,
-  (payload: Record<string, unknown>) => IChallengeDm
+  (payload: Record<string, unknown>, deps: IChallengeJobDeps) => Promise<IChallengeDm>
 >> = {
+  season_ending: seasonEndingDm,
   left_out_of_draw: leftOutOfDrawDm,
 };
 
 /**
  * Payload `{ event, user_id, challenge, ..., feature_key }` (ChallengeDmJobPayload): DMs
- * the member, in Preview too (only posts move to bot-dev). A member with closed DMs is
- * done with the reason, never retried. An event this bot has no DM for fails the job.
+ * the member, in Preview too (only staff can have Runs then), but not while Challenges is
+ * Off. A member with DMs closed can never get it, so that is acked done with the reason
+ * rather than failed and retried. An event this bot has no DM for fails the job.
  */
-export const handleChallengeDm: BotJobHandler = async (payload, surface) => {
+export const handleChallengeDm: BotJobHandler = async (payload, surface, context) => {
   const event = requireString(payload, "event");
-  const userId = requireString(payload, "user_id");
   const build = Object.hasOwn(CHALLENGE_DMS, event) ? CHALLENGE_DMS[event] : undefined;
-  if (!build) {
-    throw new Error(`This bot has no DM for the Challenge event "${event}".`);
+  if (!build) throw new Error(`This bot has no DM for the Challenge event "${event}".`);
+  const featureKey = POST_FEATURE_KEYS.challenges;
+  if (isSuppressed(await jobFeatureState(featureKey, surface, context))) {
+    return `Not sent: the ${featureKey} Feature is Off.`;
   }
-  const dm = build(payload);
+  const deps = challengeDeps(surface);
+  const dm = await build(payload, deps);
   try {
-    await challengeDeps(surface).sendDm(userId, dm.post);
+    await deps.sendDm(dm.userId, dm.post);
   } catch (err: unknown) {
     if (isClosedDmError(err)) {
-      return `Did not DM <@${userId}> about ${dm.about}: their DMs are closed.`;
+      logError("BotJobHandlers.challenge_dm", err);
+      return `Not delivered: member ${dm.userId}'s DMs are closed, so ${dm.about} was not sent.`;
     }
-    throw err;
+    throw new Error(`Could not DM member ${dm.userId}: ${describeRequestError(err)}`, {
+      cause: err,
+    });
   }
-  return `DMed <@${userId}> about ${dm.about}.`;
+  return `DMed member ${dm.userId} ${dm.about}.`;
 };
 
 export const BOT_JOB_HANDLERS: BotJobHandlers = {

@@ -58,6 +58,7 @@ function fakeDeps(options: { storeError?: unknown; dmError?: unknown } = {}): IF
     },
     poolPreview: async (_pool, page) => ({ items: [], page, pages: 1, count: 0 }),
     coverImage: async () => null,
+    memberEmoji: () => null,
   };
   return deps;
 }

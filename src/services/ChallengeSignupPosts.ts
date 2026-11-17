@@ -15,6 +15,7 @@ import { buildChallengeSantaId } from "../functions/ChallengeCustomIds.js";
 import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import type { IChallengeJobDeps, IChallengePost } from "./ChallengeAnnouncements.js";
+import type { IChallengeDm } from "./ChallengeSeasons.js";
 import type { IChallenge } from "./ChallengeApi.js";
 import { commandMention } from "./CommandMentionService.js";
 import type {
@@ -330,18 +331,19 @@ export async function announceEditionCancelled(
     `(${plural(joined, "member", "members")} could be drawn).`;
 }
 
-/** A Challenge DM to send, and what it is about for the job's result. */
-export interface IChallengeDm {
-  post: IChallengePost;
-  about: string;
-}
-
 /**
  * Payload `{ event: "left_out_of_draw", user_id, challenge, edition, backlog_count,
  * minimum }`: the DM telling a member the draw left them out, and how to be in the next.
  * Sent whatever their Challenge DM setting (it is news about their own sign-up).
  */
-export function leftOutOfDrawDm(payload: Record<string, unknown>): IChallengeDm {
+export async function leftOutOfDrawDm(payload: Record<string, unknown>):
+  Promise<IChallengeDm> {
+  const userId = payload.user_id;
+  if (typeof userId !== "string" || !/^\d+$/.test(userId)) {
+    throw new Error(`Invalid payload: user_id must be a Discord user ID, got ${
+      JSON.stringify(userId)
+    }.`);
+  }
   const edition = payloadEdition(payload);
   const minimum = payloadCount(payload, "minimum");
   const backlog = payloadCount(payload, "backlog_count");
@@ -355,11 +357,13 @@ export function leftOutOfDrawDm(payload: Record<string, unknown>): IChallengeDm 
       (nextOpens ? `, and sign up for ${next} from ${editionDay(nextOpens)}.` : "."),
   ].join("\n");
   return {
+    userId,
     post: {
       components: [new ContainerBuilder().addTextDisplayComponents(text(content)).toJSON()],
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { parse: [] },
     },
-    about: `being left out of ${edition.challenge.name} ${edition.year}`,
+    about: `the left-out notice for "${edition.challenge.name} ${edition.year}" ` +
+      `(Edition ${edition.id})`,
   };
 }

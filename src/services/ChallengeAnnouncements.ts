@@ -27,6 +27,7 @@ import {
 import { DISCORD_SELECT_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
+import { getUserEmojiString } from "./UserEmojiService.js";
 import {
   CHALLENGE_API,
   poolDefinitionOf,
@@ -44,7 +45,8 @@ import {
 } from "./ChallengeSignupPosts.js";
 
 // The #challenges posts (spec api#376). This file holds the new-Challenge post
-// (`challenge_created`, design 1B "Cover wall"); later tickets add the other events.
+// (`challenge_created`, design 1B "Cover wall"), the post type and the jobs' deps; the
+// other events live in their own files.
 
 /** A Components V2 post; mentions in it never ping. */
 export interface IChallengePost {
@@ -58,8 +60,8 @@ export interface IChallengePost {
 }
 
 /**
- * What the Challenge jobs may do: post in a channel, DM a member, read games and their
- * covers, and store an Edition's sign-up post.
+ * What the Challenge jobs may do: post in a channel, DM a member, read games, their
+ * covers and members' avatar emojis, and store an Edition's sign-up post.
  */
 export interface IChallengeJobDeps {
   /**
@@ -67,14 +69,16 @@ export interface IChallengeJobDeps {
    * error, or when the channel can't hold posts.
    */
   postMessage(channelId: string, post: IChallengePost): Promise<string | void>;
-  /** DMs a member. Throws the discord.js error (closed DMs: code 50007). */
-  sendDm(userId: string, post: IChallengePost): Promise<void>;
   /** Stores where an Edition's sign-up opening post is (PUT .../signup_post). */
   storeSignupPost(editionId: number, post: ISignupPost): Promise<void>;
   /** The games a Pool resolves to, for its covers when the payload carries none. */
   poolPreview(pool: IPoolDefinition, page: number, per: number): Promise<IPage<IGameSummary>>;
   /** A game's cover image, or null without one (errors logged, never thrown). */
   coverImage(gameId: number): Promise<Buffer | null>;
+  /** DMs a member. Throws the discord.js error (closed DMs: code 50007). */
+  sendDm(userId: string, post: IChallengePost): Promise<void>;
+  /** The member's avatar emoji (`<:name:id>`), or null when they have none yet. */
+  memberEmoji(userId: string): string | null;
 }
 
 /** A post as discord.js sends it: files attached, and a reply that never fails the send. */
@@ -99,14 +103,15 @@ export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
       const sent = await channel.send(discordMessage(post));
       return sent.id;
     },
-    sendDm: async (userId, post) => {
-      const user = await client.users.fetch(userId);
-      await user.send(discordMessage(post));
-    },
     storeSignupPost: (editionId, post) =>
       CHALLENGE_EDITION_API.storeSignupPost(editionId, post),
     poolPreview: (pool, page, per) => CHALLENGE_API.poolPreview(pool, page, per),
     coverImage: async (gameId) => (await fetchGameCoverBuffer(gameId))?.buffer ?? null,
+    sendDm: async (userId, post) => {
+      const user = await client.users.fetch(userId);
+      await user.send(discordMessage(post));
+    },
+    memberEmoji: (userId) => getUserEmojiString(userId),
   };
 }
 
@@ -138,10 +143,10 @@ function payloadGames(payload: Record<string, unknown>): IGameSummary[] | null {
 
 /**
  * The Pool's first games for the cover wall: the payload's `pool_games` when it has them
- * (the API adds them to `challenge_created`), else the Pool preview's first page. A failed
+ * (`challenge_created` and `season_opened`), else the Pool preview's first page. A failed
  * preview is logged and posts without covers.
  */
-async function coverGames(
+export async function coverGames(
   challenge: IChallenge,
   payload: Record<string, unknown>,
   deps: IChallengeJobDeps,

@@ -2,7 +2,8 @@ import sharp, { type OverlayOptions } from "sharp";
 
 // The Run Finished shelf (design 3B): the Run's Cleared covers standing on a shelf, up to
 // 5 a row, drawn with sharp like the vote collage (collageGenerator). A game without a
-// cover gets a card with its title, and games past the last tile a "+N more" card.
+// cover gets a card with its title, and games past the last tile a "+N more" card. The
+// Season opened post's cover strip (design 2B) draws its tiles the same way.
 
 /** One tile on the shelf: a game (its cover, or null for a title card) or the rest. */
 export type ShelfTile =
@@ -105,6 +106,26 @@ function plank(width: number): Buffer {
       `<rect width="${width}" height="${PLANK_HEIGHT}" rx="4" ry="4" fill="${PLANK}"/>` +
       `<rect width="${width}" height="3" rx="1.5" ry="1.5" fill="${PLANK_EDGE}"/></svg>`,
   );
+}
+
+/**
+ * The Season opened strip (design 2B): the tiles in one row, no shelf, on the same dark
+ * backdrop. Throws when there are no tiles.
+ */
+export async function composeCoverStrip(tiles: readonly ShelfTile[]): Promise<Buffer> {
+  if (!tiles.length) throw new Error("A strip needs at least one tile.");
+  const width = PADDING * 2 + tiles.length * COVER_WIDTH + (tiles.length - 1) * GAP;
+  const height = PADDING * 2 + COVER_HEIGHT;
+  const images = await Promise.all(tiles.map(tileImage));
+  const composites: OverlayOptions[] = images.map((input, index) => ({
+    input,
+    left: PADDING + index * (COVER_WIDTH + GAP),
+    top: PADDING,
+  }));
+  return sharp({ create: { width, height, channels: 4, background: BACKGROUND } })
+    .composite(composites)
+    .png({ compressionLevel: 9 })
+    .toBuffer();
 }
 
 /** The shelf as a PNG. Throws when there are no tiles. */

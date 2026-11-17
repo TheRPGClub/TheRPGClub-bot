@@ -18,3 +18,8 @@ export const BOT_JOB_RESULT_TEXT_MAX = 2000;
  * left unacked for the lease to hand back until this attempt, which acks it failed.
  */
 export const BOT_JOB_MAX_ATTEMPTS = 3;
+/**
+ * Kinds whose Feature routes public posts but which only DM a member, so they carry no
+ * Preview note and are not "posts held" while Off (the handler decides what Off means).
+ */
+export const DM_ONLY_JOB_KINDS: ReadonlySet<string> = new Set(["challenge_dm"]);

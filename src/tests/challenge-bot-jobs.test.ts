@@ -67,7 +67,6 @@ function fakeDeps(options: {
     postMessage: async (channelId, post) => {
       deps.posts.push({ channelId, post });
     },
-    sendDm: async () => {},
     storeSignupPost: async () => {},
     poolPreview: async (pool, page, per): Promise<IPage<IGameSummary>> => {
       deps.previews.push({ pool, page, per });
@@ -75,6 +74,10 @@ function fakeDeps(options: {
       const items = options.preview ?? [];
       return { items, page, pages: 1, count: items.length };
     },
+    sendDm: async () => {
+      throw new Error("The #challenges posts send no DMs.");
+    },
+    memberEmoji: () => null,
   };
   return deps;
 }
@@ -336,10 +339,10 @@ test("run_finished: posts the Run's shelf of Cleared covers in #challenges", asy
     /^Cleared Final Fantasy IX, Final Fantasy VI and Final Fantasy Tactics in 53 days\.$/m,
   );
   assert.match(text, /^-# Run started 23 September · still playing Final Fantasy XII$/m);
-  // The member is named on the button, which opens the Challenge's Runs; never pinged.
+  // The member is named on the button, which links to their profile; never pinged.
   assert.deepEqual(
-    buttonsOf(post.components).map((b) => [b.label, b.customId]),
-    [["Lufia", "challenge-show-v1:7:m:1:n"]],
+    buttonsOf(post.components).map((b) => [b.label, b.url]),
+    [["Lufia", "https://the-rpg-club-www.vercel.app/members/222"]],
   );
   assert.deepEqual(post.allowedMentions, { parse: [] });
   assert.deepEqual(deps.coverLookups, [9, 6, 15]);
