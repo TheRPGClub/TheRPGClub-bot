@@ -348,7 +348,7 @@ const HELP_TOPICS: HelpTopic[] = [
       "/challenge show challenge:<challenge> [view:<game|member>] | " +
       "/challenge edit challenge:<challenge> | /challenge start challenge:<challenge> | " +
       "/challenge my-runs [past:<boolean>] | /challenge abandon run:<run> | " +
-      "/challenge delete-run run:<run>",
+      "/challenge delete-run run:<run> | /challenge dms [set:<on|off>]",
     notes:
       "Regulars and staff create Challenges in two short forms, then pick the franchises " +
       "and collections for the Pool and check its covers before saving. New Challenges are " +
@@ -357,7 +357,9 @@ const HELP_TOPICS: HelpTopic[] = [
       "it to another Host from /challenge edit. Start a Run from /challenge start or a " +
       "post's Start a Run button: your Game Completions and Now Playing fill it in by " +
       "themselves, and /challenge my-runs says what's next. Finished Runs are announced in " +
-      "#challenges. An abandoned Run stays on your profile until you delete it.",
+      "#challenges. An abandoned Run stays on your profile until you delete it. Each " +
+      "Season's opening is posted in #challenges, and a week before a Season ends the bot " +
+      "DMs members whose Run is still going; /challenge dms set:off turns those DMs off.",
   },
   {
     id: "thread",
