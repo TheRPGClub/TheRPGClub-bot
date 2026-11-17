@@ -348,7 +348,9 @@ const HELP_TOPICS: HelpTopic[] = [
       "/challenge show challenge:<challenge> [view:<game|member>] | " +
       "/challenge edit challenge:<challenge> | /challenge start challenge:<challenge> | " +
       "/challenge my-runs [past:<boolean>] | /challenge abandon run:<run> | " +
-      "/challenge delete-run run:<run> | /challenge dms [set:<on|off>]",
+      "/challenge delete-run run:<run> | /challenge dms [set:<on|off>] | " +
+      "/challenge santa join [challenge:<challenge>] | " +
+      "/challenge santa leave [challenge:<challenge>]",
     notes:
       "Regulars and staff create Challenges in two short forms, then pick the franchises " +
       "and collections for the Pool and check its covers before saving. New Challenges are " +
@@ -359,7 +361,10 @@ const HELP_TOPICS: HelpTopic[] = [
       "themselves, and /challenge my-runs says what's next. Finished Runs are announced in " +
       "#challenges. An abandoned Run stays on your profile until you delete it. Each " +
       "Season's opening is posted in #challenges, and a week before a Season ends the bot " +
-      "DMs members whose Run is still going; /challenge dms set:off turns those DMs off.",
+      "DMs members whose Run is still going; /challenge dms set:off turns those DMs off. " +
+      "Secret Santa: sign up with /challenge santa join or the post's Sign up button (you " +
+      "need 5 games in your backlog); /challenge santa leave takes you off before the " +
+      "draw, or drops your pick after it, until the pick deadline.",
   },
   {
     id: "thread",

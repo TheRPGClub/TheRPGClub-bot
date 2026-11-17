@@ -65,6 +65,7 @@ function fakeDeps(options: {
     postMessage: async (channelId, post) => {
       deps.posts.push({ channelId, post });
     },
+    storeSignupPost: async () => {},
     poolPreview: async (_pool, page): Promise<IPage<IGameSummary>> =>
       ({ items: [], page, pages: 1, count: 0 }),
     coverImage: async (gameId) => {

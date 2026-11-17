@@ -67,3 +67,5 @@ export const CHALLENGE_LIST_PREFIX = "challenge-list-v1";
 export const CHALLENGE_RUN_PREFIX = "challenge-run-v1";
 /** /challenge edit: the edit panel's buttons and the Host picker, with the Challenge ID. */
 export const CHALLENGE_EDIT_PREFIX = "challenge-edit-v1";
+/** Secret Santa sign-up: join, leave, and confirm leaving after the draw, with the Edition ID. */
+export const CHALLENGE_SANTA_PREFIX = "challenge-santa-v1";

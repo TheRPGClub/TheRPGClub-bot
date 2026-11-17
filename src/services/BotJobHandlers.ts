@@ -110,6 +110,13 @@ import {
   seasonEndingDm,
   type IChallengeDm,
 } from "./ChallengeSeasons.js";
+import {
+  announceEditionCancelled,
+  announceSignupClosed,
+  announceSignupClosing,
+  announceSignupOpened,
+  leftOutOfDrawDm,
+} from "./ChallengeSignupPosts.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -1038,6 +1045,10 @@ const CHALLENGE_ANNOUNCERS: Readonly<Record<
   challenge_created: announceNewChallenge,
   run_finished: announceRunFinished,
   season_opened: announceSeasonOpened,
+  signup_opened: announceSignupOpened,
+  signup_closing: announceSignupClosing,
+  signup_closed: announceSignupClosed,
+  edition_cancelled: announceEditionCancelled,
 };
 
 /**
@@ -1068,6 +1079,7 @@ const CHALLENGE_DMS: Readonly<Record<
   (payload: Record<string, unknown>, deps: IChallengeJobDeps) => Promise<IChallengeDm>
 >> = {
   season_ending: seasonEndingDm,
+  left_out_of_draw: leftOutOfDrawDm,
 };
 
 /**
