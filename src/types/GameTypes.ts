@@ -18,6 +18,8 @@ export interface IGame {
   coverUrl: string | null;
 }
 
+export type DatePrecision = "day" | "month" | "quarter" | "year" | "tba";
+
 export interface IRelease {
   id: number;
   gameId: number;
@@ -25,6 +27,7 @@ export interface IRelease {
   regionId: number;
   format: "Physical" | "Digital" | null;
   releaseDate: Date | null;
+  datePrecision: DatePrecision;
   notes: string | null;
 }
 

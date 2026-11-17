@@ -31,7 +31,7 @@ function isSendableTextChannel(channel: TextBasedChannel | null): channel is Sen
   return Boolean(channel && typeof (channel as any).send === "function");
 }
 
-function buildAnnouncementPreface(candidate: IReleaseAnnouncementCandidate): string {
+export function buildAnnouncementPreface(candidate: IReleaseAnnouncementCandidate): string {
   const releaseTime = DateTime.fromJSDate(candidate.releaseDate).setZone(RELEASE_SCHEDULING_ZONE);
   const releaseUnix = Math.floor(releaseTime.toSeconds());
   return `## Upcoming Game Release\n<t:${releaseUnix}:F> (<t:${releaseUnix}:R>)`;

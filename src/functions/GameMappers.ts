@@ -1,4 +1,10 @@
-import type { IGame, IRelease, IPlatformDef, IRegionDef } from "../types/GameTypes.js";
+import type {
+  DatePrecision,
+  IGame,
+  IRelease,
+  IPlatformDef,
+  IRegionDef,
+} from "../types/GameTypes.js";
 import type { HltbCacheEntry } from "../classes/HltbCache.js";
 
 export const IGDB_REGION_MAP: Record<number, { code: string; name: string }> = {
@@ -27,6 +33,8 @@ export type ReleaseApiData = {
   region_id: number;
   format: string | null;
   release_date: string | null;
+  // Optional so an API without Date Precision still maps (dated = day, undated = tba).
+  date_precision?: string | null;
   notes: string | null;
 };
 
@@ -108,18 +116,20 @@ export function mapGameRow(row: any): IGame {
 }
 
 export function mapReleaseRow(row: any): IRelease {
+  const releaseDate: Date | null =
+    row.RELEASE_DATE instanceof Date
+      ? row.RELEASE_DATE
+      : row.RELEASE_DATE
+        ? new Date(row.RELEASE_DATE)
+        : null;
   return {
     id: Number(row.RELEASE_ID),
     gameId: Number(row.GAME_ID),
     platformId: Number(row.PLATFORM_ID),
     regionId: Number(row.REGION_ID),
     format: row.FORMAT ? (String(row.FORMAT) as "Physical" | "Digital") : null,
-    releaseDate:
-      row.RELEASE_DATE instanceof Date
-        ? row.RELEASE_DATE
-        : row.RELEASE_DATE
-          ? new Date(row.RELEASE_DATE)
-          : null,
+    releaseDate,
+    datePrecision: mapDatePrecision(row.DATE_PRECISION, Boolean(releaseDate)),
     notes: row.NOTES ? String(row.NOTES) : null,
   };
 }
@@ -132,8 +142,22 @@ export function mapReleaseFromApi(data: ReleaseApiData): IRelease {
     regionId: Number(data.region_id),
     format: data.format ? (data.format as "Physical" | "Digital") : null,
     releaseDate: data.release_date ? new Date(data.release_date) : null,
+    datePrecision: mapDatePrecision(data.date_precision, Boolean(data.release_date)),
     notes: data.notes ?? null,
   };
+}
+
+const DATE_PRECISIONS: readonly DatePrecision[] = ["day", "month", "quarter", "year", "tba"];
+
+function mapDatePrecision(
+  value: string | null | undefined,
+  hasDate: boolean,
+): DatePrecision {
+  if (!hasDate) return "tba";
+  if (value === undefined || value === null) return "day";
+  const known = DATE_PRECISIONS.find((precision) => precision === value);
+  // An unknown precision is never shown as an exact day.
+  return known ?? "tba";
 }
 
 export function mapPlatformFromApi(data: PlatformApiData): IPlatformDef {

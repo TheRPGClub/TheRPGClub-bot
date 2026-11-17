@@ -25,7 +25,7 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-import { formatTableDate } from "../../functions/DateFormatUtils.js";
+import { formatReleaseDate } from "../../functions/DateFormatUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { padCommandName } from "../help.command.js";
 import type { IGame, IRelease } from "../../types/GameTypes.js";
@@ -96,10 +96,16 @@ export function trimTextDisplayContent(content: string): string {
   return truncateWithEllipsis(content, 4000);
 }
 
+// Only day Releases count toward the earliest release date: a vague Release's stored date
+// is the first day of its period, which would invent a day the game never had.
 export function isGameReleased(game: IGame, releases: IRelease[]): boolean {
   const releaseDates: Date[] = [];
   for (const release of releases) {
-    if (release.releaseDate instanceof Date && !Number.isNaN(release.releaseDate.getTime())) {
+    if (
+      release.datePrecision === "day" &&
+      release.releaseDate instanceof Date &&
+      !Number.isNaN(release.releaseDate.getTime())
+    ) {
       releaseDates.push(release.releaseDate);
     }
   }
@@ -118,6 +124,35 @@ export function isGameReleased(game: IGame, releases: IRelease[]): boolean {
     .map((releaseDate) => releaseDate.getTime())
     .reduce((earliest, current) => (current < earliest ? current : earliest));
   return earliestReleaseTimestamp <= Date.now();
+}
+
+// Where a Release sits in the Releases table, following the Release Calendar's placement:
+// a month before day 1 of its month, a quarter after its last day, a year after its Q4,
+// and TBA last. Each key is [UTC timestamp, tie-break rank].
+function releaseSortKey(release: IRelease): [number, number] {
+  const date = release.releaseDate;
+  if (!date || Number.isNaN(date.getTime()) || release.datePrecision === "tba") {
+    return [Number.POSITIVE_INFINITY, 0];
+  }
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  switch (release.datePrecision) {
+    case "month":
+      return [Date.UTC(year, month, 1), 0];
+    case "quarter":
+      return [Date.UTC(year, Math.floor(month / 3) * 3 + 3, 1), -2];
+    case "year":
+      return [Date.UTC(year + 1, 0, 1), -1];
+    default:
+      return [date.getTime(), 1];
+  }
+}
+
+function compareReleasesByDate(a: IRelease, b: IRelease): number {
+  const [aTime, aRank] = releaseSortKey(a);
+  const [bTime, bRank] = releaseSortKey(b);
+  if (aTime !== bTime) return aTime < bTime ? -1 : 1;
+  return aRank - bRank;
 }
 
 export function buildGameProfileActionRow(
@@ -341,11 +376,7 @@ export async function buildGameProfile(
     let releasesByDate: Map<string, string[]> | null = null;
 
     if (releases.length > 0) {
-      const sortedReleases = [...releases].sort((a, b) => {
-        const aTime = a.releaseDate ? a.releaseDate.getTime() : Number.POSITIVE_INFINITY;
-        const bTime = b.releaseDate ? b.releaseDate.getTime() : Number.POSITIVE_INFINITY;
-        return aTime - bTime;
-      });
+      const sortedReleases = [...releases].sort(compareReleasesByDate);
 
       const releaseMap = new Map<string, string[]>();
       sortedReleases.forEach((r) => {
@@ -353,7 +384,7 @@ export async function buildGameProfile(
           ?? "Unknown Platform").trim();
         const regionName = (r.regionName || "Unknown Region").trim();
         const regionSuffix = regionName === "Worldwide" ? "" : ` (${regionName})`;
-        const releaseDate = r.releaseDate ? formatTableDate(r.releaseDate) : "TBD";
+        const releaseDate = formatReleaseDate(r.releaseDate, r.datePrecision);
         const format = r.format ? `(${r.format}) ` : "";
         const platformLabel = `${platformName} ${regionSuffix}${format}`.trim();
         const list = releaseMap.get(releaseDate) ?? [];

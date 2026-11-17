@@ -40,6 +40,7 @@ export type RelationReleaseApiData = {
   region_id: number;
   format: string | null;
   release_date: string | null;
+  date_precision?: string | null;
   notes: string | null;
   platform_name: string | null;
   region_name: string | null;
