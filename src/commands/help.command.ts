@@ -348,7 +348,8 @@ const HELP_TOPICS: HelpTopic[] = [
       "/challenge show challenge:<challenge> [view:<game|member>] | " +
       "/challenge edit challenge:<challenge> | /challenge start challenge:<challenge> | " +
       "/challenge my-runs [past:<boolean>] | /challenge abandon run:<run> | " +
-      "/challenge delete-run run:<run>",
+      "/challenge delete-run run:<run> | /challenge santa join [challenge:<challenge>] | " +
+      "/challenge santa leave [challenge:<challenge>]",
     notes:
       "Regulars and staff create Challenges in two short forms, then pick the franchises " +
       "and collections for the Pool and check its covers before saving. New Challenges are " +
@@ -357,7 +358,10 @@ const HELP_TOPICS: HelpTopic[] = [
       "it to another Host from /challenge edit. Start a Run from /challenge start or a " +
       "post's Start a Run button: your Game Completions and Now Playing fill it in by " +
       "themselves, and /challenge my-runs says what's next. Finished Runs are announced in " +
-      "#challenges. An abandoned Run stays on your profile until you delete it.",
+      "#challenges. An abandoned Run stays on your profile until you delete it. Secret " +
+      "Santa: sign up with /challenge santa join or the post's Sign up button (you need 5 " +
+      "games in your backlog); /challenge santa leave takes you off before the draw, or " +
+      "drops your pick after it, until the pick deadline.",
   },
   {
     id: "thread",

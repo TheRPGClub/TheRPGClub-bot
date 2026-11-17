@@ -67,6 +67,8 @@ function fakeDeps(options: {
     postMessage: async (channelId, post) => {
       deps.posts.push({ channelId, post });
     },
+    sendDm: async () => {},
+    storeSignupPost: async () => {},
     poolPreview: async (pool, page, per): Promise<IPage<IGameSummary>> => {
       deps.previews.push({ pool, page, per });
       if (options.previewError) throw options.previewError;
