@@ -1,6 +1,10 @@
 import { AxiosError, AxiosHeaders, type AxiosResponse } from "axios";
 import type { IChallenge, IChallengeRun, IGameSummary } from "../services/ChallengeApi.js";
-import type { IChallengeEdition } from "../services/ChallengeEditionApi.js";
+import type {
+  IChallengeEdition,
+  ISantaBacklogEntry,
+  ISantaView,
+} from "../services/ChallengeEditionApi.js";
 
 // Shared fixtures for the Challenge tests: a Pool Challenge as the API serves it, and a
 // reader for the Components V2 JSON the Challenge views and posts are built from.
@@ -108,6 +112,47 @@ export function santaEdition(overrides: Partial<IChallengeEdition> = {}): IChall
     signed_up: false,
     members: [],
     drawn_at: null,
+    ...overrides,
+  };
+}
+
+/** A game in the recipient's backlog, on a platform. */
+export function backlogEntry(
+  id: number,
+  title: string,
+  platform: string | null = "PlayStation 2",
+): ISantaBacklogEntry {
+  return {
+    entry_id: 500 + id,
+    gamedb_game_id: id,
+    platform_id: platform ? 7 : null,
+    game: game(id, title),
+    platform: platform ? { platform_id: 7, platform_name: platform } : null,
+  };
+}
+
+/** Kaiserkaze's side as Lufia's Santa in the 2026 Edition: picking, nothing picked yet. */
+export function santaView(overrides: Partial<ISantaView> = {}): ISantaView {
+  return {
+    edition_id: 12,
+    year: 2026,
+    recipient: { user_id: "101", username: "lufia", global_name: "Lufia" },
+    taste: {
+      genres: [
+        { genre_id: 1, name: "Role-playing (RPG)" },
+        { genre_id: 2, name: "Adventure" },
+        { genre_id: 3, name: "Strategy" },
+      ],
+      platform: { platform_id: 7, platform_name: "PlayStation 2" },
+    },
+    pick: null,
+    pick_deadline_on: "2026-12-15",
+    picks_open: true,
+    backlog: [
+      backlogEntry(1, "Shadow Hearts: Covenant"),
+      backlogEntry(2, "Dragon Quest XI S", "Nintendo Switch"),
+      backlogEntry(3, "Chained Echoes", null),
+    ],
     ...overrides,
   };
 }

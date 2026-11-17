@@ -307,9 +307,9 @@ test("season_ending: another DM failure fails the job", async (t) => {
 test("challenge_dm: an event this bot does not send fails with its name", async (t) => {
   t.mock.method(console, "error", () => undefined);
   const deps = fakeDeps();
-  const acks = await run(deps, "challenge_dm", ending({ event: "pick_reminder" }));
+  const acks = await run(deps, "challenge_dm", ending({ event: "gift_wrapped" }));
 
   assert.equal(acks[0]?.status, "failed");
-  assert.match(acks[0]?.status === "failed" ? acks[0].error : "", /pick_reminder/);
+  assert.match(acks[0]?.status === "failed" ? acks[0].error : "", /gift_wrapped/);
   assert.deepEqual(deps.dms, []);
 });

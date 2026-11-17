@@ -69,3 +69,5 @@ export const CHALLENGE_RUN_PREFIX = "challenge-run-v1";
 export const CHALLENGE_EDIT_PREFIX = "challenge-edit-v1";
 /** Secret Santa sign-up: join, leave, and confirm leaving after the draw, with the Edition ID. */
 export const CHALLENGE_SANTA_PREFIX = "challenge-santa-v1";
+/** A Santa's pick: open, page, search and choose, with the Edition ID, page and search. */
+export const CHALLENGE_SANTA_PICK_PREFIX = "challenge-santa-pick-v1";

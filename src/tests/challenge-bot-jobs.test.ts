@@ -278,11 +278,11 @@ test("challenge_created: a Secret Santa has no Start a Run (its Runs come from a
 test("challenge_announce: an event this bot does not post yet fails with its name", async (t) => {
   t.mock.method(console, "error", () => undefined);
   const deps = fakeDeps();
-  const acks = await run(deps, { ...created(), event: "edition_revealed" });
+  const acks = await run(deps, { ...created(), event: "gift_wrapped" });
 
   const ack = acks[0];
   assert.equal(ack?.status, "failed");
-  assert.match(ack?.status === "failed" ? ack.error : "", /edition_revealed/);
+  assert.match(ack?.status === "failed" ? ack.error : "", /gift_wrapped/);
   assert.deepEqual(deps.posts, []);
 });
 

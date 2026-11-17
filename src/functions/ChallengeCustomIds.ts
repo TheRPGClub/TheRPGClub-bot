@@ -2,6 +2,7 @@ import {
   CHALLENGE_EDIT_PREFIX,
   CHALLENGE_LIST_PREFIX,
   CHALLENGE_RUN_PREFIX,
+  CHALLENGE_SANTA_PICK_PREFIX,
   CHALLENGE_SANTA_PREFIX,
   CHALLENGE_SHOW_PREFIX,
   CHALLENGE_WIZARD_PREFIX,
@@ -166,4 +167,54 @@ export function parseChallengeSantaId(
   }
   const known = (CHALLENGE_SANTA_ACTIONS as readonly string[]).includes(action ?? "");
   return known ? { action: action as ChallengeSantaAction, editionId } : null;
+}
+
+/**
+ * A Santa's pick, on an Edition: `open` (the reminder DM's Pick now: a new private reply),
+ * `page` (another page, or the whole list again), `search` (opens the search modal),
+ * `search-modal` (its submit) and `choose` (the select: records the pick). Each custom ID
+ * is `<prefix>:<action>:<Edition ID>:<page>[:<search>]`, the search last so it may hold
+ * colons; the clicking member is the Santa.
+ */
+export const SANTA_PICK_ACTIONS = ["open", "page", "search", "search-modal", "choose"] as const;
+
+export type SantaPickAction = (typeof SANTA_PICK_ACTIONS)[number];
+
+export interface ISantaPickTarget {
+  action: SantaPickAction;
+  editionId: number;
+  /** 1-based; 0 only on a disabled Previous button. */
+  page: number;
+  /** The backlog search, "" for the whole list. */
+  query: string;
+}
+
+/** Search words kept in a custom ID, so it stays within Discord's 100 characters. */
+export const SANTA_PICK_QUERY_MAX = 40;
+
+export function buildSantaPickId(
+  action: SantaPickAction,
+  editionId: number,
+  page = 1,
+  query = "",
+): string {
+  const parts = [CHALLENGE_SANTA_PICK_PREFIX, action, editionId, page];
+  const search = query.slice(0, SANTA_PICK_QUERY_MAX);
+  return (search ? [...parts, search] : parts).join(":");
+}
+
+export function parseSantaPickId(customId: string): ISantaPickTarget | null {
+  const [prefix, action, rawEdition, rawPage, ...rest] = customId.split(":");
+  const editionId = Number(rawEdition);
+  const page = Number(rawPage);
+  if (
+    prefix !== CHALLENGE_SANTA_PICK_PREFIX ||
+    !Number.isInteger(editionId) || editionId < 1 || !Number.isInteger(page) || page < 1
+  ) {
+    return null;
+  }
+  const known = (SANTA_PICK_ACTIONS as readonly string[]).includes(action ?? "");
+  return known
+    ? { action: action as SantaPickAction, editionId, page, query: rest.join(":") }
+    : null;
 }
