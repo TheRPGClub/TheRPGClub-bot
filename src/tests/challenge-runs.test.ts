@@ -107,11 +107,11 @@ test("start: a Run that Finishes at once says so", async () => {
   assert.match(text, /Your play earlier this Season already Finished it\./);
 });
 
+// birth_date_required asks for the Birth Date instead (challenge-slots-runs.test.ts).
 for (const [code, message] of [
   ["season_run_exists", "You already have a Run of this Challenge this Season."],
   ["run_active", "You already have an Active Run of this Challenge."],
   ["challenge_closed", "This Challenge is Closed."],
-  ["birth_date_required", "Set your Birth Date first: this Challenge starts in your birth year."],
 ] as const) {
   test(`start: a 409 ${code} shows the API's message with the exchange`, async () => {
     const error = apiError(409, { error: code, message }, {

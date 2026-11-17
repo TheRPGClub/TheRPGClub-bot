@@ -152,7 +152,7 @@ function bodyString(data: unknown, key: string): string | null {
  * The friendly line for a refusal the member or staff can act on, or null for an error the
  * command's error reply should show.
  */
-function refusalLine(err: unknown, targetUserId: string): string | null {
+export function birthDateRefusalLine(err: unknown, targetUserId: string): string | null {
   const response = responseOf(err);
   if (!response) return null;
   const message = bodyString(response.data, "error");
@@ -192,7 +192,7 @@ export async function birthDateReply(
     const document = await api.setBirthDate(input.targetUserId, birthDate, input.actingUserId);
     return changedReply(document, own, input.targetUserId);
   } catch (err: unknown) {
-    const friendly = refusalLine(err, input.targetUserId);
+    const friendly = birthDateRefusalLine(err, input.targetUserId);
     if (!friendly) throw err;
     return buildApiErrorMessage(friendly, err, { devPing: false });
   }

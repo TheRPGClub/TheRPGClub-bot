@@ -62,15 +62,21 @@ export function canModerate(interaction: AnyRepliable): boolean {
     memberHasPermission(interaction, PermissionsBitField.Flags.Administrator);
 }
 
-/** A modal's answers by input ID: text as typed, radio groups as their value or null. */
+/**
+ * A modal's answers by input ID: text as typed, radio groups as their value or null, and
+ * checkbox groups as their first ticked value or null.
+ */
 export function readModalFields(
   interaction: ModalSubmitInteraction,
   radioIds: readonly string[] = [],
+  checkboxIds: readonly string[] = [],
 ): Record<string, string | null> {
   const fields: Record<string, string | null> = {};
   for (const [id, data] of interaction.fields.fields) {
     if (radioIds.includes(id)) {
       fields[id] = interaction.fields.getRadioGroup(id) ?? null;
+    } else if (checkboxIds.includes(id)) {
+      fields[id] = interaction.fields.getCheckboxGroup(id)[0] ?? null;
     } else if ("value" in data && typeof data.value === "string") {
       fields[id] = data.value;
     }

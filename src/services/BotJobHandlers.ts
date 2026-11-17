@@ -105,6 +105,7 @@ import {
   type IChallengeJobDeps,
 } from "./ChallengeAnnouncements.js";
 import { announceRunFinished } from "./ChallengeRunFinished.js";
+import { announceRunCaughtUp } from "./ChallengeCaughtUp.js";
 import {
   announceSeasonOpened,
   seasonEndingDm,
@@ -1046,6 +1047,7 @@ const CHALLENGE_ANNOUNCERS: Readonly<Record<
 >> = {
   challenge_created: announceNewChallenge,
   run_finished: announceRunFinished,
+  run_caught_up: announceRunCaughtUp,
   season_opened: announceSeasonOpened,
   signup_opened: announceSignupOpened,
   signup_closing: announceSignupClosing,

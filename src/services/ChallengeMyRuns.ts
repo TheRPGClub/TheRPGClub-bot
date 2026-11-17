@@ -1,19 +1,29 @@
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
   ContainerBuilder,
   SectionBuilder,
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
-import { MessageFlags } from "discord-api-types/v10";
+import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
-import { CHALLENGE_FORMAT_INKS, clubToday } from "../functions/ChallengeCopy.js";
+import {
+  CHALLENGE_FORMAT_INKS,
+  clubToday,
+  escapeChallengeText,
+  listJoin,
+} from "../functions/ChallengeCopy.js";
+import { buildChallengeSlotsId } from "../functions/ChallengeCustomIds.js";
+import { clearedEntries, nextSlotYear, openYears } from "../functions/ChallengeSlotsCopy.js";
 import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { fetchGameCoverUrl } from "./GameImageService.js";
 import { commandMention } from "./CommandMentionService.js";
 import type { IChallengeView } from "./ChallengeBrowse.js";
-import { CHALLENGE_API, type IChallengeRun } from "./ChallengeApi.js";
+import { CHALLENGE_API, type IChallenge, type IChallengeRun } from "./ChallengeApi.js";
 import type { IChallengeEdition } from "./ChallengeEditionApi.js";
 import { assignmentAdvice, signedUpEditions, signedUpLine } from "./ChallengeSignup.js";
+import { fetchReleaseYears } from "./ChallengeSlotActions.js";
 import {
   boldTitles,
   entriesIn,
@@ -27,24 +37,38 @@ import {
 
 // /challenge my-runs (spec api#376, bot#1547), design 5C "What's next": each Active Run
 // as advice (what is left, and which game you're playing would count), past Runs behind
-// the `past` option. Secret Santa Runs say where the gift is, and an Edition the member
-// signed up for shows until its draw (bot#1551). Slots advice comes with bot#1550; until
-// then its Runs show their progress plainly.
+// the `past` option. Slots Runs (bot#1550) name their open years, which game In Progress
+// fits one, and offer moving a game and picking past play. Secret Santa Runs say where the
+// gift is, and an Edition the member signed up for shows until its draw (bot#1551).
 
 export interface IMyRunsDeps {
   api?: Pick<IChallengeRunsApi, "listMemberRuns">;
   now?: () => Date;
   /** A game's cover image URL, for the Run's thumbnail; null without one. */
   coverUrl?: (gameId: number) => Promise<string | null>;
+  /** A Slots Run's Challenge, for Counts past play; null when it can't be read. */
+  challenge?: (challengeId: number, actingUserId: string) => Promise<IChallenge | null>;
+  /** A game's release years, for which open year an In Progress game fits. */
+  releaseYears?: (gameId: number) => Promise<number[] | null>;
   /** The Secret Santa Editions in sign-up the member joined. */
   santaSignups?: (userId: string) => Promise<IChallengeEdition[]>;
+}
+
+/** A Slots Run's Challenge and its In Progress games' release years, read for its card. */
+interface ISlotsFacts {
+  countsPastPlay: boolean;
+  released: Map<number, number[] | null>;
 }
 
 /** Runs read per request, and at most this many requests. */
 const RUNS_PER_REQUEST = 100;
 const RUNS_MAX_REQUESTS = 5;
-/** Active Runs shown as cards (4 components each, within Discord's 40). */
+/** Active Runs shown as cards, while their components fit Discord's 40. */
 const ACTIVE_CARDS_MAX = 8;
+const COMPONENTS_MAX = 40;
+/** Open years named before "and N more", and In Progress games named on a Slots card. */
+const OPEN_YEARS_NAMED = 10;
+const PLAYING_NAMED = 3;
 /** Past Runs listed before "and N older Runs". */
 const PAST_SHOWN_MAX = 20;
 
@@ -102,24 +126,122 @@ function poolAdvice(run: IChallengeRun): string[] {
   return lines;
 }
 
-function runCard(run: IChallengeRun, coverUrl: string | null, today: string): ContainerBuilder {
+function yearsText(years: readonly number[]): string {
+  const named = years.slice(0, OPEN_YEARS_NAMED).map(String);
+  const more = years.length - named.length;
+  return more > 0 ? `${named.join(", ")} and ${more} more` : named.join(", ");
+}
+
+/** The advice for a Slots Run: its open years, or Caught Up, and what would fill one. */
+function slotsAdvice(run: IChallengeRun, facts: ISlotsFacts): string[] {
+  const name = `**${runChallengeName(run)}**`;
+  const open = openYears(run);
+  const lines: string[] = [];
+  if (run.progress.caught_up || !open.length) {
+    const last = run.slots?.last_year;
+    lines.push(run.progress.caught_up && last
+      ? `${name} is Caught Up: every year to ${last} has a Cleared game.`
+      : `${name} has every slot filled.`);
+    const next = nextSlotYear(run);
+    if (next) lines.push(`The ${next} slot opens on 1 January.`);
+  } else {
+    lines.push(`${name} has ${plural(open.length, "open year", "open years")}: ${yearsText(open)}.`);
+  }
+  for (const entry of entriesIn(run, "in_progress").slice(0, PLAYING_NAMED)) {
+    const title = `**${escapeChallengeText(entry.title)}**`;
+    const released = facts.released.get(entry.game_id);
+    if (!released) {
+      lines.push(`${title} is In Progress.`);
+      continue;
+    }
+    const fits = open.filter((year) => released.includes(year));
+    lines.push(fits.length
+      ? `${title} is In Progress and fits ${listJoin(fits.map(String))}.`
+      : `${title} is In Progress, but its years are filled.`);
+  }
+  const waiting = clearedEntries(run).filter((entry) => !entry.slot_year);
+  if (waiting.length) {
+    lines.push(`${boldTitles(waiting)} ${waiting.length === 1 ? "is" : "are"} Cleared and ` +
+      "waiting for an open year. Move a game to make room.");
+  }
+  if (facts.countsPastPlay && open.length) {
+    lines.push("-# Counts past play is on: you can pick an earlier Game Completion for an " +
+      "open year.");
+  }
+  return lines;
+}
+
+/** A Slots card's buttons: Pick past play and Move a game, while a year is open. */
+function slotsButtons(run: IChallengeRun, facts: ISlotsFacts): ButtonBuilder[] {
+  if (!openYears(run).length) return [];
+  const buttons: ButtonBuilder[] = [];
+  if (facts.countsPastPlay) {
+    buttons.push(new ButtonBuilder()
+      .setCustomId(buildChallengeSlotsId({ action: "pick", ids: [run.id] }))
+      .setLabel("Pick past play")
+      .setStyle(ButtonStyle.Secondary));
+  }
+  if (clearedEntries(run).length) {
+    buttons.push(new ButtonBuilder()
+      .setCustomId(buildChallengeSlotsId({ action: "move", ids: [run.id] }))
+      .setLabel("Move a game")
+      .setStyle(ButtonStyle.Secondary));
+  }
+  return buttons;
+}
+
+/** A card and how many components it holds (Discord counts every nested one). */
+function runCard(
+  run: IChallengeRun,
+  coverUrl: string | null,
+  facts: ISlotsFacts | null,
+  today: string,
+): { container: ContainerBuilder; components: number } {
   const format = run.challenge?.challenge_format ?? "pool";
-  const lines = format === "pool"
-    ? poolAdvice(run)
-    : format === "assignment"
-      ? assignmentAdvice(run, today)
-      : [`**${runChallengeName(run)}** · ${runProgressText(run)}`];
-  lines.push(`-# ${runClosesText(run) ?? "Always Open, no end date"}`);
+  let lines: string[];
+  if (format === "pool") lines = poolAdvice(run);
+  else if (facts && run.slots) lines = slotsAdvice(run, facts);
+  else if (format === "assignment") lines = assignmentAdvice(run, today);
+  else lines = [`**${runChallengeName(run)}** · ${runProgressText(run)}`];
+  const closes = runClosesText(run);
+  if (format !== "slots" || closes) lines.push(`-# ${closes ?? "Always Open, no end date"}`);
   const container = new ContainerBuilder().setAccentColor(CHALLENGE_FORMAT_INKS[format]);
   const body = text(lines.join("\n"));
+  let components = 2;
   if (coverUrl) {
     const section = new SectionBuilder().addTextDisplayComponents(body);
     section.setThumbnailAccessory(new ThumbnailBuilder().setURL(coverUrl));
     container.addSectionComponents(section);
+    components += 2;
   } else {
     container.addTextDisplayComponents(body);
   }
-  return container;
+  const buttons = facts && run.slots ? slotsButtons(run, facts) : [];
+  if (buttons.length) {
+    container.addActionRowComponents(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons),
+    );
+    components += 1 + buttons.length;
+  }
+  return { container, components };
+}
+
+/** Reads what a Slots Run's card needs; a failed read leaves that part out. */
+async function slotsFacts(
+  run: IChallengeRun,
+  actingUserId: string,
+  deps: Required<Pick<IMyRunsDeps, "challenge" | "releaseYears">>,
+): Promise<ISlotsFacts | null> {
+  if (!run.slots) return null;
+  const playing = entriesIn(run, "in_progress").slice(0, PLAYING_NAMED);
+  const [challenge, years] = await Promise.all([
+    run.challenge ? deps.challenge(run.challenge.id, actingUserId).catch(() => null) : null,
+    Promise.all(playing.map((entry) => deps.releaseYears(entry.game_id).catch(() => null))),
+  ]);
+  return {
+    countsPastPlay: challenge?.slots?.counts_past_play ?? false,
+    released: new Map(playing.map((entry, index) => [entry.game_id, years[index] ?? null])),
+  };
 }
 
 /** The cover of the first game the member is playing for the Run, if any. */
@@ -168,6 +290,11 @@ export async function buildMyRunsView(
 ): Promise<IChallengeView> {
   const api = deps.api ?? CHALLENGE_API;
   const coverUrl = deps.coverUrl ?? fetchGameCoverUrl;
+  const factDeps = {
+    challenge: deps.challenge ??
+      ((id: number, acting: string) => CHALLENGE_API.getChallenge(id, acting)),
+    releaseYears: deps.releaseYears ?? fetchReleaseYears,
+  };
   const today = clubToday(deps.now?.() ?? new Date());
   const [runs, signups] = await Promise.all([
     memberRuns(api, input.actingUserId),
@@ -181,9 +308,21 @@ export async function buildMyRunsView(
     text("## What's next for your Runs"),
   );
   const components: (ContainerBuilder | TextDisplayBuilder)[] = [header];
-  const cards = active.slice(0, ACTIVE_CARDS_MAX);
-  const covers = await Promise.all(cards.map((run) => runCover(run, coverUrl)));
-  cards.forEach((run, index) => components.push(runCard(run, covers[index] ?? null, today)));
+  const candidates = active.slice(0, ACTIVE_CARDS_MAX);
+  const [covers, facts] = await Promise.all([
+    Promise.all(candidates.map((run) => runCover(run, coverUrl))),
+    Promise.all(candidates.map((run) => slotsFacts(run, input.actingUserId, factDeps))),
+  ]);
+  // The header, its text, the footer and each sign-up card, then Run cards while they fit.
+  let used = 3 + signups.length * 2;
+  let shownCards = 0;
+  for (const [index, run] of candidates.entries()) {
+    const card = runCard(run, covers[index] ?? null, facts[index] ?? null, today);
+    if (used + card.components > COMPONENTS_MAX) break;
+    used += card.components;
+    components.push(card.container);
+    shownCards += 1;
+  }
   for (const edition of signups) {
     components.push(new ContainerBuilder()
       .setAccentColor(CHALLENGE_FORMAT_INKS.assignment)
@@ -197,7 +336,7 @@ export async function buildMyRunsView(
   }
 
   const footer: string[] = [];
-  const hidden = active.slice(ACTIVE_CARDS_MAX);
+  const hidden = active.slice(shownCards);
   if (hidden.length) {
     footer.push(`-# Also Active: ${hidden.map((run) => runChallengeName(run)).join(", ")}`);
   }

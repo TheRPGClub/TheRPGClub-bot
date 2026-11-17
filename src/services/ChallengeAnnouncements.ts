@@ -14,6 +14,7 @@ import {
 import type { Client, MessageCreateOptions } from "discord.js";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
+  clubToday,
   describePool,
   describePoolTarget,
   describeSchedule,
@@ -21,12 +22,18 @@ import {
   hostLabel,
 } from "../functions/ChallengeCopy.js";
 import {
+  COUNTS_PAST_PLAY_LINE,
+  describeSlotsRange,
+  describeSlotsTarget,
+} from "../functions/ChallengeSlotsCopy.js";
+import {
   buildChallengeRunId,
   buildChallengeShowId,
 } from "../functions/ChallengeCustomIds.js";
 import { DISCORD_SELECT_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
+import { composeYearStrip, stripTiles } from "./ChallengeSlotsImage.js";
 import { getUserEmojiString } from "./UserEmojiService.js";
 import {
   CHALLENGE_API,
@@ -45,8 +52,8 @@ import {
 } from "./ChallengeSignupPosts.js";
 
 // The #challenges posts (spec api#376). This file holds the new-Challenge post
-// (`challenge_created`, design 1B "Cover wall"), the post type and the jobs' deps; the
-// other events live in their own files.
+// (`challenge_created`, design 1B "Cover wall", with a year strip for Slots), the post
+// type and the jobs' deps; the other events live in their own files.
 
 /** A Components V2 post; mentions in it never ping. */
 export interface IChallengePost {
@@ -185,17 +192,26 @@ export function challengeRuleLines(challenge: IChallenge): string[] {
     lines.push(`**Pool** ${describePool(challenge.pool)}`);
     lines.push(`**To Finish** ${describePoolTarget(challenge.pool)}`);
   }
+  if (challenge.slots) {
+    lines.push(`**Slots** ${describeSlotsRange(challenge.slots)}`);
+    lines.push(`**To Finish** ${describeSlotsTarget(challenge.slots)}`);
+  }
   const schedule = describeSchedule(challenge);
   lines.push(`**${schedule.label}** ${schedule.value}`);
+  if (challenge.slots?.counts_past_play) lines.push(`**Counts past play** ${COUNTS_PAST_PLAY_LINE}`);
   const edition = signupEditionOf(challenge);
   if (edition) lines.push(editionRuleLine(edition));
   return lines;
 }
 
-/** The new-Challenge post: name, Host, the Pool's cover wall, rules and a way in. */
+/**
+ * The new-Challenge post: name, Host, the Pool's cover wall (or a Slots Challenge's year
+ * strip), rules and a way in.
+ */
 export function buildNewChallengePost(
   challenge: IChallenge,
   games: readonly IGameSummary[],
+  yearStrip: Buffer | null = null,
 ): IChallengePost {
   const container = new ContainerBuilder().addTextDisplayComponents(text(
     `# ${escapeChallengeText(challenge.name)}\n` +
@@ -203,6 +219,16 @@ export function buildNewChallengePost(
   ));
   const wall = buildCoverWall(games);
   if (wall) container.addMediaGalleryComponents(wall);
+  const stripName = `year-strip-${challenge.id}.png`;
+  if (yearStrip) {
+    container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
+      new MediaGalleryItemBuilder()
+        .setURL(`attachment://${stripName}`)
+        .setDescription(`One slot for each year: ${
+          challenge.slots ? describeSlotsRange(challenge.slots) : ""
+        }`.slice(0, DISCORD_SELECT_LABEL_MAX)),
+    ));
+  }
   container.addTextDisplayComponents(text(
     [challenge.description.trim(), ...challengeRuleLines(challenge)].filter(Boolean).join("\n"),
   ));
@@ -245,7 +271,20 @@ export function buildNewChallengePost(
     components: [container.toJSON()],
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [] },
+    ...(yearStrip ? { files: [{ name: stripName, data: yearStrip }] } : {}),
   };
+}
+
+/** A Slots Challenge's year strip, or null for other Formats (or when it can't be drawn). */
+async function yearStripOf(challenge: IChallenge): Promise<Buffer | null> {
+  if (!challenge.slots) return null;
+  try {
+    const currentYear = Number(clubToday().slice(0, 4));
+    return await composeYearStrip(stripTiles(challenge.slots, currentYear));
+  } catch (err: unknown) {
+    logError(`${LOG_CONTEXT}.yearStrip`, err);
+    return null;
+  }
 }
 
 /**
@@ -259,7 +298,11 @@ export async function announceNewChallenge(
 ): Promise<string> {
   const challenge = payloadChallenge(payload);
   const games = await coverGames(challenge, payload, deps);
-  const messageId = await deps.postMessage(channelId, buildNewChallengePost(challenge, games));
+  const strip = await yearStripOf(challenge);
+  const messageId = await deps.postMessage(
+    channelId,
+    buildNewChallengePost(challenge, games, strip),
+  );
   // A Secret Santa's first Edition opens with it: this post is its sign-up post.
   const edition = signupEditionOf(challenge);
   const note = edition ? await storeSignupPost(edition.id, channelId, messageId, deps) : "";
