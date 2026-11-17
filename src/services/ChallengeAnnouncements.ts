@@ -27,6 +27,7 @@ import {
 import { DISCORD_SELECT_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
+import { getUserEmojiString } from "./UserEmojiService.js";
 import {
   CHALLENGE_API,
   poolDefinitionOf,
@@ -37,7 +38,8 @@ import {
 } from "./ChallengeApi.js";
 
 // The #challenges posts (spec api#376). This file holds the new-Challenge post
-// (`challenge_created`, design 1B "Cover wall"); later tickets add the other events.
+// (`challenge_created`, design 1B "Cover wall"), the post type and the jobs' deps; the
+// other events live in their own files.
 
 /** A Components V2 post; mentions in it never ping. */
 export interface IChallengePost {
@@ -48,7 +50,10 @@ export interface IChallengePost {
   files?: { name: string; data: Buffer }[];
 }
 
-/** What the Challenge jobs may do: post in a channel and read games and their covers. */
+/**
+ * What the Challenge jobs may do: post in a channel, DM a member, and read games, their
+ * covers and members' avatar emojis.
+ */
 export interface IChallengeJobDeps {
   /** Posts to a text channel. Throws the discord.js error, or when it can't hold posts. */
   postMessage(channelId: string, post: IChallengePost): Promise<void>;
@@ -56,6 +61,20 @@ export interface IChallengeJobDeps {
   poolPreview(pool: IPoolDefinition, page: number, per: number): Promise<IPage<IGameSummary>>;
   /** A game's cover image, or null without one (errors logged, never thrown). */
   coverImage(gameId: number): Promise<Buffer | null>;
+  /** DMs a member. Throws the discord.js error (closed DMs: code 50007). */
+  sendDm(userId: string, post: IChallengePost): Promise<void>;
+  /** The member's avatar emoji (`<:name:id>`), or null when they have none yet. */
+  memberEmoji(userId: string): string | null;
+}
+
+function sendable(post: IChallengePost) {
+  const { files, ...message } = post;
+  return {
+    ...message,
+    ...(files?.length
+      ? { files: files.map((file) => ({ attachment: file.data, name: file.name })) }
+      : {}),
+  };
 }
 
 export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
@@ -65,16 +84,15 @@ export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
       if (!channel || !channel.isSendable()) {
         throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
       }
-      const { files, ...message } = post;
-      await channel.send({
-        ...message,
-        ...(files?.length
-          ? { files: files.map((file) => ({ attachment: file.data, name: file.name })) }
-          : {}),
-      });
+      await channel.send(sendable(post));
     },
     poolPreview: (pool, page, per) => CHALLENGE_API.poolPreview(pool, page, per),
     coverImage: async (gameId) => (await fetchGameCoverBuffer(gameId))?.buffer ?? null,
+    sendDm: async (userId, post) => {
+      const user = await client.users.fetch(userId);
+      await user.send(sendable(post));
+    },
+    memberEmoji: (userId) => getUserEmojiString(userId),
   };
 }
 
@@ -106,10 +124,10 @@ function payloadGames(payload: Record<string, unknown>): IGameSummary[] | null {
 
 /**
  * The Pool's first games for the cover wall: the payload's `pool_games` when it has them
- * (the API adds them to `challenge_created`), else the Pool preview's first page. A failed
+ * (`challenge_created` and `season_opened`), else the Pool preview's first page. A failed
  * preview is logged and posts without covers.
  */
-async function coverGames(
+export async function coverGames(
   challenge: IChallenge,
   payload: Record<string, unknown>,
   deps: IChallengeJobDeps,
