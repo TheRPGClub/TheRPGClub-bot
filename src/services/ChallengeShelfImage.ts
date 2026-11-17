@@ -28,12 +28,12 @@ const CARD_MUTED = "#a9a39a";
 const TITLE_LINE_CHARS = 16;
 const TITLE_LINES_MAX = 5;
 
-function escapeXml(value: string): string {
+export function escapeXml(value: string): string {
   return value.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 /** Words into lines of about `width` characters, at most `max` lines (the last cut). */
-function wrap(value: string, width: number, max: number): string[] {
+export function wrap(value: string, width: number, max: number): string[] {
   const lines: string[] = [];
   let line = "";
   for (const word of value.split(/\s+/).filter(Boolean)) {

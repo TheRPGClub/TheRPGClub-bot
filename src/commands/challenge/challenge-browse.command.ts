@@ -31,11 +31,11 @@ import {
 } from "../../config/customIdPrefixes.js";
 import {
   buildChallengeListView,
-  buildChallengeShowView,
   CHALLENGE_LIST_SHOW_ID,
   challengeTextView,
   type IChallengeView,
 } from "../../services/ChallengeBrowse.js";
+import { buildShowView } from "../../services/ChallengeSlotsShow.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import {
@@ -44,7 +44,8 @@ import {
   parseChallengeOption,
 } from "./challenge-interaction.utils.js";
 
-// /challenge list and /challenge show, and their buttons and select (spec api#376).
+// /challenge list and /challenge show, and their buttons and select (spec api#376). A
+// Slots Challenge's show opens on the member's own Run by decade (bot#1550).
 
 type BrowseInteraction =
   | CommandInteraction
@@ -112,7 +113,7 @@ export class ChallengeBrowseCommand {
     )
     @SlashOption({
       name: "view",
-      description: "Who Cleared each game, or each member's Run (by game by default)",
+      description: "Who Cleared each game (Slots: your own years), or each member's Run",
       type: ApplicationCommandOptionType.String,
       required: false,
     })
@@ -127,7 +128,7 @@ export class ChallengeBrowseCommand {
     }
     await showBuilt(
       interaction,
-      () => buildChallengeShowView({
+      () => buildShowView({
         challengeId,
         view: view ?? "game",
         page: 1,
@@ -152,7 +153,7 @@ export class ChallengeBrowseCommand {
     }
     await showBuilt(
       interaction,
-      () => buildChallengeShowView({ ...target, actingUserId: interaction.user.id }),
+      () => buildShowView({ ...target, actingUserId: interaction.user.id }),
       "Could not show the Challenge.",
     );
   }
@@ -182,7 +183,7 @@ export class ChallengeBrowseCommand {
     }
     await showBuilt(
       interaction,
-      () => buildChallengeShowView({
+      () => buildShowView({
         challengeId,
         view: "game",
         page: 1,

@@ -29,7 +29,7 @@ import { entriesIn } from "./ChallengeRuns.js";
 
 // The Run Finished post in #challenges (`run_finished`, design 3B "Shelf"): the whole
 // Run as a shelf of its Cleared covers, how long it took, and what the member still plays.
-// The Caught Up year poster is bot#1550's.
+// The Caught Up year poster is in ChallengeCaughtUp.
 
 /** Tiles on the shelf; past it, the last tile counts the rest. */
 export const SHELF_TILES_MAX = 10;
@@ -41,7 +41,7 @@ function text(content: string): TextDisplayBuilder {
 }
 
 /** The `run` of a job payload, or a thrown error naming what is wrong. */
-function payloadRun(payload: Record<string, unknown>): IChallengeRun {
+export function payloadRun(payload: Record<string, unknown>): IChallengeRun {
   const run = payload.run as Partial<IChallengeRun> | undefined;
   if (
     !run || typeof run !== "object" || typeof run.id !== "number" ||

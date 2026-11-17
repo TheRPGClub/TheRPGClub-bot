@@ -23,9 +23,11 @@ import {
   hostLabel,
   memberName,
 } from "../functions/ChallengeCopy.js";
+import { describeSlotsRange } from "../functions/ChallengeSlotsCopy.js";
 import {
   buildChallengeListId,
   buildChallengeShowId,
+  buildChallengeSlotsId,
   type ChallengeListFilter,
   type ChallengeShowView,
 } from "../functions/ChallengeCustomIds.js";
@@ -114,6 +116,7 @@ function summaryLine(challenge: IChallenge, now: Date): string {
     if (typeof count === "number") parts.push(`${count} ${count === 1 ? "game" : "games"}`);
     parts.push(describePoolTarget(challenge.pool));
   }
+  if (challenge.slots) parts.push(describeSlotsRange(challenge.slots));
   parts.push(describeScheduleShort(challenge), describeOpen(challenge, now));
   return parts.join(" · ");
 }
@@ -240,12 +243,31 @@ async function byMemberText(
   page: number,
   actingUserId: string,
   api: IChallengeBrowseApi,
-): Promise<{ text: string; pages: number }> {
+): Promise<{ text: string; pages: number; runs: IChallengeRun[] }> {
   const runs = await api.listRuns(challenge.id, actingUserId, page, CHALLENGE_PAGE_SIZE);
   const heading = `### By member · ${runs.count} ${runs.count === 1 ? "Run" : "Runs"}`;
   const lines = runs.items.map(runLine);
   if (!runs.count) lines.push("Nobody has started a Run yet.");
-  return { text: [heading, ...lines].join("\n"), pages: runs.pages };
+  return { text: [heading, ...lines].join("\n"), pages: runs.pages, runs: runs.items };
+}
+
+/** A Slots Challenge's by-member select: open a member's Run by decade (bot#1550). */
+function slotsRunSelect(
+  challengeId: number,
+  runs: readonly IChallengeRun[],
+): ActionRowBuilder<StringSelectMenuBuilder> | null {
+  if (!runs.length) return null;
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(buildChallengeSlotsId({ action: "runs", ids: [challengeId] }))
+      .setPlaceholder("See a member's years")
+      .addOptions(...runs.map((run) => ({
+        label: `${memberName(run.user)} · ${RUN_STATUS_LABELS[run.status] ?? run.status}`
+          .slice(0, DISCORD_SELECT_LABEL_MAX),
+        description: `${run.progress.cleared} of ${run.progress.target} years`,
+        value: String(run.id),
+      }))),
+  );
 }
 
 function showButton(
@@ -281,7 +303,7 @@ export async function buildChallengeShowView(
   const hasPool = !!challenge.pool;
   const shown: ChallengeShowView = hasPool ? target.view : "member";
   const page = shown === target.view ? target.page : 1;
-  const body = shown === "game"
+  const body: { text: string; pages: number; runs?: IChallengeRun[] } = shown === "game"
     ? await byGameText(challenge, page, target.actingUserId, api)
     : await byMemberText(challenge, page, target.actingUserId, api);
 
@@ -310,9 +332,13 @@ export async function buildChallengeShowView(
       showButton(id, "Next", { view: shown, page: page + 1 }, { disabled: page >= body.pages }),
     );
   }
-  const rows = buttons.length
+  const rows: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] = buttons.length
     ? [new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons)]
     : [];
+  const runSelect = challenge.challenge_format === "slots"
+    ? slotsRunSelect(id, body.runs ?? [])
+    : null;
+  if (runSelect) rows.unshift(runSelect);
   return view(container, rows);
 }
 

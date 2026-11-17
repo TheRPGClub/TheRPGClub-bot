@@ -4,6 +4,7 @@ import {
   CHALLENGE_RUN_PREFIX,
   CHALLENGE_SANTA_PREFIX,
   CHALLENGE_SHOW_PREFIX,
+  CHALLENGE_SLOTS_PREFIX,
   CHALLENGE_WIZARD_PREFIX,
 } from "../config/customIdPrefixes.js";
 
@@ -119,7 +120,11 @@ export function parseChallengeEditId(
  * `abandon`, `delete` and `keep` take a Run ID (confirming, or keeping it after all).
  * Each custom ID is `<prefix>:<action>:<ID>`; the clicking member is who acts.
  */
-export const CHALLENGE_RUN_ACTIONS = ["start", "abandon", "delete", "keep"] as const;
+export const CHALLENGE_RUN_ACTIONS = [
+  "start", "abandon", "delete", "keep",
+  // A birth-year Run without a Birth Date: the button that asks for it, and its modal.
+  "birth", "birth-modal",
+] as const;
 
 export type ChallengeRunAction = (typeof CHALLENGE_RUN_ACTIONS)[number];
 
@@ -137,6 +142,67 @@ export function parseChallengeRunId(
   }
   const known = (CHALLENGE_RUN_ACTIONS as readonly string[]).includes(action ?? "");
   return known ? { action: action as ChallengeRunAction, id } : null;
+}
+
+/**
+ * A Slots Run's actions (bot#1550), each `<prefix>:<action>:<IDs...>`; the clicking
+ * member is who acts:
+ * - `decade` (Run ID, decade, `n` new private reply or `u` update): a decade page;
+ * - `decades` (Run ID): the select of decades, for a Run of more than 5;
+ * - `runs` (Challenge ID): the by-member select opening a member's Run;
+ * - `move` and `pick` (Run ID): the buttons that start moving a game or picking past play;
+ * - `move-game` and `pick-play` (Run ID): the selects of a game to move or play to pick;
+ * - `move-year` (Run ID, game ID) and `pick-year` (Run ID, Game Completion ID): the
+ *   selects of the year.
+ */
+export const CHALLENGE_SLOTS_ACTIONS = [
+  "decade", "decades", "runs", "move", "pick", "move-game", "pick-play", "move-year",
+  "pick-year",
+] as const;
+
+export type ChallengeSlotsAction = (typeof CHALLENGE_SLOTS_ACTIONS)[number];
+
+const SLOTS_ID_COUNTS: Readonly<Record<ChallengeSlotsAction, number>> = {
+  "decade": 2,
+  "decades": 1,
+  "runs": 1,
+  "move": 1,
+  "pick": 1,
+  "move-game": 1,
+  "pick-play": 1,
+  "move-year": 2,
+  "pick-year": 2,
+};
+
+export interface IChallengeSlotsTarget {
+  action: ChallengeSlotsAction;
+  ids: number[];
+  /** `decade` only: a new private reply (from a post) or an update of the view. */
+  reply?: "new" | "update";
+}
+
+export function buildChallengeSlotsId(target: IChallengeSlotsTarget): string {
+  const parts: (string | number)[] = [CHALLENGE_SLOTS_PREFIX, target.action, ...target.ids];
+  if (target.action === "decade") parts.push(target.reply === "new" ? "n" : "u");
+  return parts.join(":");
+}
+
+export function parseChallengeSlotsId(customId: string): IChallengeSlotsTarget | null {
+  const [prefix, action, ...rest] = customId.split(":");
+  if (prefix !== CHALLENGE_SLOTS_PREFIX) return null;
+  if (!(CHALLENGE_SLOTS_ACTIONS as readonly string[]).includes(action ?? "")) return null;
+  const known = action as ChallengeSlotsAction;
+  let reply: IChallengeSlotsTarget["reply"];
+  if (known === "decade") {
+    const flag = rest.pop();
+    if (flag !== "n" && flag !== "u") return null;
+    reply = flag === "n" ? "new" : "update";
+  }
+  const ids = rest.map(Number);
+  if (ids.length !== SLOTS_ID_COUNTS[known] || ids.some((id) => !Number.isInteger(id) || id < 1)) {
+    return null;
+  }
+  return reply ? { action: known, ids, reply } : { action: known, ids };
 }
 
 /**
