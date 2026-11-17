@@ -348,7 +348,9 @@ const HELP_TOPICS: HelpTopic[] = [
       "/challenge show challenge:<challenge> [view:<game|member>] | " +
       "/challenge edit challenge:<challenge> | /challenge start challenge:<challenge> | " +
       "/challenge my-runs [past:<boolean>] | /challenge abandon run:<run> | " +
-      "/challenge delete-run run:<run>",
+      "/challenge delete-run run:<run> | " +
+      "/challenge slot-move run:<run> game:<game> year:<year> | " +
+      "/challenge past-pick run:<run> game:<game> year:<year>",
     notes:
       "Regulars and staff create Challenges in two short forms, then pick the franchises " +
       "and collections for the Pool and check its covers before saving. New Challenges are " +
@@ -357,7 +359,11 @@ const HELP_TOPICS: HelpTopic[] = [
       "it to another Host from /challenge edit. Start a Run from /challenge start or a " +
       "post's Start a Run button: your Game Completions and Now Playing fill it in by " +
       "themselves, and /challenge my-runs says what's next. Finished Runs are announced in " +
-      "#challenges. An abandoned Run stays on your profile until you delete it.",
+      "#challenges. An abandoned Run stays on your profile until you delete it. A Slots " +
+      "Challenge has one slot per release year: a birth-year one asks for your Birth Date " +
+      "and shows only the year. /challenge slot-move moves a Cleared game to another year " +
+      "it came out in, and /challenge past-pick picks an earlier Game Completion when the " +
+      "Challenge counts past play. Caught Up Runs are announced in #challenges.",
   },
   {
     id: "thread",

@@ -94,6 +94,21 @@ export interface IChallengeRunEntry {
   title: string;
   state: "in_progress" | "cleared";
   cleared_on?: string | null;
+  /** The Game Completion that Cleared it. */
+  completion_id?: number | null;
+  /** Slots: the year this Cleared game fills; null when In Progress or waiting. */
+  slot_year?: number | null;
+  /** The member placed it there themselves (a slot move or a past-play pick). */
+  picked_by_hand?: boolean;
+}
+
+/** A Slots Run's years so far, each with the game filling it (null while open). */
+export interface IChallengeRunSlots {
+  first_year: number;
+  /** The last year so far: the current year for a range that grows. */
+  last_year: number;
+  growing: boolean;
+  years: { year: number; game_id?: number | null; title?: string | null }[];
 }
 
 /** The Challenge a Run belongs to, as the Run serves it. */
@@ -118,6 +133,28 @@ export interface IChallengeRun {
   progress: { in_progress: number; cleared: number; target: number; caught_up?: boolean };
   /** The games counted on the Run, Cleared first. */
   entries?: IChallengeRunEntry[];
+  /** Slots only. */
+  slots?: IChallengeRunSlots | null;
+}
+
+/** What the member should know about a Run they just started (`birth_year_shown`). */
+export interface IChallengeNotice {
+  code: string;
+  message: string;
+}
+
+/** A started Run, with the start reply's notices. */
+export type IStartedRun = IChallengeRun & { notices?: IChallengeNotice[] };
+
+/** A Game Completion from before a Slots Run that may be picked for an open year. */
+export interface IPastPlay {
+  completion_id: number;
+  game_id: number;
+  title: string;
+  /** Null when the Game Completion has no date. */
+  completed_at?: string | null;
+  /** The Run's open years the game fits. */
+  open_years: number[];
 }
 
 /** A Pool definition, as the create and edit bodies and the Pool preview take it. */
@@ -137,6 +174,7 @@ export interface IChallengeWrite {
   ends_on?: string | null;
   season?: { start: string; end: string } | null;
   pool?: IPoolDefinition & { target: PoolTarget };
+  slots?: IChallengeSlots;
   assignment?: IChallengeAssignment;
   hosted_by_club?: boolean;
 }
@@ -181,11 +219,25 @@ export interface IChallengeApi {
    * POST /challenges/:id/runs for the acting member. Throws the AxiosError on a refusal
    * (409 challenge_closed, run_active, season_run_exists, birth_date_required, ...).
    */
-  startRun(challengeId: number, actingUserId: string): Promise<IChallengeRun>;
+  startRun(challengeId: number, actingUserId: string): Promise<IStartedRun>;
   /** POST /challenge_runs/:id/abandon. Throws the AxiosError on a refusal. */
   abandonRun(runId: number, actingUserId: string): Promise<IChallengeRun>;
   /** DELETE /challenge_runs/:id. Throws the AxiosError on a refusal; false when gone. */
   deleteRun(runId: number, actingUserId: string): Promise<boolean>;
+  /**
+   * POST /challenge_runs/:id/slot_move: puts a Cleared game in another open year. Throws
+   * the AxiosError on a refusal (409 slot_filled, 422 slot_not_fitting, ...).
+   */
+  slotMove(runId: number, gameId: number, slotYear: number, actingUserId: string):
+    Promise<IChallengeRun>;
+  /**
+   * POST /challenge_runs/:id/past_pick: puts an earlier Game Completion in an open year.
+   * Throws the AxiosError on a refusal (422 past_play_off, already_cleared, ...).
+   */
+  pastPick(runId: number, completionId: number, slotYear: number, actingUserId: string):
+    Promise<IChallengeRun>;
+  /** GET /challenge_runs/:id/past_play: what past-pick may pick, oldest first. */
+  pastPlay(runId: number, actingUserId: string, query?: string): Promise<IPastPlay[]>;
   /** POST /challenges/pool_preview: the games a Pool resolves to, oldest release first. */
   poolPreview(pool: IPoolDefinition, page: number, per: number): Promise<IPage<IGameSummary>>;
   /** GET /challenges/pool_sources: franchises then collections whose name holds q. */
@@ -290,11 +342,11 @@ export const CHALLENGE_API: IChallengeApi = {
     return payload?.data ?? null;
   },
   async startRun(challengeId, actingUserId) {
-    const payload = await apiPostOrThrow<{ data: IChallengeRun }>(
-      `${CHALLENGES_PATH}/${challengeId}/runs`,
-      { data: { acting_user_id: actingUserId } },
-    );
-    return payload.data;
+    const payload = await apiPostOrThrow<{
+      data: IChallengeRun;
+      meta?: { notices?: IChallengeNotice[] };
+    }>(`${CHALLENGES_PATH}/${challengeId}/runs`, { data: { acting_user_id: actingUserId } });
+    return { ...payload.data, notices: payload.meta?.notices ?? [] };
   },
   async abandonRun(runId, actingUserId) {
     const payload = await apiPostOrThrow<{ data: IChallengeRun }>(
@@ -308,6 +360,31 @@ export const CHALLENGE_API: IChallengeApi = {
       withQuery(`${RUNS_PATH}/${runId}`, { acting_user_id: actingUserId }),
     );
     return payload !== null;
+  },
+  async slotMove(runId, gameId, slotYear, actingUserId) {
+    const payload = await apiPostOrThrow<{ data: IChallengeRun }>(
+      `${RUNS_PATH}/${runId}/slot_move`,
+      { data: { game_id: gameId, slot_year: slotYear, acting_user_id: actingUserId } },
+    );
+    return payload.data;
+  },
+  async pastPick(runId, completionId, slotYear, actingUserId) {
+    const payload = await apiPostOrThrow<{ data: IChallengeRun }>(
+      `${RUNS_PATH}/${runId}/past_pick`,
+      {
+        data: { completion_id: completionId, slot_year: slotYear, acting_user_id: actingUserId },
+      },
+    );
+    return payload.data;
+  },
+  async pastPlay(runId, actingUserId, query) {
+    const payload = await apiGetOrThrow<{ data: IPastPlay[] }>(
+      withQuery(`${RUNS_PATH}/${runId}/past_play`, {
+        acting_user_id: actingUserId,
+        q: query?.trim() || undefined,
+      }),
+    );
+    return payload.data ?? [];
   },
   async poolPreview(pool, page, per) {
     const payload = await apiPostOrThrow<{ data: IGameSummary[]; meta?: PageMeta }>(

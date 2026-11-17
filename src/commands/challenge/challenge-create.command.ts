@@ -63,6 +63,7 @@ import {
   newChallengeDraft,
   renderWizardStep,
   saveChallengeDraft,
+  WIZARD_CHECKBOX_FIELDS,
   WIZARD_FIELDS,
   WIZARD_RADIO_FIELDS,
   wizardClosedView,
@@ -321,7 +322,10 @@ export class ChallengeCreateCommand {
   @ModalComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:basics-modal:`) })
   async basicsModal(interaction: ModalSubmitInteraction): Promise<void> {
     await withDraft(interaction, async (sessionId, draft) => {
-      const result = applyBasics(draft, readModalFields(interaction, WIZARD_RADIO_FIELDS));
+      const result = applyBasics(
+        draft,
+        readModalFields(interaction, WIZARD_RADIO_FIELDS, WIZARD_CHECKBOX_FIELDS),
+      );
       saveDraft(interaction, sessionId, result.draft);
       await showStep(interaction, sessionId, result.draft, result.errors);
     });

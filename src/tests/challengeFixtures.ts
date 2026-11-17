@@ -1,5 +1,10 @@
 import { AxiosError, AxiosHeaders, type AxiosResponse } from "axios";
-import type { IChallenge, IChallengeRun, IGameSummary } from "../services/ChallengeApi.js";
+import type {
+  IChallenge,
+  IChallengeRun,
+  IChallengeRunEntry,
+  IGameSummary,
+} from "../services/ChallengeApi.js";
 
 // Shared fixtures for the Challenge tests: a Pool Challenge as the API serves it, and a
 // reader for the Components V2 JSON the Challenge views and posts are built from.
@@ -54,6 +59,79 @@ export function poolRun(overrides: Partial<IChallengeRun> = {}): IChallengeRun {
       { game_id: 6, title: "Final Fantasy VI", state: "cleared", cleared_on: "2026-10-30" },
       { game_id: 10, title: "Final Fantasy X", state: "in_progress", cleared_on: null },
     ],
+    ...overrides,
+  };
+}
+
+/** Years Alive: a club-hosted Slots Challenge from each member's birth year to now. */
+export function slotsChallenge(overrides: Partial<IChallenge> = {}): IChallenge {
+  return poolChallenge({
+    id: 12,
+    name: "Years Alive",
+    description: "One game from every year you've been alive.",
+    challenge_format: "slots",
+    hosted_by_club: true,
+    host: null,
+    schedule: "always_open",
+    season: null,
+    pool: null,
+    slots: { first_year: "birth_year", last_year: "current_year", counts_past_play: true },
+    ...overrides,
+  });
+}
+
+/**
+ * Tamsin's Run of Years Alive from 1994: every year Cleared but the years in `open` (titles are "Game <year>", game IDs the year), plus an In Progress game.
+ */
+export function slotsRun(
+  options: { first?: number; last?: number; open?: number[]; growing?: boolean } = {},
+  overrides: Partial<IChallengeRun> = {},
+): IChallengeRun {
+  const first = options.first ?? 1994;
+  const last = options.last ?? 2026;
+  const open = new Set(options.open ?? []);
+  const years: { year: number; game_id: number | null; title: string | null }[] = [];
+  const entries: IChallengeRunEntry[] = [];
+  for (let year = first; year <= last; year += 1) {
+    const filled = !open.has(year);
+    years.push({ year, game_id: filled ? year : null, title: filled ? `Game ${year}` : null });
+    if (filled) {
+      entries.push({
+        game_id: year,
+        title: `Game ${year}`,
+        state: "cleared",
+        cleared_on: "2025-05-01",
+        completion_id: 5000 + year,
+        slot_year: year,
+        picked_by_hand: false,
+      });
+    }
+  }
+  entries.push({
+    game_id: 77,
+    title: "Tales of Arise",
+    state: "in_progress",
+    cleared_on: null,
+    slot_year: null,
+    picked_by_hand: false,
+  });
+  const cleared = years.filter((y) => y.game_id !== null).length;
+  return {
+    id: 90,
+    challenge: { id: 12, name: "Years Alive", challenge_format: "slots", schedule: "always_open" },
+    user: { user_id: "333", username: "tamsin", global_name: "Tamsin" },
+    status: "active",
+    started_at: "2024-03-04T15:00:00.000Z",
+    ended_at: null,
+    window: { starts_on: "2024-03-04", ends_on: null },
+    progress: {
+      in_progress: 1,
+      cleared,
+      target: years.length,
+      caught_up: cleared === years.length,
+    },
+    entries,
+    slots: { first_year: first, last_year: last, growing: options.growing ?? true, years },
     ...overrides,
   };
 }

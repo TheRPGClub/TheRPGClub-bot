@@ -4,9 +4,18 @@ import {
   type AutocompleteInteraction,
   type ButtonInteraction,
   type CommandInteraction,
+  type ModalSubmitInteraction,
 } from "discord.js";
-import { ButtonComponent, Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import {
+  ButtonComponent,
+  Discord,
+  ModalComponent,
+  Slash,
+  SlashGroup,
+  SlashOption,
+} from "discordx";
+import {
+  safeDeferModalSubmit,
   safeDeferReply,
   safeDeferUpdate,
   safeEditReply,
@@ -18,8 +27,12 @@ import { CHALLENGE_RUN_PREFIX } from "../../config/customIdPrefixes.js";
 import { CHALLENGE_API } from "../../services/ChallengeApi.js";
 import { challengeTextView } from "../../services/ChallengeBrowse.js";
 import { buildMyRunsView } from "../../services/ChallengeMyRuns.js";
+import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import {
   abandonRunReply,
+  BIRTH_DATE_FIELD,
+  birthDateStartReply,
+  buildBirthDateModal,
   confirmRunChange,
   deleteRunReply,
   runChoices,
@@ -39,7 +52,7 @@ import {
 // Every custom ID holds its Challenge or Run ID, and the clicking member is who acts, so
 // the buttons work after a restart.
 
-type RunInteraction = CommandInteraction | ButtonInteraction;
+type RunInteraction = CommandInteraction | ButtonInteraction | ModalSubmitInteraction;
 
 /** Runs read for the run: autocomplete, newest first. */
 const AUTOCOMPLETE_READ = 100;
@@ -157,6 +170,11 @@ export class ChallengeRunsCommand {
   @ButtonComponent({ id: new RegExp(`^${CHALLENGE_RUN_PREFIX}:`) })
   async runButton(interaction: ButtonInteraction): Promise<void> {
     const target = parseChallengeRunId(interaction.customId);
+    if (target?.action === "birth") {
+      // A birth-year Run without a Birth Date: ask for it, then start (bot#1550).
+      safeIgnore(interaction.showModal(buildBirthDateModal(target.id)));
+      return;
+    }
     if (target?.action === "start") {
       // From a #challenges post: a private reply of its own.
       await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
@@ -182,7 +200,28 @@ export class ChallengeRunsCommand {
       case "keep":
         await safeEditReply(interaction, challengeTextView("Kept the Run as it is."));
         return;
+      default:
+        await safeEditReply(interaction, challengeTextView("This button is out of date."));
     }
+  }
+
+  @ModalComponent({ id: new RegExp(`^${CHALLENGE_RUN_PREFIX}:birth-modal:`) })
+  async birthDateModal(interaction: ModalSubmitInteraction): Promise<void> {
+    if (!(await safeDeferModalSubmit(interaction))) return;
+    const target = parseChallengeRunId(interaction.customId);
+    if (target?.action !== "birth-modal") {
+      await safeEditReply(interaction, challengeTextView("This form is out of date."));
+      return;
+    }
+    const birthDate = sanitizeUserInput(
+      interaction.fields.getTextInputValue(BIRTH_DATE_FIELD),
+      { preserveNewlines: false },
+    );
+    await showResult(interaction, await birthDateStartReply({
+      challengeId: target.id,
+      birthDate,
+      actingUserId: interaction.user.id,
+    }));
   }
 
   private async confirm(

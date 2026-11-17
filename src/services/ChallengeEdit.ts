@@ -56,11 +56,6 @@ export function rulesLocked(challenge: IChallenge): boolean {
   return (challenge.run_count ?? 0) > 0;
 }
 
-/** Whether the wizard can edit this Challenge's rules from Discord (Slots: bot#1550). */
-function rulesEditableHere(challenge: IChallenge): boolean {
-  return challenge.challenge_format === "pool" || challenge.challenge_format === "assignment";
-}
-
 /** Whether its end date may still change: Always Open and not yet Closed for good. */
 function endDateEditable(challenge: IChallenge): boolean {
   return challenge.schedule === "always_open" && !challenge.ended_at &&
@@ -93,8 +88,6 @@ function lockText(challenge: IChallenge): string[] {
         "so its Format, schedule, Season and Pool can't change. " +
         "Its name, description and end date still can.",
     );
-  } else if (!rulesEditableHere(challenge)) {
-    lines.push("Its Slots settings can't be edited from Discord yet; use the website.");
   } else {
     lines.push("The rules can change until someone starts a Run.");
   }
@@ -130,7 +123,7 @@ export function buildEditPanel(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       button("details", id, "Name and description", { style: ButtonStyle.Primary }),
       button("rules", id, "Rules", {
-        disabled: rulesLocked(challenge) || !rulesEditableHere(challenge),
+        disabled: rulesLocked(challenge),
       }),
     ),
   ];

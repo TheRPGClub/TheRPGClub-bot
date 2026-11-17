@@ -2,9 +2,13 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ContainerBuilder,
+  LabelBuilder,
+  ModalBuilder,
   TextDisplayBuilder,
+  TextInputBuilder,
 } from "@discordjs/builders";
-import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
+import { ButtonStyle, MessageFlags, TextInputStyle } from "discord-api-types/v10";
+import axios from "axios";
 import { DateTime } from "luxon";
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import { buildChallengeRunId } from "../functions/ChallengeCustomIds.js";
@@ -31,8 +35,17 @@ import {
   type IChallengeApi,
   type IChallengeRun,
   type IChallengeRunEntry,
+  type IStartedRun,
   type RunStatus,
 } from "./ChallengeApi.js";
+import {
+  BIRTH_DATE_API,
+  BIRTH_DATE_FORMAT_HINT,
+  birthDateRefusalLine,
+  formatBirthDate,
+  type IBirthDateApi,
+} from "./BirthDateService.js";
+import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 
 // A member's Runs from Discord (spec api#376, bot#1547): start, abandon and delete one.
 // The API decides every rule (Closed, one Active Run, one Run per Season, Birth Date);
@@ -91,10 +104,12 @@ export function runClosesText(run: IChallengeRun): string | null {
   return run.challenge?.schedule === "seasonal" ? `Season closes ${when}` : `Closes ${when}`;
 }
 
-function startedText(run: IChallengeRun): string {
+function startedText(run: IStartedRun): string {
   const lines = [`## You started a Run of ${runChallengeName(run)}`];
   const { cleared, target } = run.progress;
-  if (run.challenge?.challenge_format === "pool" || !run.challenge) {
+  if (run.slots) {
+    lines.push(`One slot for each year from ${run.slots.first_year} to ${run.slots.last_year}.`);
+  } else if (run.challenge?.challenge_format === "pool" || !run.challenge) {
     lines.push(`Clear ${games(target)} from its Pool to Finish.`);
   }
   lines.push("Your Game Completions and Now Playing fill it in by themselves.");
@@ -108,13 +123,50 @@ function startedText(run: IChallengeRun): string {
   if (playing.length) {
     lines.push(`${boldTitles(playing)} ${playing.length === 1 ? "is" : "are"} In Progress.`);
   }
+  // What the API says the member should know (a birth-year Run shows the birth year).
+  lines.push(...(run.notices ?? []).map((notice) => notice.message));
   const footer = [runClosesText(run), `${commandMention("challenge my-runs")} shows what's next`]
     .filter(Boolean);
   lines.push(`-# ${footer.join(" · ")}`);
   return lines.join("\n");
 }
 
-/** Starts the acting member's Run of a Challenge (/challenge start, or a post's button). */
+/** The API's refusal of a birth-year Run without a Birth Date: its message, or null. */
+function birthDateRequired(err: unknown): string | null {
+  if (!axios.isAxiosError(err) || err.response?.status !== 409) return null;
+  const body = err.response.data as { error?: unknown; message?: unknown } | undefined;
+  if (body?.error !== "birth_date_required") return null;
+  return typeof body.message === "string" && body.message.trim()
+    ? body.message.trim()
+    : "This Challenge starts at your birth year, so it needs your Birth Date first.";
+}
+
+/** The answer to a missing Birth Date: the API's message and a button to enter it. */
+function birthDatePrompt(challengeId: number, message: string): IChallengeView {
+  const container = new ContainerBuilder().addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(safeV2TextContent(
+      `${message}\n-# Only you and staff see the full date. You can change it twice a month ` +
+        `with ${commandMention("profile birth-date")}.`,
+      MAX_CONTAINER_TEXT,
+    )),
+  );
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(buildChallengeRunId("birth", challengeId))
+      .setLabel("Enter your Birth Date")
+      .setStyle(ButtonStyle.Primary),
+  );
+  return {
+    components: [container.toJSON(), row.toJSON()],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { parse: [] },
+  };
+}
+
+/**
+ * Starts the acting member's Run of a Challenge (/challenge start, or a post's button). A
+ * birth-year Slots Run without a Birth Date asks for it (bot#1550).
+ */
 export async function startRunReply(
   input: { challengeId: number; actingUserId: string },
   deps: IChallengeRunsDeps = {},
@@ -124,8 +176,71 @@ export async function startRunReply(
     const run = await api.startRun(input.challengeId, input.actingUserId);
     return { view: challengeTextView(startedText(run)) };
   } catch (err: unknown) {
+    const missing = birthDateRequired(err);
+    if (missing) return { view: birthDatePrompt(input.challengeId, missing) };
     return { error: challengeRefusalText(err, "Could not start the Run.") };
   }
+}
+
+/** The custom ID of the Birth Date modal's one field. */
+export const BIRTH_DATE_FIELD = "challenge-birth-date";
+
+/** The modal behind "Enter your Birth Date": the date, then the Run starts. */
+export function buildBirthDateModal(challengeId: number): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId(buildChallengeRunId("birth-modal", challengeId))
+    .setTitle("Your Birth Date")
+    .addLabelComponents(new LabelBuilder()
+      .setLabel("Birth Date (YYYY-MM-DD)")
+      .setDescription("Only you and staff see the full date; the Run shows the year.")
+      .setTextInputComponent(new TextInputBuilder()
+        .setCustomId(BIRTH_DATE_FIELD)
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("1990-05-04")
+        .setMinLength(10)
+        .setMaxLength(10)
+        .setRequired(true)));
+}
+
+/**
+ * Saves the acting member's Birth Date from the modal, then starts the Run. A date the API
+ * won't take is shown with the request and response, and no Run starts.
+ */
+export async function birthDateStartReply(
+  input: { challengeId: number; birthDate: string; actingUserId: string },
+  deps: IChallengeRunsDeps & { birthDates?: IBirthDateApi } = {},
+): Promise<ChallengeRunResult> {
+  const birthDates = deps.birthDates ?? BIRTH_DATE_API;
+  let saved: string | null;
+  try {
+    const document = await birthDates.setBirthDate(
+      input.actingUserId,
+      input.birthDate.trim(),
+      input.actingUserId,
+    );
+    saved = document.birthDate;
+  } catch (err: unknown) {
+    const friendly = birthDateRefusalLine(err, input.actingUserId);
+    return {
+      error: friendly
+        ? buildApiErrorMessage(friendly, err, { devPing: false })
+        : buildApiErrorMessage(`Could not save your Birth Date. ${BIRTH_DATE_FORMAT_HINT}`, err),
+    };
+  }
+  const started = await startRunReply(input, deps);
+  if (!("view" in started)) return started;
+  const note = saved
+    ? `Saved your Birth Date, ${formatBirthDate(saved)}. Only you and staff see it.`
+    : "Saved your Birth Date.";
+  return {
+    view: {
+      ...started.view,
+      components: [
+        new TextDisplayBuilder().setContent(safeV2TextContent(note, MAX_CONTAINER_TEXT)).toJSON(),
+        ...started.view.components,
+      ],
+    },
+  };
 }
 
 /** A Run's status in words; unknown ones as the API names them. */

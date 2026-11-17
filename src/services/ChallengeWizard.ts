@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder,
   ButtonBuilder,
+  CheckboxGroupBuilder,
   ContainerBuilder,
   LabelBuilder,
   ModalBuilder,
@@ -35,7 +36,11 @@ import {
   DISCORD_SELECT_OPTIONS_MAX,
   MAX_CONTAINER_TEXT,
 } from "../config/textLimits.js";
-import { buildCoverWall, COVER_WALL_MAX } from "./ChallengeAnnouncements.js";
+import {
+  buildCoverWall,
+  challengeRuleLines,
+  COVER_WALL_MAX,
+} from "./ChallengeAnnouncements.js";
 import type { IChallengeView } from "./ChallengeBrowse.js";
 import {
   CHALLENGE_API,
@@ -44,6 +49,7 @@ import {
   type IChallenge,
   type IChallengeApi,
   type IChallengePool,
+  type IChallengeSlots,
   type IChallengeWrite,
   type IGameSummary,
   type IPage,
@@ -55,11 +61,15 @@ import {
 // /challenge create and the rules part of /challenge edit (spec api#376), design 6C "Two
 // modals and a cover preview": a basics modal, the Format's settings modal, the pick of
 // franchises and collections, then a preview of the Pool's covers where games are left
-// out or added by hand before saving. The draft is plain data, saved with the wizard
-// session so every step resumes after a restart.
+// out or added by hand before saving. A Slots Challenge (bot#1550) sets Counts past play in
+// the basics modal and its first and last year in the settings modal, then is previewed
+// in words. The draft is plain data, saved with the wizard session so every step resumes
+// after a restart.
 
-/** The Formats this wizard builds. Slots joins with bot#1550. */
-export type WizardFormat = "pool" | "assignment";
+/** The Formats this wizard builds. */
+export type WizardFormat = "pool" | "slots" | "assignment";
+
+const WIZARD_FORMATS: readonly string[] = ["pool", "slots", "assignment"];
 
 export type WizardStep = "basics" | "sources" | "preview";
 
@@ -102,6 +112,12 @@ export interface IChallengeDraft {
   };
   /** Assignment: the Edition calendar as MM-DD. */
   assignment: { signupCutoff: string; pickDeadline: string; reveal: string };
+  /** Slots: the range, and Counts past play (Always Open only). */
+  slots: {
+    firstYear: number | "birth_year";
+    lastYear: number | "current_year";
+    countsPastPlay: boolean;
+  };
   /** The last franchise and collection search's results. */
   sourceResults: IPoolSource[];
   /** The last "Include a game" search's results. */
@@ -131,14 +147,28 @@ export const WIZARD_FIELDS = {
   pickDeadline: "challenge-pick-deadline",
   reveal: "challenge-reveal",
   includeQuery: "challenge-include-query",
+  countsPastPlay: "challenge-counts-past-play",
+  firstYear: "challenge-first-year",
+  firstYearFixed: "challenge-first-year-fixed",
+  lastYear: "challenge-last-year",
+  lastYearFixed: "challenge-last-year-fixed",
+  season: "challenge-season",
 } as const;
+
+/** The value of Counts past play's one checkbox when it is ticked. */
+export const COUNTS_PAST_PLAY_ON = "on";
 
 /** The modal fields each modal holds, so the command can read them by kind. */
 export const WIZARD_RADIO_FIELDS: readonly string[] = [
   WIZARD_FIELDS.format,
   WIZARD_FIELDS.schedule,
   WIZARD_FIELDS.target,
+  WIZARD_FIELDS.firstYear,
+  WIZARD_FIELDS.lastYear,
 ];
+
+/** The checkbox groups, read as their one ticked value or null. */
+export const WIZARD_CHECKBOX_FIELDS: readonly string[] = [WIZARD_FIELDS.countsPastPlay];
 
 /** A modal's answers: text inputs as typed, radio groups as their value or null. */
 export type WizardFields = Readonly<Record<string, string | null | undefined>>;
@@ -148,6 +178,11 @@ const DESCRIPTION_MAX = 2000;
 /** Games in one page of the exclude pick (a select holds 25 options). */
 const EXCLUDE_PAGE_SIZE = DISCORD_SELECT_OPTIONS_MAX;
 const SECRET_SANTA_CALENDAR = { signupCutoff: "12-01", pickDeadline: "12-15", reveal: "12-25" };
+const YEARS_ALIVE: IChallengeDraft["slots"] = {
+  firstYear: "birth_year",
+  lastYear: "current_year",
+  countsPastPlay: false,
+};
 
 export function newChallengeDraft(ownerId: string, clubHosted: boolean): IChallengeDraft {
   return {
@@ -164,6 +199,7 @@ export function newChallengeDraft(ownerId: string, clubHosted: boolean): IChalle
     endsOn: null,
     pool: { franchises: [], collections: [], included: [], excluded: [], target: 1 },
     assignment: { ...SECRET_SANTA_CALENDAR },
+    slots: { ...YEARS_ALIVE },
     sourceResults: [],
     includeChoices: [],
     previewPage: 1,
@@ -180,7 +216,15 @@ function draftPool(pool: IChallengePool): IChallengeDraft["pool"] {
   };
 }
 
-/** The draft for editing a Pool or Assignment Challenge's rules, starting at basics. */
+function draftSlots(slots: IChallengeSlots): IChallengeDraft["slots"] {
+  return {
+    firstYear: slots.first_year,
+    lastYear: slots.last_year,
+    countsPastPlay: slots.counts_past_play,
+  };
+}
+
+/** The draft for editing a Challenge's rules, starting at basics. */
 export function draftFromChallenge(challenge: IChallenge, ownerId: string): IChallengeDraft {
   const draft = newChallengeDraft(ownerId, false);
   const assignment = challenge.assignment;
@@ -190,7 +234,7 @@ export function draftFromChallenge(challenge: IChallenge, ownerId: string): ICha
     challengeId: challenge.id,
     name: challenge.name,
     description: challenge.description,
-    format: challenge.challenge_format === "assignment" ? "assignment" : "pool",
+    format: challenge.challenge_format,
     schedule: challenge.schedule,
     season: challenge.season
       ? { start: challenge.season.start, end: challenge.season.end }
@@ -204,7 +248,12 @@ export function draftFromChallenge(challenge: IChallenge, ownerId: string): ICha
         reveal: assignment.reveal,
       }
       : draft.assignment,
+    slots: challenge.slots ? draftSlots(challenge.slots) : draft.slots,
   };
+}
+
+function isYear(value: unknown, keyword: string): boolean {
+  return value === keyword || Number.isInteger(value);
 }
 
 function isNamedIdList(value: unknown): value is INamedId[] {
@@ -228,7 +277,7 @@ export function challengeDraftFromState(state: unknown): IChallengeDraft | null 
     ["basics", "sources", "preview"].includes(draft.step) &&
     typeof draft.name === "string" &&
     typeof draft.description === "string" &&
-    (draft.format === "pool" || draft.format === "assignment") &&
+    WIZARD_FORMATS.includes(draft.format) &&
     !!pool &&
     isNamedIdList(pool.franchises) &&
     isNamedIdList(pool.collections) &&
@@ -237,7 +286,16 @@ export function challengeDraftFromState(state: unknown): IChallengeDraft | null 
     !!draft.assignment &&
     Array.isArray(draft.sourceResults) &&
     Array.isArray(draft.includeChoices);
-  return valid ? { ...draft, previewPage: Math.max(1, Number(draft.previewPage) || 1) } : null;
+  if (!valid) return null;
+  // A draft saved before Slots joined has no slots: it gets the defaults.
+  const slots = draft.slots as Partial<IChallengeDraft["slots"]> | undefined;
+  const slotsValid = !!slots && isYear(slots.firstYear, "birth_year") &&
+    isYear(slots.lastYear, "current_year") && typeof slots.countsPastPlay === "boolean";
+  return {
+    ...draft,
+    slots: slotsValid ? draft.slots : { ...YEARS_ALIVE },
+    previewPage: Math.max(1, Number(draft.previewPage) || 1),
+  };
 }
 
 function field(fields: WizardFields, id: string): string {
@@ -253,10 +311,16 @@ export function applyBasics(
   const description = field(fields, WIZARD_FIELDS.description);
   const format = field(fields, WIZARD_FIELDS.format);
   const schedule = field(fields, WIZARD_FIELDS.schedule);
+  const countsPastPlay = field(fields, WIZARD_FIELDS.countsPastPlay) === COUNTS_PAST_PLAY_ON;
   const errors: string[] = [];
   if (!name) errors.push("Give the Challenge a name.");
-  if (format !== "pool" && format !== "assignment") errors.push("Choose a Challenge Format.");
+  if (!WIZARD_FORMATS.includes(format)) errors.push("Choose a Challenge Format.");
   if (schedule !== "always_open" && schedule !== "seasonal") errors.push("Choose a schedule.");
+  if (countsPastPlay && WIZARD_FORMATS.includes(format) && format !== "slots") {
+    errors.push("Counts past play is only for Slots Challenges.");
+  } else if (countsPastPlay && schedule === "seasonal") {
+    errors.push("Counts past play is only for Always Open Challenges.");
+  }
   if (errors.length) return { draft, errors };
   return {
     draft: {
@@ -267,6 +331,7 @@ export function applyBasics(
       format: format as WizardFormat,
       // An Assignment Challenge runs in Editions: Always Open, with no end date.
       schedule: format === "assignment" ? "always_open" : schedule as ChallengeSchedule,
+      slots: { ...draft.slots, countsPastPlay },
     },
     errors: [],
   };
@@ -310,6 +375,79 @@ function applyAssignmentSettings(
   };
 }
 
+/** A fixed year typed in the Slots modal, or null with the reason added to `errors`. */
+function readYear(
+  fields: WizardFields,
+  id: string,
+  label: string,
+  example: number,
+  errors: string[],
+): number | null {
+  const value = field(fields, id);
+  if (!value) {
+    errors.push(`${label}: give a year, such as ${example}.`);
+    return null;
+  }
+  const year = Number(value);
+  if (!/^\d{4}$/.test(value) || !Number.isInteger(year)) {
+    errors.push(`${label}: "${value}" is not a year, such as ${example}.`);
+    return null;
+  }
+  return year;
+}
+
+/** "21 June to 22 September" as a Season, or null when it is not one. */
+function parseSeason(value: string): { start: string; end: string } | null {
+  const parts = value.split(/\s+(?:to|until|-)\s+/i);
+  if (parts.length !== 2) return null;
+  const start = parseMonthDay(parts[0]!);
+  const end = parseMonthDay(parts[1]!);
+  return start && end ? { start, end } : null;
+}
+
+/** Applies the Slots settings modal: the first and last year, and the schedule's dates. */
+function applySlotsSettings(
+  draft: IChallengeDraft,
+  fields: WizardFields,
+): { draft: IChallengeDraft; errors: string[] } {
+  const errors: string[] = [];
+  const firstYear = field(fields, WIZARD_FIELDS.firstYear) === "fixed"
+    ? readYear(fields, WIZARD_FIELDS.firstYearFixed, "Fixed first year", 1990, errors)
+    : "birth_year";
+  const lastYear = field(fields, WIZARD_FIELDS.lastYear) === "fixed"
+    ? readYear(fields, WIZARD_FIELDS.lastYearFixed, "Fixed last year", 1999, errors)
+    : "current_year";
+  if (typeof firstYear === "number" && typeof lastYear === "number" && firstYear > lastYear) {
+    errors.push("The first year can't come after the last year.");
+  }
+  let season: IChallengeDraft["season"] = null;
+  let endsOn: string | null = null;
+  if (draft.schedule === "seasonal") {
+    const typed = field(fields, WIZARD_FIELDS.season);
+    season = parseSeason(typed);
+    if (!season) {
+      errors.push(typed
+        ? `Season: "${typed}" is not two days and months, such as 21 June to 22 September.`
+        : "Season: give its first and last day, such as 21 June to 22 September.");
+    }
+  } else {
+    const typed = field(fields, WIZARD_FIELDS.endsOn);
+    endsOn = typed ? parseChallengeDate(typed) : null;
+    if (typed && !endsOn) errors.push(`End date: "${typed}" is not a date, such as 3 March 2027.`);
+  }
+  if (errors.length || firstYear === null || lastYear === null) return { draft, errors };
+  return {
+    draft: {
+      ...draft,
+      step: "preview",
+      season,
+      endsOn,
+      slots: { ...draft.slots, firstYear, lastYear },
+    },
+    errors: [],
+  };
+}
+
 function hasPoolDefinition(pool: IChallengeDraft["pool"]): boolean {
   return pool.franchises.length + pool.collections.length + pool.included.length > 0;
 }
@@ -325,6 +463,7 @@ export async function applySettings(
   api: Pick<IChallengeWizardApi, "poolSources"> = CHALLENGE_API,
 ): Promise<{ draft: IChallengeDraft; errors: string[] }> {
   if (draft.format === "assignment") return applyAssignmentSettings(draft, fields);
+  if (draft.format === "slots") return applySlotsSettings(draft, fields);
 
   const errors: string[] = [];
   let season: IChallengeDraft["season"] = null;
@@ -486,6 +625,15 @@ function poolDefinition(draft: IChallengeDraft, withExcluded: boolean): IPoolDef
   };
 }
 
+function slotsOf(draft: IChallengeDraft): IChallengeSlots {
+  return {
+    first_year: draft.slots.firstYear,
+    last_year: draft.slots.lastYear,
+    // Always Open only; a Seasonal draft never sends it on.
+    counts_past_play: draft.schedule === "always_open" && draft.slots.countsPastPlay,
+  };
+}
+
 /** The create or edit body for the draft. */
 export function challengeWriteOf(draft: IChallengeDraft): IChallengeWrite {
   const write: IChallengeWrite = {
@@ -498,6 +646,8 @@ export function challengeWriteOf(draft: IChallengeDraft): IChallengeWrite {
   };
   if (draft.format === "pool") {
     write.pool = { ...poolDefinition(draft, true), target: draft.pool.target };
+  } else if (draft.format === "slots") {
+    write.slots = slotsOf(draft);
   } else {
     write.assignment = {
       signup_cutoff: draft.assignment.signupCutoff,
@@ -656,6 +806,48 @@ function assignmentPreview(
   ]);
 }
 
+/** A Slots Challenge's preview: its rules in words (the year strip is drawn for the post). */
+function slotsPreview(
+  sessionId: string,
+  draft: IChallengeDraft,
+  notice: string[],
+): IChallengeView {
+  const rules = challengeRuleLines({
+    ...challengeOfDraft(draft),
+    slots: slotsOf(draft),
+  });
+  const lines = [
+    ...noticeLines(notice),
+    `## Preview: ${escapeChallengeText(draft.name)}`,
+    `-# Slots · ${scheduleSummary(draft)}`,
+    draft.description,
+    ...rules,
+  ].filter(Boolean);
+  return wizardView(new ContainerBuilder().addTextDisplayComponents(text(lines.join("\n"))), [
+    buttonRow(
+      saveButton(sessionId, draft),
+      button(sessionId, "basics", "Back"),
+      button(sessionId, "cancel", "Cancel"),
+    ),
+  ]);
+}
+
+/** The draft as a Challenge, for the rule lines the posts share. */
+function challengeOfDraft(draft: IChallengeDraft): IChallenge {
+  return {
+    id: draft.challengeId ?? 0,
+    name: draft.name,
+    description: draft.description,
+    challenge_format: draft.format,
+    hosted_by_club: draft.clubHosted,
+    schedule: draft.schedule,
+    ends_on: draft.endsOn,
+    season: draft.season ? { ...draft.season, crosses_new_year: false } : null,
+    open: true,
+    hidden: false,
+  };
+}
+
 function yearOf(game: IGameSummary): string | null {
   const year = game.initial_release_date
     ? new Date(game.initial_release_date).getUTCFullYear()
@@ -758,9 +950,9 @@ export async function renderWizardStep(
   const lines = [...notice];
   if (draft.step === "sources") return sourcesView(sessionId, draft, lines);
   if (draft.step === "preview") {
-    return draft.format === "assignment"
-      ? assignmentPreview(sessionId, draft, lines)
-      : poolPreview(sessionId, draft, api, lines);
+    if (draft.format === "assignment") return assignmentPreview(sessionId, draft, lines);
+    if (draft.format === "slots") return slotsPreview(sessionId, draft, lines);
+    return poolPreview(sessionId, draft, api, lines);
   }
   return basicsView(sessionId, draft, lines);
 }
@@ -859,6 +1051,7 @@ export function buildBasicsModal(sessionId: string, draft: IChallengeDraft): Mod
         maxLength: DESCRIPTION_MAX,
       }),
       radio(WIZARD_FIELDS.format, "Challenge Format", [
+        { label: "Slots", value: "slots", description: "One game from each year in a range" },
         { label: "Pool", value: "pool", description: "Any game from a set you choose" },
         {
           label: "Assignment",
@@ -870,7 +1063,73 @@ export function buildBasicsModal(sessionId: string, draft: IChallengeDraft): Mod
         { label: "Always Open", value: "always_open", description: "Join at any time" },
         { label: "Seasonal", value: "seasonal", description: "Open on the same dates every year" },
       ], editing || draft.name ? draft.schedule : null),
+      new LabelBuilder().setLabel("Counts past play").setCheckboxGroupComponent(
+        new CheckboxGroupBuilder()
+          .setCustomId(WIZARD_FIELDS.countsPastPlay)
+          .setMinValues(0)
+          .setMaxValues(1)
+          .setRequired(false)
+          .setOptions({
+            label: "Let earlier Game Completions be picked",
+            value: COUNTS_PAST_PLAY_ON,
+            description: "Slots and Always Open only",
+            default: draft.slots.countsPastPlay,
+          }),
+      ),
     );
+}
+
+/** Modal 2 for Slots: the first and last year, then the Season or end date. */
+function slotsSettingsLabels(draft: IChallengeDraft): LabelBuilder[] {
+  const { firstYear, lastYear, countsPastPlay } = draft.slots;
+  const labels = [
+    radio(WIZARD_FIELDS.firstYear, "First year", [
+      {
+        label: "Each member's birth year",
+        value: "birth_year",
+        description: "Members are asked for their Birth Date",
+      },
+      { label: "A fixed year", value: "fixed" },
+    ], firstYear === "birth_year" ? "birth_year" : "fixed"),
+    textInput(WIZARD_FIELDS.firstYearFixed, "Fixed first year", {
+      value: typeof firstYear === "number" ? String(firstYear) : undefined,
+      placeholder: "e.g. 1990",
+      required: false,
+      maxLength: 4,
+    }),
+    radio(WIZARD_FIELDS.lastYear, "Last year", [
+      {
+        label: "The current year",
+        value: "current_year",
+        description: "Gains a slot every 1 January",
+      },
+      { label: "A fixed year", value: "fixed" },
+    ], lastYear === "current_year" ? "current_year" : "fixed"),
+    textInput(WIZARD_FIELDS.lastYearFixed, "Fixed last year", {
+      value: typeof lastYear === "number" ? String(lastYear) : undefined,
+      placeholder: "e.g. 1999",
+      required: false,
+      maxLength: 4,
+    }),
+  ];
+  // A modal holds five components: the schedule's dates take the last one.
+  if (draft.schedule === "seasonal") {
+    labels.push(textInput(WIZARD_FIELDS.season, "Season", {
+      value: draft.season
+        ? `${formatMonthDay(draft.season.start)} to ${formatMonthDay(draft.season.end)}`
+        : undefined,
+      placeholder: "21 June to 22 September",
+      maxLength: 60,
+    }));
+  } else {
+    labels.push(textInput(WIZARD_FIELDS.endsOn, "End date", {
+      value: draft.endsOn ? formatChallengeDate(draft.endsOn) : undefined,
+      placeholder: "None, or a date such as 3 March 2027",
+      required: false,
+      description: `Counts past play was set in step 1 (${countsPastPlay ? "on" : "off"}).`,
+    }));
+  }
+  return labels;
 }
 
 /** Modal 2: the Format's settings (a Pool's schedule, target and search; a calendar). */
@@ -889,6 +1148,7 @@ export function buildSettingsModal(sessionId: string, draft: IChallengeDraft): M
       textInput(WIZARD_FIELDS.reveal, "Picks revealed", { value: formatMonthDay(reveal) }),
     );
   }
+  if (draft.format === "slots") return modal.addLabelComponents(...slotsSettingsLabels(draft));
   const labels: LabelBuilder[] = [];
   if (draft.schedule === "seasonal") {
     labels.push(
