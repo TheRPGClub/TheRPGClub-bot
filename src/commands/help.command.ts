@@ -69,6 +69,7 @@ type HelpTopicId =
   | "avatar-history"
   | "publicreminder"
   | "giveaway"
+  | "challenge"
   | "thread"
   | "flag"
   | "news"
@@ -335,6 +336,21 @@ const HELP_TOPICS: HelpTopic[] = [
       "/gamegiveaway still works for now and points to /giveaway hub.",
   },
   {
+    id: "challenge",
+    label: "/challenge",
+    summary: "Create and browse club Challenges.",
+    syntax:
+      "Syntax: /challenge create [club-hosted:<boolean>] | /challenge list [show:<filter>] | " +
+      "/challenge show challenge:<challenge> [view:<game|member>] | " +
+      "/challenge edit challenge:<challenge>",
+    notes:
+      "Regulars and staff create Challenges in two short forms, then pick the franchises " +
+      "and collections for the Pool and check its covers before saving. New Challenges are " +
+      "announced in #challenges. A Challenge's rules lock once someone starts a Run; its " +
+      "name, description and end date can still change. Staff can hide a Challenge or hand " +
+      "it to another Host from /challenge edit.",
+  },
+  {
     id: "thread",
     label: "/thread",
     summary:
@@ -454,7 +470,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
   {
     id: "members",
     name: "Members",
-    topicIds: ["profile", "mp-info"],
+    topicIds: ["profile", "mp-info", "challenge"],
   },
   {
     id: "gamedb",
@@ -1001,6 +1017,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   news: "Share game news in the News Channel.",
   suggestion: "Submit a bot suggestion.",
   giveaway: "Claim or donate game keys.",
+  challenge: "Create and browse club Challenges.",
   "avatar-history": "View a member’s avatar history.",
   mod: "Moderator tools.",
   admin: "Admin tools.",

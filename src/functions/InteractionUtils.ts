@@ -546,6 +546,36 @@ export async function safeDeferUpdate(interaction: AnyRepliable): Promise<boolea
   }
 }
 
+/**
+ * Acks a modal submit before slow work: as an update of the message whose button opened
+ * it, so a later safeEditReply rewrites that message in place, or, for a modal opened by
+ * a slash command, as a private deferred reply. Returns false when it could not be acked.
+ */
+export async function safeDeferModalSubmit(
+  interaction: ModalSubmitInteraction,
+): Promise<boolean> {
+  const aug = interaction as AugmentedInteraction;
+  if (aug.__rpgAcked || interaction.deferred || interaction.replied) return true;
+  if (!interaction.isFromMessage()) {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    return Boolean(aug.__rpgAcked);
+  }
+  if (shouldBlockDevChannelInteraction(interaction)) {
+    await sendDevChannelBlockResponse(interaction);
+    return false;
+  }
+  try {
+    await interaction.deferUpdate();
+    aug.__rpgAcked = true;
+    aug.__rpgDeferred = true;
+    return true;
+  } catch (err: unknown) {
+    if (isAckError(err)) return !isUnknownInteraction(err);
+    logError("InteractionUtils.safeDeferModalSubmit", err);
+    return false;
+  }
+}
+
 /** Defers the update. Returns false if deferral failed (caller should return). */
 export async function safeDeferUpdateOrBail(interaction: AnyRepliable): Promise<boolean> {
   return safeDeferUpdate(interaction);

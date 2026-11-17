@@ -149,3 +149,58 @@ export function describeOpen(challenge: IChallenge, now: Date = new Date()): str
   const when = `<t:${Math.floor(change.getTime() / 1000)}:R>`;
   return `${state}, ${challenge.open ? "closes" : "opens"} ${when}`;
 }
+
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function monthNumber(name: string): number | null {
+  const lower = name.toLowerCase();
+  if (lower.length < 3) return null;
+  const index = MONTHS.findIndex((month) => month.toLowerCase().startsWith(lower));
+  return index >= 0 ? index + 1 : null;
+}
+
+function twoDigits(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+/**
+ * A day and month a member typed ("21 June", "June 21", "21 Jun", "06-21") as "MM-DD",
+ * or null when it is not one. 29 February is a day and month; the API decides on it.
+ */
+export function parseMonthDay(input: string): string | null {
+  const value = input.trim().replace(/,/g, " ").replace(/\s+/g, " ");
+  let month: number | null = null;
+  let day: number | null = null;
+  let match = /^(\d{1,2})-(\d{1,2})$/.exec(value);
+  if (match) {
+    month = Number(match[1]);
+    day = Number(match[2]);
+  } else if ((match = /^(\d{1,2})(?:st|nd|rd|th)? ([a-z]+)\.?$/i.exec(value))) {
+    day = Number(match[1]);
+    month = monthNumber(match[2]!);
+  } else if ((match = /^([a-z]+)\.? (\d{1,2})(?:st|nd|rd|th)?$/i.exec(value))) {
+    month = monthNumber(match[1]!);
+    day = Number(match[2]);
+  }
+  if (!month || !day || month > 12 || day > DAYS_IN_MONTH[month - 1]!) return null;
+  return `${twoDigits(month)}-${twoDigits(day)}`;
+}
+
+/**
+ * A date a member typed ("3 March 2027", "March 3 2027", "2027-03-03") as an ISO date, or
+ * null when it is not one.
+ */
+export function parseChallengeDate(input: string): string | null {
+  const value = input.trim().replace(/,/g, " ").replace(/\s+/g, " ");
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value);
+  let parts: { year: number; monthDay: string | null } | null = null;
+  if (iso) {
+    parts = { year: Number(iso[1]), monthDay: parseMonthDay(`${iso[2]}-${iso[3]}`) };
+  } else {
+    const withYear = /^(.*) (\d{4})$/.exec(value);
+    if (withYear) parts = { year: Number(withYear[2]), monthDay: parseMonthDay(withYear[1]!) };
+  }
+  if (!parts?.monthDay) return null;
+  const date = DateTime.fromISO(`${parts.year}-${parts.monthDay}`);
+  return date.isValid ? date.toISODate() : null;
+}

@@ -1,3 +1,5 @@
+import axios from "axios";
+import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import {
   apiGet,
   apiGetOrThrow,
@@ -262,4 +264,20 @@ export function poolDefinitionOf(pool: IChallengePool): IPoolDefinition {
     included_game_ids: (pool.included_games ?? []).map((g) => g.game_id),
     excluded_game_ids: (pool.excluded_games ?? []).map((g) => g.game_id),
   };
+}
+
+/**
+ * The reply for a failed Challenge call. A refusal (4xx) leads with the API's own
+ * `message`, written for members, as given; anything else leads with `fallback` and pings
+ * the devs. Both carry the full request and response (CLAUDE.md).
+ */
+export function challengeRefusalText(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status ?? 0;
+    const message = (err.response?.data as { message?: unknown } | undefined)?.message;
+    if (status >= 400 && status < 500 && typeof message === "string" && message.trim()) {
+      return buildApiErrorMessage(message.trim(), err, { devPing: false });
+    }
+  }
+  return buildApiErrorMessage(fallback, err);
 }
