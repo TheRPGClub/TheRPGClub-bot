@@ -12,6 +12,7 @@ import type {
   IPage,
   IPoolDefinition,
 } from "../services/ChallengeApi.js";
+import { describeOpen } from "../functions/ChallengeCopy.js";
 import { buttonsOf, game, poolChallenge, selectsOf, textOf } from "./challengeFixtures.js";
 
 interface IFakeBrowseApi extends IChallengeBrowseApi {
@@ -192,6 +193,23 @@ test("show: a Closed Seasonal Challenge says when it opens", async () => {
 
   const opens = Math.floor(Date.parse("2027-06-21T04:00:00Z") / 1000);
   assert.ok(textOf(view.components).includes(`Closed, opens <t:${opens}:R>`));
+});
+
+test("a 29 February Season day falls back like the API's in a year without one", () => {
+  // 2027 has no 29 February: a Season starting then opens on 1 March, and one ending then
+  // ends on 28 February (so it closes as 1 March begins).
+  const closed = poolChallenge({
+    open: false,
+    season: { start: "02-29", end: "03-31", crosses_new_year: false },
+  });
+  const opens = Math.floor(Date.parse("2027-03-01T05:00:00Z") / 1000);
+  assert.equal(describeOpen(closed, NOW), `Closed, opens <t:${opens}:R>`);
+
+  const open = poolChallenge({
+    open: true,
+    season: { start: "11-01", end: "02-29", crosses_new_year: true },
+  });
+  assert.equal(describeOpen(open, NOW), `Open, closes <t:${opens}:R>`);
 });
 
 test("show: a club-hosted Challenge names the club, with no Host button", async () => {
