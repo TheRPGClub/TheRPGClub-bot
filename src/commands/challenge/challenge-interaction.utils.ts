@@ -18,11 +18,9 @@ import {
 import { CHALLENGE_API } from "../../services/ChallengeApi.js";
 import type { IIncludeChoice } from "../../services/ChallengeWizard.js";
 import { logError } from "../../utilities/LogUtils.js";
+import { CHALLENGE_AUTOCOMPLETE_READ } from "../../config/challenges.js";
 
 // Discord-side helpers the /challenge commands share.
-
-/** Challenges read for the autocomplete, newest first. */
-const AUTOCOMPLETE_READ = 100;
 
 /**
  * Autocomplete for a `challenge:` option: the Challenges the member may see whose name
@@ -37,7 +35,7 @@ export async function autocompleteChallenge(interaction: AutocompleteInteraction
     const page = await CHALLENGE_API.listChallenges({
       actingUserId: interaction.user.id,
       page: 1,
-      per: AUTOCOMPLETE_READ,
+      per: CHALLENGE_AUTOCOMPLETE_READ,
     });
     const matches = page.items.filter((c) => !query || c.name.toLowerCase().includes(query));
     await safeRespond(interaction, matches.slice(0, DISCORD_AUTOCOMPLETE_CHOICES_MAX).map((c) => ({

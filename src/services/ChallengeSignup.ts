@@ -1,14 +1,8 @@
-import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ContainerBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
+import { ActionRowBuilder, ButtonBuilder, ContainerBuilder } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { buildChallengeSantaId } from "../functions/ChallengeCustomIds.js";
 import { escapeChallengeText, listJoin } from "../functions/ChallengeCopy.js";
-import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import { commandMention } from "./CommandMentionService.js";
 import { challengeTextView, type IChallengeView } from "./ChallengeBrowse.js";
@@ -27,6 +21,8 @@ import {
 } from "./ChallengeEditionApi.js";
 import type { ChallengeRunResult } from "./ChallengeRuns.js";
 import { editionDay, editionName } from "./ChallengeSignupPosts.js";
+import { plural } from "../utilities/TextUtils.js";
+import { CHALLENGE_ASSIGNMENT_READ } from "../config/challenges.js";
 
 // Secret Santa sign-up from Discord (spec api#376, bot#1551): /challenge santa join and
 // leave, the posts' Sign up button, and the buttons of their replies. The API decides
@@ -42,9 +38,6 @@ export interface ISantaSignupDeps {
 export type SantaTarget =
   | { editionId: number; actingUserId: string }
   | { challengeId: number | null; actingUserId: string };
-
-/** Assignment Challenges read when none is named. */
-const ASSIGNMENT_READ = 100;
 
 /** What a Secret Santa command does to an Edition. */
 export type SantaAction = "join" | "leave" | "pick";
@@ -83,12 +76,8 @@ const ACTIONS: Readonly<Record<SantaAction, {
   },
 };
 
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
-
 function viewWithButtons(content: string, buttons: ButtonBuilder[]): IChallengeView {
-  const container = new ContainerBuilder().addTextDisplayComponents(text(content));
+  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content));
   return {
     components: [
       container.toJSON(),
@@ -97,10 +86,6 @@ function viewWithButtons(content: string, buttons: ButtonBuilder[]): IChallengeV
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [] },
   };
-}
-
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
 }
 
 function santaButton(
@@ -161,7 +146,7 @@ async function onlyEdition(
       actingUserId: input.actingUserId,
       challengeFormat: "assignment",
       page: 1,
-      per: ASSIGNMENT_READ,
+      per: CHALLENGE_ASSIGNMENT_READ,
     });
     challenges = page.items;
   } catch (err: unknown) {
@@ -203,7 +188,7 @@ function joinedText(edition: IChallengeEdition): string {
     `## You're in ${editionName(edition)}`,
     `On ${editionDay(edition.signup_cutoff_on)} the draw makes you someone's Santa, and ` +
       `someone yours. On ${editionDay(edition.reveal_on)} everyone unwraps theirs.`,
-    `-# ${plural(edition.signed_up_count, "member", "members")} signed up · Changed your ` +
+    `-# ${plural(edition.signed_up_count, "member")} signed up · Changed your ` +
       `mind? Leave before ${editionDay(edition.signup_cutoff_on)}.`,
   ].join("\n");
 }
@@ -325,7 +310,7 @@ export async function signedUpEditions(
       actingUserId,
       challengeFormat: "assignment",
       page: 1,
-      per: ASSIGNMENT_READ,
+      per: CHALLENGE_ASSIGNMENT_READ,
     });
     const open = page.items
       .map((challenge) => challenge.assignment?.edition)

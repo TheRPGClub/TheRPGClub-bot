@@ -4,19 +4,14 @@ import {
   ContainerBuilder,
   LabelBuilder,
   ModalBuilder,
-  TextDisplayBuilder,
   TextInputBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags, TextInputStyle } from "discord-api-types/v10";
 import axios from "axios";
 import { DateTime } from "luxon";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { buildChallengeRunId } from "../functions/ChallengeCustomIds.js";
-import {
-  DISCORD_AUTOCOMPLETE_CHOICES_MAX,
-  MAX_CONTAINER_TEXT,
-  truncateLabel,
-} from "../config/textLimits.js";
+import { DISCORD_AUTOCOMPLETE_CHOICES_MAX, truncateLabel } from "../config/textLimits.js";
 import {
   CHALLENGE_TIME_ZONE,
   escapeChallengeText,
@@ -46,6 +41,7 @@ import {
   type IBirthDateApi,
 } from "./BirthDateService.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
+import { plural } from "../utilities/TextUtils.js";
 
 // A member's Runs from Discord (spec api#376, bot#1547): start, abandon and delete one.
 // The API decides every rule (Closed, one Active Run, one Run per Season, Birth Date);
@@ -88,7 +84,7 @@ export function formatRunDate(iso: string): string {
 }
 
 function games(count: number): string {
-  return `${count} ${count === 1 ? "game" : "games"}`;
+  return `${plural(count, "game")}`;
 }
 
 /**
@@ -144,11 +140,10 @@ function birthDateRequired(err: unknown): string | null {
 /** The answer to a missing Birth Date: the API's message and a button to enter it. */
 function birthDatePrompt(challengeId: number, message: string): IChallengeView {
   const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(
+    buildTextDisplay(
       `${message}\n-# Only you and staff see the full date. You can change it twice a month ` +
         `with ${commandMention("profile birth-date")}.`,
-      MAX_CONTAINER_TEXT,
-    )),
+    ),
   );
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -236,7 +231,7 @@ export async function birthDateStartReply(
     view: {
       ...started.view,
       components: [
-        new TextDisplayBuilder().setContent(safeV2TextContent(note, MAX_CONTAINER_TEXT)).toJSON(),
+        buildTextDisplay(note).toJSON(),
         ...started.view.components,
       ],
     },
@@ -260,7 +255,7 @@ export function runProgressText(run: IChallengeRun): string {
 function confirmView(content: string, action: "abandon" | "delete", run: IChallengeRun):
   IChallengeView {
   const container = new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT)),
+    buildTextDisplay(content),
   );
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()

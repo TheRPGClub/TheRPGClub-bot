@@ -5,6 +5,7 @@ import type {
   IChallengeMember,
   IChallengePool,
 } from "../services/ChallengeApi.js";
+import { plural } from "../utilities/TextUtils.js";
 
 // The words every Challenge view and post shares (spec api#376), in the API glossary's
 // terms: Host, Pool, Season, Always Open, Seasonal, Cleared, Finish.
@@ -71,10 +72,10 @@ export function describePool(pool: IChallengePool): string {
   const sources = [
     namedGroup((pool.franchises ?? []).map((f) => f.name), "franchise", "franchises"),
     namedGroup((pool.collections ?? []).map((c) => c.name), "collection", "collections"),
-    included ? `${included} ${included === 1 ? "game" : "games"} added by hand` : null,
+    included ? `${plural(included, "game")} added by hand` : null,
   ].filter((part): part is string => part !== null);
   const count = pool.game_count;
-  const games = typeof count === "number" ? `${count} ${count === 1 ? "game" : "games"}` : "Games";
+  const games = typeof count === "number" ? `${plural(count, "game")}` : "Games";
   return sources.length ? `${games} from ${listJoin(sources)}` : games;
 }
 

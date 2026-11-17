@@ -1,5 +1,12 @@
-import sharp, { type OverlayOptions } from "sharp";
-import { escapeXml, wrap } from "./ChallengeShelfImage.js";
+import type { OverlayOptions } from "sharp";
+import {
+  composeCanvas,
+  coverTile,
+  escapeXml,
+  textCard,
+  wrap,
+  type ITileShape,
+} from "./ChallengeImageTiles.js";
 
 // The Secret Santa reveal sheet (design 7C "Gift tags"): every picked game's cover with a
 // gold tag naming who it is for, under a "Secret Santa 2026 / Revealed 25 December"
@@ -47,26 +54,16 @@ const FONT = "'Barlow Condensed', 'Roboto Condensed', 'DejaVu Sans Condensed', s
 /** About how wide a bold uppercase character of the tag font draws, per pixel of size. */
 const TAG_CHAR_WIDTH = 0.66;
 
-function roundedMask(): Buffer {
-  return Buffer.from(
-    `<svg width="${COVER_WIDTH}" height="${COVER_HEIGHT}">` +
-      `<rect width="${COVER_WIDTH}" height="${COVER_HEIGHT}" rx="${CORNER}"/></svg>`,
-  );
-}
+const SHAPE: ITileShape = { width: COVER_WIDTH, height: COVER_HEIGHT, corner: CORNER };
 
-/** A tile without a cover: the title on a card, or "+N more". */
+/** A tile without a cover: the title on a card. */
 function titleCard(lines: string[], size: number): Buffer {
-  const line = Math.round(size * 1.25);
-  const top = COVER_HEIGHT / 2 - ((lines.length - 1) * line) / 2;
-  const text = lines.map((value, index) =>
-    `<text x="50%" y="${top + index * line}" text-anchor="middle" ` +
-      `dominant-baseline="middle">${escapeXml(value)}</text>`).join("");
-  return Buffer.from(
-    `<svg width="${COVER_WIDTH}" height="${COVER_HEIGHT}">` +
-      `<rect width="${COVER_WIDTH}" height="${COVER_HEIGHT}" rx="${CORNER}" fill="${CARD}"/>` +
-      `<g font-family="${FONT}" font-size="${size}" font-weight="700" fill="${PAPER}">` +
-      `${text}</g></svg>`,
-  );
+  return textCard(SHAPE, {
+    lines,
+    fill: CARD,
+    font: { family: FONT, size, fill: PAPER },
+    lineHeight: Math.round(size * 1.25),
+  });
 }
 
 /** A wrapped present: the tile of a recipient whose backlog had nothing to pick. */
@@ -81,20 +78,10 @@ function giftBox(): Buffer {
   );
 }
 
-async function coverTile(tag: IGiftTag): Promise<Buffer> {
-  if (!tag.game) return giftBox();
-  const card = (): Buffer => titleCard(wrap(tag.game!.title.toUpperCase(), 14, 6), 20);
-  if (!tag.game.cover) return card();
-  try {
-    return await sharp(tag.game.cover)
-      .resize(COVER_WIDTH, COVER_HEIGHT, { fit: "cover" })
-      .composite([{ input: roundedMask(), blend: "dest-in" }])
-      .png()
-      .toBuffer();
-  } catch {
-    // An image sharp can't read gets the title card instead.
-    return card();
-  }
+function giftTile(tag: IGiftTag): Promise<Buffer> {
+  const game = tag.game;
+  if (!game) return Promise.resolve(giftBox());
+  return coverTile(game.cover, SHAPE, () => titleCard(wrap(game.title.toUpperCase(), 14, 6), 20));
 }
 
 /** The tag's name cut to fit the tile next to "TO". */
@@ -153,7 +140,7 @@ export async function composeGiftTags(
     top: gridTop + Math.floor(index / columns) * (CELL_HEIGHT + GAP_Y),
   });
 
-  const covers = await Promise.all(shown.map(coverTile));
+  const covers = await Promise.all(shown.map(giftTile));
   const composites: OverlayOptions[] = covers.map((input, index) => ({ input, ...at(index) }));
   if (more) composites.push({ input: titleCard([`+${more} more`], 30), ...at(shown.length) });
 
@@ -174,8 +161,5 @@ export async function composeGiftTags(
     "</g></svg>";
   composites.push({ input: Buffer.from(svg), left: 0, top: 0 });
 
-  return sharp({ create: { width, height, channels: 4, background: BACKGROUND } })
-    .composite(composites)
-    .png({ compressionLevel: 9 })
-    .toBuffer();
+  return composeCanvas({ width, height }, BACKGROUND, composites);
 }

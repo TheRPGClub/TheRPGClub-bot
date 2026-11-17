@@ -1,7 +1,14 @@
 import sharp, { type OverlayOptions } from "sharp";
 import { decadeLabel, decadeOf } from "../functions/ChallengeSlotsCopy.js";
 import type { IChallengeSlots } from "./ChallengeApi.js";
-import { escapeXml, wrap } from "./ChallengeShelfImage.js";
+import {
+  composeCanvas,
+  coverTile,
+  escapeXml,
+  textCard,
+  wrap,
+  type ITileShape,
+} from "./ChallengeImageTiles.js";
 
 // The Slots pictures (spec api#376, bot#1550), drawn with sharp like the Run Finished
 // shelf: the new-Challenge year strip (design 1B), a row of empty year slots, and the
@@ -120,41 +127,23 @@ const POSTER_HEADER = 148;
 const POSTER_LEGEND = 64;
 const POSTER_CORNER = 6;
 
-function posterMask(): Buffer {
-  const { width, height } = POSTER_TILE;
-  return Buffer.from(
-    `<svg width="${width}" height="${height}"><rect width="${width}" height="${height}" ` +
-      `rx="${POSTER_CORNER}" ry="${POSTER_CORNER}"/></svg>`,
-  );
-}
+const POSTER_SHAPE: ITileShape = { ...POSTER_TILE, corner: POSTER_CORNER };
 
 function titleCard(title: string): Buffer {
-  const { width, height } = POSTER_TILE;
   // Three lines at most, kept above the year in the corner.
-  const lines = wrap(title, 11, 3);
-  const top = height / 2 - 10 - ((lines.length - 1) * 15) / 2;
-  const text = lines.map((line, i) =>
-    `<text x="50%" y="${top + i * 15}" text-anchor="middle" dominant-baseline="middle">` +
-      `${escapeXml(line)}</text>`).join("");
-  return Buffer.from(
-    `<svg width="${width}" height="${height}"><rect width="${width}" height="${height}" ` +
-      `rx="${POSTER_CORNER}" fill="${CARD}"/><g font-family="${BODY_FONT}" font-size="12" ` +
-      `font-weight="700" fill="${INK}">${text}</g></svg>`,
-  );
+  return textCard(POSTER_SHAPE, {
+    lines: wrap(title, 11, 3),
+    fill: CARD,
+    font: { family: BODY_FONT, size: 12, fill: INK },
+    lineHeight: 15,
+    middle: POSTER_TILE.height / 2 - 10,
+  });
 }
 
-async function posterTile(year: IPosterYear): Promise<Buffer | null> {
-  if (!year.game) return null;
-  if (!year.game.cover) return titleCard(year.game.title);
-  try {
-    return await sharp(year.game.cover)
-      .resize(POSTER_TILE.width, POSTER_TILE.height, { fit: "cover" })
-      .composite([{ input: posterMask(), blend: "dest-in" }])
-      .png()
-      .toBuffer();
-  } catch {
-    return titleCard(year.game.title);
-  }
+function posterTile(year: IPosterYear): Promise<Buffer | null> {
+  const game = year.game;
+  if (!game) return Promise.resolve(null);
+  return coverTile(game.cover, POSTER_SHAPE, () => titleCard(game.title));
 }
 
 /** The year's two digits on a tile, over a shade so it reads on any cover. */
@@ -229,8 +218,5 @@ export async function composeYearPoster(input: IPosterInput): Promise<Buffer> {
     `font-family="${BODY_FONT}" font-weight="700" fill="${MUTED}">OPEN</text></svg>`;
   composites.push({ input: Buffer.from(overlay), left: 0, top: 0 });
 
-  return sharp({ create: { width, height, channels: 4, background: BACKGROUND } })
-    .composite(composites)
-    .png({ compressionLevel: 9 })
-    .toBuffer();
+  return composeCanvas({ width, height }, BACKGROUND, composites);
 }

@@ -1,4 +1,11 @@
-import sharp, { type OverlayOptions } from "sharp";
+import type { OverlayOptions } from "sharp";
+import {
+  composeCanvas,
+  coverTile,
+  textCard,
+  wrap,
+  type ITileShape,
+} from "./ChallengeImageTiles.js";
 
 // The Run Finished shelf (design 3B): the Run's Cleared covers standing on a shelf, up to
 // 5 a row, drawn with sharp like the vote collage (collageGenerator). A game without a
@@ -28,67 +35,28 @@ const CARD_MUTED = "#a9a39a";
 const TITLE_LINE_CHARS = 16;
 const TITLE_LINES_MAX = 5;
 
-export function escapeXml(value: string): string {
-  return value.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`);
-}
-
-/** Words into lines of about `width` characters, at most `max` lines (the last cut). */
-export function wrap(value: string, width: number, max: number): string[] {
-  const lines: string[] = [];
-  let line = "";
-  for (const word of value.split(/\s+/).filter(Boolean)) {
-    const next = line ? `${line} ${word}` : word;
-    if (next.length > width && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = next;
-    }
-  }
-  if (line) lines.push(line);
-  if (lines.length <= max) return lines;
-  const kept = lines.slice(0, max);
-  kept[max - 1] = `${kept[max - 1]!.slice(0, width - 1)}…`;
-  return kept;
-}
-
-function roundedMask(): Buffer {
-  return Buffer.from(
-    `<svg width="${COVER_WIDTH}" height="${COVER_HEIGHT}">` +
-      `<rect width="${COVER_WIDTH}" height="${COVER_HEIGHT}" rx="${CORNER}" ry="${CORNER}"/>` +
-      "</svg>",
-  );
-}
+const SHAPE: ITileShape = { width: COVER_WIDTH, height: COVER_HEIGHT, corner: CORNER };
 
 /** A card with centred text lines: a game's title, or "+N more". */
 function card(lines: string[], options: { size: number; muted?: boolean }): Buffer {
-  const lineHeight = Math.round(options.size * 1.25);
-  const top = COVER_HEIGHT / 2 - ((lines.length - 1) * lineHeight) / 2;
-  const text = lines.map((line, index) =>
-    `<text x="50%" y="${top + index * lineHeight}" text-anchor="middle" ` +
-      `dominant-baseline="middle">${escapeXml(line)}</text>`).join("");
-  return Buffer.from(
-    `<svg width="${COVER_WIDTH}" height="${COVER_HEIGHT}">` +
-      `<rect width="${COVER_WIDTH}" height="${COVER_HEIGHT}" rx="${CORNER}" ry="${CORNER}" ` +
-      `fill="${CARD}"/>` +
-      `<g font-family="sans-serif" font-size="${options.size}" font-weight="700" ` +
-      `fill="${options.muted ? CARD_MUTED : CARD_TEXT}">${text}</g></svg>`,
-  );
+  return textCard(SHAPE, {
+    lines,
+    fill: CARD,
+    font: {
+      family: "sans-serif",
+      size: options.size,
+      fill: options.muted ? CARD_MUTED : CARD_TEXT,
+    },
+    lineHeight: Math.round(options.size * 1.25),
+  });
 }
 
-async function tileImage(tile: ShelfTile): Promise<Buffer> {
-  if (tile.kind === "more") return card([`+${tile.count} more`], { size: 44, muted: true });
-  if (!tile.cover) return card(wrap(tile.title, TITLE_LINE_CHARS, TITLE_LINES_MAX), { size: 26 });
-  try {
-    return await sharp(tile.cover)
-      .resize(COVER_WIDTH, COVER_HEIGHT, { fit: "cover" })
-      .composite([{ input: roundedMask(), blend: "dest-in" }])
-      .png()
-      .toBuffer();
-  } catch {
-    // An image sharp can't read gets the title card instead.
-    return card(wrap(tile.title, TITLE_LINE_CHARS, TITLE_LINES_MAX), { size: 26 });
+function tileImage(tile: ShelfTile): Promise<Buffer> {
+  if (tile.kind === "more") {
+    return Promise.resolve(card([`+${tile.count} more`], { size: 44, muted: true }));
   }
+  return coverTile(tile.cover, SHAPE, () =>
+    card(wrap(tile.title, TITLE_LINE_CHARS, TITLE_LINES_MAX), { size: 26 }));
 }
 
 /** Tiles per row: balanced rows of at most 5 (6 as 3 and 3, 7 as 4 and 3). */
@@ -122,10 +90,7 @@ export async function composeCoverStrip(tiles: readonly ShelfTile[]): Promise<Bu
     left: PADDING + index * (COVER_WIDTH + GAP),
     top: PADDING,
   }));
-  return sharp({ create: { width, height, channels: 4, background: BACKGROUND } })
-    .composite(composites)
-    .png({ compressionLevel: 9 })
-    .toBuffer();
+  return composeCanvas({ width, height }, BACKGROUND, composites);
 }
 
 /** The shelf as a PNG. Throws when there are no tiles. */
@@ -155,8 +120,5 @@ export async function composeRunShelf(tiles: readonly ShelfTile[]): Promise<Buff
     });
   });
 
-  return sharp({ create: { width, height, channels: 4, background: BACKGROUND } })
-    .composite(composites)
-    .png({ compressionLevel: 9 })
-    .toBuffer();
+  return composeCanvas({ width, height }, BACKGROUND, composites);
 }

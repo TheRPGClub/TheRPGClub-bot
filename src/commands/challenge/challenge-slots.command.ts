@@ -44,6 +44,7 @@ import { buildSlotsRunView } from "../../services/ChallengeSlotsShow.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { challengeErrorReply, parseChallengeOption } from "./challenge-interaction.utils.js";
+import { CHALLENGE_AUTOCOMPLETE_READ } from "../../config/challenges.js";
 
 // /challenge slot-move and past-pick, and a Slots Run's components: its decade pages, the
 // by-member select of Runs, and the Move a game and Pick past play steps (spec api#376,
@@ -52,8 +53,6 @@ import { challengeErrorReply, parseChallengeOption } from "./challenge-interacti
 
 type SlotsInteraction = CommandInteraction | ButtonInteraction | StringSelectMenuInteraction;
 
-/** Runs read for the run: autocomplete, newest first. */
-const AUTOCOMPLETE_READ = 100;
 const LOG_CONTEXT = "ChallengeSlotsCommand";
 
 async function showResult(interaction: SlotsInteraction, result: ChallengeSlotResult):
@@ -107,7 +106,7 @@ async function autocompleteRun(interaction: AutocompleteInteraction): Promise<vo
       interaction.user.id,
       interaction.user.id,
       1,
-      AUTOCOMPLETE_READ,
+      CHALLENGE_AUTOCOMPLETE_READ,
     );
     return slotsRunChoices(page.items, focusedQuery(interaction));
   });

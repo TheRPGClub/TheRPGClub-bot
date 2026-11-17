@@ -7,6 +7,7 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import { DEV_ROLE_ID } from "../config/roles.js";
+import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 import { linkCommandMentions } from "../services/CommandMentionService.js";
 
@@ -16,6 +17,11 @@ export function safeV2TextContent(value: string, maxLength: number): string {
   const normalized = value.split("\0").join("").trim();
   if (normalized.length <= maxLength) return normalized;
   return truncateWithEllipsis(normalized, maxLength);
+}
+
+/** A text display for a container, cut to the text a container may hold. */
+export function buildTextDisplay(content: string): TextDisplayBuilder {
+  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
 }
 
 export function buildComponentsV2Flags(isEphemeral: boolean): number {

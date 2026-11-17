@@ -6,12 +6,11 @@ import {
   ModalBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
-  TextDisplayBuilder,
   TextInputBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags, TextInputStyle } from "discord-api-types/v10";
 import { DateTime } from "luxon";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_TIME_ZONE,
   escapeChallengeText,
@@ -24,7 +23,6 @@ import {
 } from "../functions/ChallengeCustomIds.js";
 import {
   DISCORD_SELECT_OPTIONS_MAX,
-  MAX_CONTAINER_TEXT,
   truncateDescription,
   truncateLabel,
 } from "../config/textLimits.js";
@@ -44,8 +42,10 @@ import {
 import type { ChallengeRunResult } from "./ChallengeRuns.js";
 import type { IChallengeDm } from "./ChallengeSeasons.js";
 import { resolveEdition, type ISantaSignupDeps, type SantaTarget } from "./ChallengeSignup.js";
-import { editionDay, payloadEdition } from "./ChallengeSignupPosts.js";
+import { editionDay } from "./ChallengeSignupPosts.js";
 import { commandMention } from "./CommandMentionService.js";
+import { plural } from "../utilities/TextUtils.js";
+import { payloadEdition, payloadMember, payloadUserId } from "./ChallengePayloads.js";
 
 // A Santa's pick from Discord (spec api#376, bot#1552), design 7C "Gift tags": a private
 // view of the recipient's eligible backlog (what the API serves: their backlog minus the
@@ -66,14 +66,6 @@ export interface ISantaPage {
 
 /** The search modal's text input. */
 export const SANTA_SEARCH_FIELD = "santa-search";
-
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
-
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
 
 /** The recipient's name, escaped for a message. */
 function recipientName(member: IChallengeMember): string {
@@ -157,15 +149,15 @@ export function buildSantaPickView(view: ISantaView, at: ISantaPage = {}): IChal
       : `${name}'s backlog has no games they haven't Cleared, so there is nothing to pick ` +
         `yet. Check back before ${editionDay(view.pick_deadline_on)}.`);
   }
-  const container = new ContainerBuilder().addTextDisplayComponents(text(lines.join("\n")));
+  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(lines.join("\n")));
   const hints = [
     tasteLine(name, view.taste),
     view.picks_open && query && games.length
-      ? `-# ${plural(games.length, "game", "games")} in ${name}'s backlog ` +
+      ? `-# ${plural(games.length, "game")} in ${name}'s backlog ` +
         `${games.length === 1 ? "matches" : "match"} "${escapeChallengeText(query)}".`
       : null,
   ].filter((line): line is string => !!line);
-  if (hints.length) container.addTextDisplayComponents(text(hints.join("\n")));
+  if (hints.length) container.addTextDisplayComponents(buildTextDisplay(hints.join("\n")));
 
   const rows: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] = [];
   if (view.picks_open) {
@@ -256,7 +248,7 @@ export async function santaPickReply(
 function buildGoneView(): IChallengeView {
   return {
     components: [new ContainerBuilder()
-      .addTextDisplayComponents(text("That Edition is gone, so there is nothing to pick."))
+      .addTextDisplayComponents(buildTextDisplay("That Edition is gone, so there is nothing to pick."))
       .toJSON()],
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [] },
@@ -280,19 +272,6 @@ export async function santaChooseReply(
   }
 }
 
-function payloadRecipient(payload: Record<string, unknown>): IChallengeMember {
-  const recipient = payload.recipient as Partial<IChallengeMember> | null | undefined;
-  if (
-    !recipient || typeof recipient !== "object" ||
-    typeof recipient.user_id !== "string" || typeof recipient.username !== "string"
-  ) {
-    throw new Error(`Invalid payload: recipient must be a member, got ${
-      JSON.stringify(recipient)
-    }.`);
-  }
-  return recipient as IChallengeMember;
-}
-
 /** The start of a club day (picks close then), as Unix seconds. */
 function clubDayStart(isoDate: string): number {
   return DateTime.fromISO(isoDate, { zone: CHALLENGE_TIME_ZONE }).toUnixInteger();
@@ -304,20 +283,15 @@ function clubDayStart(isoDate: string): number {
  * API sends it only to Santas who keep Challenge DMs on.
  */
 export async function pickReminderDm(payload: Record<string, unknown>): Promise<IChallengeDm> {
-  const userId = payload.user_id;
-  if (typeof userId !== "string" || !/^\d+$/.test(userId)) {
-    throw new Error(`Invalid payload: user_id must be a Discord user ID, got ${
-      JSON.stringify(userId)
-    }.`);
-  }
+  const userId = payloadUserId(payload);
   const edition = payloadEdition(payload);
-  const recipient = payloadRecipient(payload);
+  const recipient = payloadMember(payload, "recipient");
   const challenge = (payload.challenge as IChallenge | undefined) ?? null;
   const challengeName = escapeChallengeText(challenge?.name ?? edition.challenge.name);
   const name = recipientName(recipient);
   const deadline = edition.pick_deadline_on;
   const container = new ContainerBuilder()
-    .addTextDisplayComponents(text(
+    .addTextDisplayComponents(buildTextDisplay(
       `## ${challengeName}: pick ${name}'s game\n` +
         `You haven't picked yet. Picks close <t:${clubDayStart(deadline)}:R>, on ` +
         `${editionDay(deadline)}. If you don't pick, a random game from ${name}'s backlog ` +
@@ -326,7 +300,7 @@ export async function pickReminderDm(payload: Record<string, unknown>): Promise<
     .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
       button("Pick now", buildSantaPickId("open", edition.id), ButtonStyle.Primary),
     ))
-    .addTextDisplayComponents(text(
+    .addTextDisplayComponents(buildTextDisplay(
       `-# Turn Challenge DMs off with ${commandMention("challenge dms")}`,
     ));
   return {

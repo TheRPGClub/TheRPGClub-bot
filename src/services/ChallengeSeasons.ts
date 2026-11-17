@@ -5,10 +5,9 @@ import {
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   SeparatorBuilder,
-  TextDisplayBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags, SeparatorSpacingSize } from "discord-api-types/v10";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   describePoolTarget,
   escapeChallengeText,
@@ -18,7 +17,6 @@ import {
 } from "../functions/ChallengeCopy.js";
 import { buildChallengeRunId } from "../functions/ChallengeCustomIds.js";
 import { challengePageUrl } from "../config/website.js";
-import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import { commandMention } from "./CommandMentionService.js";
 import type {
@@ -31,12 +29,13 @@ import {
   COVER_WALL_MAX,
   buildCoverWall,
   coverGames,
-  payloadChallenge,
   type IChallengeJobDeps,
   type IChallengePost,
 } from "./ChallengeAnnouncements.js";
 import { composeCoverStrip, type ShelfTile } from "./ChallengeShelfImage.js";
 import { runProgressText } from "./ChallengeRuns.js";
+import { plural } from "../utilities/TextUtils.js";
+import { payloadChallenge, payloadRun, payloadUserId } from "./ChallengePayloads.js";
 
 // The lifecycle job's Season messages (spec api#376, bot#1548): the Season opened post in
 // #challenges (`season_opened`, design 2B "Returning faces": the Pool as one cover strip
@@ -47,10 +46,6 @@ import { runProgressText } from "./ChallengeRuns.js";
 export const FINISHERS_NAMED_MAX = 20;
 
 const LOG_CONTEXT = "ChallengeSeasons";
-
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
 
 /** A Season as club dates (`starts_on`, `ends_on`), from the payload's `season`. */
 interface ISeasonDates {
@@ -114,7 +109,7 @@ function seasonSubtext(challenge: IChallenge, season: ISeasonDates | null): stri
     parts.push(describePoolTarget(challenge.pool));
     const count = challenge.pool.game_count;
     if (typeof count === "number") {
-      parts.push(`${count} ${count === 1 ? "game" : "games"} in the Pool`);
+      parts.push(`${plural(count, "game")} in the Pool`);
     }
   }
   return parts.join(" · ");
@@ -172,20 +167,20 @@ export function buildSeasonOpenedPost(
   }
   if (content.finishers) {
     container.addTextDisplayComponents(
-      text(`## ${name} is back`),
-      text(
+      buildTextDisplay(`## ${name} is back`),
+      buildTextDisplay(
         `Last Season ${content.finishers} Finished. ` +
           "Anyone can start a new Run this year, them included.",
       ),
     );
   } else {
     container.addTextDisplayComponents(
-      text(`## ${name} is open`),
-      text("A new Season has started. Anyone can start a Run."),
+      buildTextDisplay(`## ${name} is open`),
+      buildTextDisplay("A new Season has started. Anyone can start a Run."),
     );
   }
   const sub = seasonSubtext(challenge, content.season);
-  if (sub) container.addTextDisplayComponents(text(`-# ${sub}`));
+  if (sub) container.addTextDisplayComponents(buildTextDisplay(`-# ${sub}`));
   if (challenge.challenge_format !== "assignment") {
     container
       .addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small))
@@ -226,7 +221,7 @@ export async function announceSeasonOpened(
     strip,
   }));
   const named = finishers.length
-    ? ` with ${finishers.length} ${finishers.length === 1 ? "Finisher" : "Finishers"} named`
+    ? ` with ${plural(finishers.length, "Finisher")} named`
     : "";
   return `Announced the Season of "${challenge.name}" (${challenge.id})${named}.`;
 }
@@ -239,28 +234,10 @@ export interface IChallengeDm {
   about: string;
 }
 
-function payloadUserId(payload: Record<string, unknown>): string {
-  const userId = payload.user_id;
-  if (typeof userId !== "string" || !/^\d+$/.test(userId)) {
-    throw new Error(`Invalid payload: user_id must be a Discord user ID, got ${
-      JSON.stringify(userId)
-    }.`);
-  }
-  return userId;
-}
-
-function payloadRun(payload: Record<string, unknown>): IChallengeRun {
-  const run = payload.run as Partial<IChallengeRun> | undefined;
-  if (!run || typeof run !== "object" || typeof run.id !== "number" || !run.progress) {
-    throw new Error(`Invalid payload: run must be a Challenge Run, got ${JSON.stringify(run)}.`);
-  }
-  return run as IChallengeRun;
-}
-
 /** "closes in 7 days", "closes in 1 day", "closes today". */
 function closesIn(daysLeft: number): string {
   if (daysLeft <= 0) return "closes today";
-  return `closes in ${daysLeft} ${daysLeft === 1 ? "day" : "days"}`;
+  return `closes in ${plural(daysLeft, "day")}`;
 }
 
 /** The Season-end reminder: how far the Run got, when the Season ends, and a link to it. */
@@ -275,7 +252,7 @@ export function buildSeasonEndingDm(
     : `Your Run: ${runProgressText(run)}.`;
   const ends = content.endsOn ? ` The Season ends on ${dayAndMonth(content.endsOn)}.` : "";
   const container = new ContainerBuilder()
-    .addTextDisplayComponents(text(
+    .addTextDisplayComponents(buildTextDisplay(
       `## ${escapeChallengeText(challenge.name)} ${closesIn(content.daysLeft)}\n` +
         `${progress}${ends}`,
     ))
@@ -285,7 +262,7 @@ export function buildSeasonEndingDm(
         .setLabel("Your Run")
         .setStyle(ButtonStyle.Link),
     ))
-    .addTextDisplayComponents(text(
+    .addTextDisplayComponents(buildTextDisplay(
       `-# Turn Challenge DMs off with ${commandMention("challenge dms")}`,
     ));
   return {

@@ -3,16 +3,14 @@ import {
   ButtonBuilder,
   ContainerBuilder,
   SectionBuilder,
-  TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
 import { DateTime } from "luxon";
 import sharp from "sharp";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { escapeChallengeText, formatMonthDay } from "../functions/ChallengeCopy.js";
 import { buildChallengeSantaId } from "../functions/ChallengeCustomIds.js";
-import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import type { IChallengeJobDeps, IChallengePost } from "./ChallengeAnnouncements.js";
 import type { IChallengeDm } from "./ChallengeSeasons.js";
@@ -23,6 +21,8 @@ import type {
   IChallengeEditionSummary,
   ISignupPost,
 } from "./ChallengeEditionApi.js";
+import { plural } from "../utilities/TextUtils.js";
+import { payloadCount, payloadEdition, payloadUserId } from "./ChallengePayloads.js";
 
 // Secret Santa's sign-up posts (spec api#376, bot#1551), design 7C "Gift tags": a warm
 // opening post with a drawn gift and a Sign up button, stored on the Edition, and the
@@ -55,10 +55,6 @@ export function giftImage(fill: string): Promise<Buffer> {
     image.catch(() => giftCache.delete(box));
   }
   return image;
-}
-
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
 }
 
 /** "Secret Santa 2026": the Challenge's name and the Edition's year, escaped. */
@@ -96,28 +92,11 @@ export function editionRuleLine(edition: IChallengeEditionSummary): string {
     `reveal ${editionDay(edition.reveal_on)}`;
 }
 
-/** The `edition` of a job payload, or a thrown error naming what is wrong. */
-export function payloadEdition(payload: Record<string, unknown>): IChallengeEdition {
-  const edition = payload.edition as Partial<IChallengeEdition> | undefined;
-  if (
-    !edition || typeof edition !== "object" ||
-    typeof edition.id !== "number" || typeof edition.year !== "number" ||
-    !edition.challenge || typeof edition.challenge.name !== "string" ||
-    typeof edition.signup_cutoff_on !== "string" ||
-    typeof edition.pick_deadline_on !== "string" || typeof edition.reveal_on !== "string"
-  ) {
-    throw new Error(`Invalid payload: edition must be an Edition, got ${
-      JSON.stringify(edition)
-    }.`);
-  }
-  return edition as IChallengeEdition;
-}
-
 /** The opening post: the Edition, how it works, its three dates, and Sign up. */
 export function buildSignupOpenedPost(edition: IChallengeEdition, gift: Buffer | null):
   IChallengePost {
   const fileName = `secret-santa-${edition.id}.png`;
-  const intro = text(
+  const intro = buildTextDisplay(
     `## ${editionName(edition)}\n` +
       "Someone in the club picks a game from your backlog. You pick one from someone " +
       `else's. On ${editionDay(edition.reveal_on)} everyone unwraps theirs.`,
@@ -132,7 +111,7 @@ export function buildSignupOpenedPost(edition: IChallengeEdition, gift: Buffer |
   } else {
     container.addTextDisplayComponents(intro);
   }
-  container.addTextDisplayComponents(text([
+  container.addTextDisplayComponents(buildTextDisplay([
     `**${editionDay(edition.signup_cutoff_on)}** sign-up closes`,
     `**${editionDay(edition.pick_deadline_on)}** Santas have picked`,
     `**${editionDay(edition.reveal_on)}** the reveal`,
@@ -200,16 +179,6 @@ const SMALL_NUMBERS = [
   "No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
 ];
 
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
-/** The payload's whole number at `key`, or 0 when it has none. */
-function payloadCount(payload: Record<string, unknown>, key: string): number {
-  const value = payload[key];
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;
-}
-
 /**
  * The opening post's message ID when it is in `channelId` (a reply must be in the same
  * channel: a post made in Preview lives in bot-dev), else null.
@@ -236,7 +205,7 @@ function followUpPost(
   withSignUp: boolean,
 ): IChallengePost {
   const content = replyTo ? body : `### ${editionName(edition)}\n${body}`;
-  const components = [text(content).toJSON()];
+  const components = [buildTextDisplay(content).toJSON()];
   return {
     components: withSignUp ? [...components, signUpRow(edition).toJSON()] : components,
     flags: MessageFlags.IsComponentsV2,
@@ -249,7 +218,7 @@ function followUpPost(
 function leftOutLine(leftOut: number, past: boolean): string | null {
   if (!leftOut) return null;
   const verb = past ? "sat" : leftOut === 1 ? "sits" : "sit";
-  return `-# ${plural(leftOut, "member", "members")} ${verb} this one out with too few ` +
+  return `-# ${plural(leftOut, "member")} ${verb} this one out with too few ` +
     "games in their backlog.";
 }
 
@@ -280,7 +249,7 @@ export async function announceSignupClosing(
     followUpPost(edition, replyTo, signupClosingText(edition, daysLeft), true),
   );
   return `Posted that sign-up for ${edition.challenge.name} ${edition.year} closes in ` +
-    `${plural(daysLeft, "day", "days")}${replyTo ? ", as a reply" : ""}.`;
+    `${plural(daysLeft, "day")}${replyTo ? ", as a reply" : ""}.`;
 }
 
 /**
@@ -296,13 +265,13 @@ export async function announceSignupClosed(
   const joined = payloadCount(payload, "joined");
   const replyTo = replyTarget(payload, channelId);
   const lines = [
-    `Sign-up is closed with **${plural(joined, "member", "members")}**. The draw is done: ` +
+    `Sign-up is closed with **${plural(joined, "member")}**. The draw is done: ` +
       `Santas, check ${commandMention("challenge santa pick")}.`,
     leftOutLine(payloadCount(payload, "left_out"), false),
   ].filter((line): line is string => !!line);
   await deps.postMessage(channelId, followUpPost(edition, replyTo, lines.join("\n"), false));
   return `Posted the draw for ${edition.challenge.name} ${edition.year}: ` +
-    `${plural(joined, "member", "members")} drawn.`;
+    `${plural(joined, "member")} drawn.`;
 }
 
 /**
@@ -319,7 +288,7 @@ export async function announceEditionCancelled(
   const joined = payloadCount(payload, "joined");
   const replyTo = replyTarget(payload, channelId);
   const drawn = joined
-    ? `only ${plural(joined, "member", "members")} could be drawn`
+    ? `only ${plural(joined, "member")} could be drawn`
     : "nobody could be drawn";
   const nextOpens = DateTime.fromISO(edition.reveal_on).plus({ days: 1 }).toISODate();
   const next = editionName({ ...edition, year: edition.year + 1 });
@@ -331,7 +300,7 @@ export async function announceEditionCancelled(
   ].filter((line): line is string => !!line);
   await deps.postMessage(channelId, followUpPost(edition, replyTo, lines.join("\n"), false));
   return `Posted that ${edition.challenge.name} ${edition.year} is cancelled ` +
-    `(${plural(joined, "member", "members")} could be drawn).`;
+    `(${plural(joined, "member")} could be drawn).`;
 }
 
 /**
@@ -341,12 +310,7 @@ export async function announceEditionCancelled(
  */
 export async function leftOutOfDrawDm(payload: Record<string, unknown>):
   Promise<IChallengeDm> {
-  const userId = payload.user_id;
-  if (typeof userId !== "string" || !/^\d+$/.test(userId)) {
-    throw new Error(`Invalid payload: user_id must be a Discord user ID, got ${
-      JSON.stringify(userId)
-    }.`);
-  }
+  const userId = payloadUserId(payload);
   const edition = payloadEdition(payload);
   const minimum = payloadCount(payload, "minimum");
   const backlog = payloadCount(payload, "backlog_count");
@@ -354,7 +318,7 @@ export async function leftOutOfDrawDm(payload: Record<string, unknown>):
   const next = editionName({ ...edition, year: edition.year + 1 });
   const content = [
     `## ${editionName(edition)}: sitting this one out`,
-    `The draw needs at least ${plural(minimum, "game", "games")} in your backlog to pick ` +
+    `The draw needs at least ${plural(minimum, "game")} in your backlog to pick ` +
       `from, and yours had ${backlog} when sign-up closed, so you weren't drawn this time. ` +
       `Add games with ${commandMention("backlog add")}` +
       (nextOpens ? `, and sign up for ${next} from ${editionDay(nextOpens)}.` : "."),
@@ -362,7 +326,7 @@ export async function leftOutOfDrawDm(payload: Record<string, unknown>):
   return {
     userId,
     post: {
-      components: [new ContainerBuilder().addTextDisplayComponents(text(content)).toJSON()],
+      components: [new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content)).toJSON()],
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { parse: [] },
     },

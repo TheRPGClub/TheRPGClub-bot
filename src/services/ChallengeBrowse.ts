@@ -5,7 +5,6 @@ import {
   SectionBuilder,
   SeparatorBuilder,
   StringSelectMenuBuilder,
-  TextDisplayBuilder,
 } from "@discordjs/builders";
 import {
   ButtonStyle,
@@ -13,7 +12,7 @@ import {
   SeparatorSpacingSize,
   type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_LABELS,
   describeOpen,
@@ -32,20 +31,18 @@ import {
   type ChallengeShowView,
 } from "../functions/ChallengeCustomIds.js";
 import { CHALLENGE_LIST_PREFIX } from "../config/customIdPrefixes.js";
-import {
-  DISCORD_BUTTON_LABEL_MAX,
-  DISCORD_SELECT_LABEL_MAX,
-  MAX_CONTAINER_TEXT,
-} from "../config/textLimits.js";
+import { DISCORD_BUTTON_LABEL_MAX, DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { memberProfileUrl } from "../config/website.js";
 import {
   CHALLENGE_API,
   poolDefinitionOf,
+  readRunPages,
   type IChallenge,
   type IChallengeApi,
   type IChallengeRun,
   type RunStatus,
 } from "./ChallengeApi.js";
+import { plural } from "../utilities/TextUtils.js";
 
 // /challenge list and /challenge show (spec api#376). Show is design 4D "Flip the view":
 // a Pool by game (who Cleared what) or by member (each Run's progress), one page at a time.
@@ -69,18 +66,10 @@ export interface IChallengeView {
 
 /** Games or Runs on one page of /challenge show, and Challenges on one of /challenge list. */
 export const CHALLENGE_PAGE_SIZE = 10;
-/** Runs read per request when gathering who Cleared what. */
-const RUNS_PER_REQUEST = 100;
-/** Pages of Runs read at most, so a huge Challenge can't stall the reply. */
-const RUNS_MAX_REQUESTS = 5;
 /** Names listed on one game's line before "and N more". */
 const NAMES_PER_LINE = 8;
 
 export const CHALLENGE_LIST_SHOW_ID = `${CHALLENGE_LIST_PREFIX}:show`;
-
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
 
 function view(
   container: ContainerBuilder,
@@ -95,7 +84,7 @@ function view(
 
 /** A one-line private reply in the Challenge views' shape. */
 export function challengeTextView(content: string): IChallengeView {
-  return view(new ContainerBuilder().addTextDisplayComponents(text(content)));
+  return view(new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content)));
 }
 
 function separator(): SeparatorBuilder {
@@ -113,7 +102,7 @@ function summaryLine(challenge: IChallenge, now: Date): string {
   const parts = [CHALLENGE_FORMAT_LABELS[challenge.challenge_format]];
   if (challenge.pool) {
     const count = challenge.pool.game_count;
-    if (typeof count === "number") parts.push(`${count} ${count === 1 ? "game" : "games"}`);
+    if (typeof count === "number") parts.push(`${plural(count, "game")}`);
     parts.push(describePoolTarget(challenge.pool));
   }
   if (challenge.slots) parts.push(describeSlotsRange(challenge.slots));
@@ -131,32 +120,26 @@ function addHeader(container: ContainerBuilder, challenge: IChallenge, now: Date
   const sub = [`-# ${summaryLine(challenge, now)}`];
   const host = challenge.hosted_by_club ? null : challenge.host;
   if (host) {
-    const section = new SectionBuilder().addTextDisplayComponents(text(heading.join("\n")));
+    const section = new SectionBuilder().addTextDisplayComponents(buildTextDisplay(heading.join("\n")));
     section.setButtonAccessory(new ButtonBuilder()
       .setURL(memberProfileUrl(host.user_id))
       .setLabel(memberName(host).slice(0, DISCORD_BUTTON_LABEL_MAX))
       .setStyle(ButtonStyle.Link));
     container.addSectionComponents(section);
   } else {
-    container.addTextDisplayComponents(text(heading.join("\n")));
+    container.addTextDisplayComponents(buildTextDisplay(heading.join("\n")));
     sub.push(`-# Hosted by ${hostLabel(challenge)}`);
   }
   if (challenge.hidden) sub.push("-# Hidden from members by a Moderator");
-  container.addTextDisplayComponents(text(sub.join("\n")));
+  container.addTextDisplayComponents(buildTextDisplay(sub.join("\n")));
 }
 
-async function allRuns(
+function allRuns(
   api: IChallengeBrowseApi,
   challengeId: number,
   actingUserId: string,
 ): Promise<IChallengeRun[]> {
-  const runs: IChallengeRun[] = [];
-  for (let page = 1; page <= RUNS_MAX_REQUESTS; page += 1) {
-    const result = await api.listRuns(challengeId, actingUserId, page, RUNS_PER_REQUEST);
-    runs.push(...result.items);
-    if (page >= result.pages) break;
-  }
-  return runs;
+  return readRunPages((page, per) => api.listRuns(challengeId, actingUserId, page, per));
 }
 
 function releaseYear(date: string | null | undefined): string | null {
@@ -245,7 +228,7 @@ async function byMemberText(
   api: IChallengeBrowseApi,
 ): Promise<{ text: string; pages: number; runs: IChallengeRun[] }> {
   const runs = await api.listRuns(challenge.id, actingUserId, page, CHALLENGE_PAGE_SIZE);
-  const heading = `### By member · ${runs.count} ${runs.count === 1 ? "Run" : "Runs"}`;
+  const heading = `### By member · ${plural(runs.count, "Run")}`;
   const lines = runs.items.map(runLine);
   if (!runs.count) lines.push("Nobody has started a Run yet.");
   return { text: [heading, ...lines].join("\n"), pages: runs.pages, runs: runs.items };
@@ -311,7 +294,7 @@ export async function buildChallengeShowView(
   addHeader(container, challenge, now);
   container
     .addSeparatorComponents(separator())
-    .addTextDisplayComponents(text(body.text));
+    .addTextDisplayComponents(buildTextDisplay(body.text));
   const id = challenge.id;
   const buttons: ButtonBuilder[] = [];
   if (hasPool) {
@@ -384,17 +367,17 @@ export async function buildChallengeListView(
     per: CHALLENGE_PAGE_SIZE,
   });
   const title = LIST_TITLES[input.filter];
-  const container = new ContainerBuilder().addTextDisplayComponents(text(
+  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(
     `## Challenges\n-# ${title} · page ${Math.min(input.page, result.pages)} of ${result.pages}`,
   ));
   if (!result.items.length) {
     const none = input.filter === "all" ? "No Challenges yet." : `No ${title}.`;
-    container.addTextDisplayComponents(text(
+    container.addTextDisplayComponents(buildTextDisplay(
       input.page > 1 ? "No Challenges on this page." : none,
     ));
   } else {
     container.addSeparatorComponents(separator());
-    container.addTextDisplayComponents(text(result.items.map(listEntry).join("\n")));
+    container.addTextDisplayComponents(buildTextDisplay(result.items.map(listEntry).join("\n")));
   }
 
   const rows: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] = [];

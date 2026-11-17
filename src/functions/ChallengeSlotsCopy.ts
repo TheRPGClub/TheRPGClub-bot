@@ -3,6 +3,7 @@ import type {
   IChallengeRunEntry,
   IChallengeSlots,
 } from "../services/ChallengeApi.js";
+import { plural } from "../utilities/TextUtils.js";
 
 // The words for Slots (spec api#376, bot#1550), in the glossary's terms: a slot per
 // release year, Cleared, Caught Up for a range that grows, Counts past play.
@@ -23,7 +24,7 @@ export function describeSlotsTarget(slots: IChallengeSlots): string {
     return `Clear every slot from your birth year to ${slots.last_year}`;
   }
   const count = slots.last_year - slots.first_year + 1;
-  return `Clear all ${count} ${count === 1 ? "slot" : "slots"}`;
+  return `Clear all ${plural(count, "slot")}`;
 }
 
 export const COUNTS_PAST_PLAY_LINE = "Pick earlier Game Completions for open years";

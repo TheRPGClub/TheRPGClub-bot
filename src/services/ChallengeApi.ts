@@ -1,4 +1,8 @@
 import axios from "axios";
+import {
+  CHALLENGE_RUNS_MAX_REQUESTS,
+  CHALLENGE_RUNS_PER_REQUEST,
+} from "../config/challenges.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import {
   apiDelete,
@@ -415,6 +419,22 @@ export const CHALLENGE_API: IChallengeApi = {
     return payload.data ?? [];
   },
 };
+
+/**
+ * Every item of a Run list, read CHALLENGE_RUNS_PER_REQUEST at a time, stopping after
+ * CHALLENGE_RUNS_MAX_REQUESTS pages so a long list can't stall a reply.
+ */
+export async function readRunPages<T>(
+  read: (page: number, per: number) => Promise<IPage<T>>,
+): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; page <= CHALLENGE_RUNS_MAX_REQUESTS; page += 1) {
+    const result = await read(page, CHALLENGE_RUNS_PER_REQUEST);
+    items.push(...result.items);
+    if (page >= result.pages) break;
+  }
+  return items;
+}
 
 /** The Pool definition a stored Pool Challenge resolves from. */
 export function poolDefinitionOf(pool: IChallengePool): IPoolDefinition {

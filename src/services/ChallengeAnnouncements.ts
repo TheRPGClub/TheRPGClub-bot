@@ -4,7 +4,6 @@ import {
   ContainerBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
-  TextDisplayBuilder,
 } from "@discordjs/builders";
 import {
   ButtonStyle,
@@ -12,7 +11,7 @@ import {
   type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
 import type { Client, MessageCreateOptions } from "discord.js";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   clubToday,
   describePool,
@@ -30,7 +29,7 @@ import {
   buildChallengeRunId,
   buildChallengeShowId,
 } from "../functions/ChallengeCustomIds.js";
-import { DISCORD_SELECT_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import { fetchGameCoverBuffer } from "./GameImageService.js";
 import { composeYearStrip, stripTiles } from "./ChallengeSlotsImage.js";
@@ -50,6 +49,7 @@ import {
   signupEditionOf,
   storeSignupPost,
 } from "./ChallengeSignupPosts.js";
+import { payloadChallenge } from "./ChallengePayloads.js";
 
 // The #challenges posts (spec api#376). This file holds the new-Challenge post
 // (`challenge_created`, design 1B "Cover wall", with a year strip for Slots), the post
@@ -127,20 +127,6 @@ export const COVER_WALL_MAX = 10;
 
 const LOG_CONTEXT = "ChallengeAnnouncements";
 
-/** The `challenge` of a job payload, or a thrown error naming what is wrong. */
-export function payloadChallenge(payload: Record<string, unknown>): IChallenge {
-  const challenge = payload.challenge as Partial<IChallenge> | undefined;
-  if (
-    !challenge || typeof challenge !== "object" ||
-    typeof challenge.id !== "number" || typeof challenge.name !== "string"
-  ) {
-    throw new Error(`Invalid payload: challenge must be a Challenge, got ${
-      JSON.stringify(challenge)
-    }.`);
-  }
-  return challenge as IChallenge;
-}
-
 function payloadGames(payload: Record<string, unknown>): IGameSummary[] | null {
   const games = payload.pool_games;
   if (!Array.isArray(games)) return null;
@@ -181,10 +167,6 @@ export function buildCoverWall(games: readonly IGameSummary[]): MediaGalleryBuil
   return items.length ? new MediaGalleryBuilder().addItems(...items) : null;
 }
 
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
-
 /** The rule lines under the description: what counts, what it takes, and when. */
 export function challengeRuleLines(challenge: IChallenge): string[] {
   const lines: string[] = [];
@@ -213,7 +195,7 @@ export function buildNewChallengePost(
   games: readonly IGameSummary[],
   yearStrip: Buffer | null = null,
 ): IChallengePost {
-  const container = new ContainerBuilder().addTextDisplayComponents(text(
+  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(
     `# ${escapeChallengeText(challenge.name)}\n` +
       `-# New Challenge · hosted by ${hostLabel(challenge)}`,
   ));
@@ -229,7 +211,7 @@ export function buildNewChallengePost(
         }`.slice(0, DISCORD_SELECT_LABEL_MAX)),
     ));
   }
-  container.addTextDisplayComponents(text(
+  container.addTextDisplayComponents(buildTextDisplay(
     [challenge.description.trim(), ...challengeRuleLines(challenge)].filter(Boolean).join("\n"),
   ));
 
@@ -264,7 +246,7 @@ export function buildNewChallengePost(
   const shown = wall ? wall.items.length : 0;
   if (hasGames && shown) {
     container.addTextDisplayComponents(
-      text(`-# Showing ${shown} of ${gameCount} games in the Pool`),
+      buildTextDisplay(`-# Showing ${shown} of ${gameCount} games in the Pool`),
     );
   }
   return {

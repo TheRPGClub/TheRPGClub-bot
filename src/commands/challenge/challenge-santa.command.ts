@@ -57,6 +57,7 @@ import {
   parseChallengeOption,
   readModalFields,
 } from "./challenge-interaction.utils.js";
+import { CHALLENGE_AUTOCOMPLETE_READ } from "../../config/challenges.js";
 
 // /challenge santa join, leave and pick (spec api#376, bot#1551 and bot#1552), the first
 // nested subcommand group, and the Secret Santa components: Sign up on the #challenges
@@ -70,9 +71,6 @@ type SantaInteraction =
   | ButtonInteraction
   | StringSelectMenuInteraction
   | ModalSubmitInteraction;
-
-/** Challenges read for the autocomplete, newest first. */
-const AUTOCOMPLETE_READ = 100;
 
 async function showResult(interaction: SantaInteraction, result: ChallengeRunResult):
   Promise<void> {
@@ -93,7 +91,7 @@ async function autocompleteSanta(interaction: AutocompleteInteraction): Promise<
       actingUserId: interaction.user.id,
       challengeFormat: "assignment",
       page: 1,
-      per: AUTOCOMPLETE_READ,
+      per: CHALLENGE_AUTOCOMPLETE_READ,
     });
     const matches = page.items.filter((c) => !query || c.name.toLowerCase().includes(query));
     await safeRespond(interaction, matches.slice(0, DISCORD_AUTOCOMPLETE_CHOICES_MAX).map((c) => {

@@ -1,12 +1,7 @@
-import {
-  ActionRowBuilder,
-  ContainerBuilder,
-  StringSelectMenuBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
+import { ActionRowBuilder, ContainerBuilder, StringSelectMenuBuilder } from "@discordjs/builders";
 import { MessageFlags } from "discord-api-types/v10";
 import Game from "../classes/Game.js";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { escapeChallengeText, formatChallengeDate } from "../functions/ChallengeCopy.js";
 import { buildChallengeSlotsId } from "../functions/ChallengeCustomIds.js";
 import { clearedEntries, decadeOf, openYears } from "../functions/ChallengeSlotsCopy.js";
@@ -14,7 +9,6 @@ import {
   DISCORD_AUTOCOMPLETE_CHOICES_MAX,
   DISCORD_SELECT_LABEL_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
-  MAX_CONTAINER_TEXT,
   truncateLabel,
 } from "../config/textLimits.js";
 import { commandMention } from "./CommandMentionService.js";
@@ -66,15 +60,11 @@ export async function fetchReleaseYears(gameId: number): Promise<number[] | null
   }
 }
 
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
-
 function pickerView(
   content: string,
   select: StringSelectMenuBuilder | null,
 ): IChallengeView {
-  const container = new ContainerBuilder().addTextDisplayComponents(text(content));
+  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content));
   const rows = select
     ? [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)]
     : [];

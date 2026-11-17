@@ -7,7 +7,7 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_INKS,
   clubToday,
@@ -16,11 +16,15 @@ import {
 } from "../functions/ChallengeCopy.js";
 import { buildChallengeSlotsId } from "../functions/ChallengeCustomIds.js";
 import { clearedEntries, nextSlotYear, openYears } from "../functions/ChallengeSlotsCopy.js";
-import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { fetchGameCoverUrl } from "./GameImageService.js";
 import { commandMention } from "./CommandMentionService.js";
 import type { IChallengeView } from "./ChallengeBrowse.js";
-import { CHALLENGE_API, type IChallenge, type IChallengeRun } from "./ChallengeApi.js";
+import {
+  CHALLENGE_API,
+  readRunPages,
+  type IChallenge,
+  type IChallengeRun,
+} from "./ChallengeApi.js";
 import type { IChallengeEdition } from "./ChallengeEditionApi.js";
 import { assignmentAdvice, signedUpEditions, signedUpLine } from "./ChallengeSignup.js";
 import { fetchReleaseYears } from "./ChallengeSlotActions.js";
@@ -34,6 +38,7 @@ import {
   runStatusLabel,
   type IChallengeRunsApi,
 } from "./ChallengeRuns.js";
+import { plural } from "../utilities/TextUtils.js";
 
 // /challenge my-runs (spec api#376, bot#1547), design 5C "What's next": each Active Run
 // as advice (what is left, and which game you're playing would count), past Runs behind
@@ -60,9 +65,6 @@ interface ISlotsFacts {
   released: Map<number, number[] | null>;
 }
 
-/** Runs read per request, and at most this many requests. */
-const RUNS_PER_REQUEST = 100;
-const RUNS_MAX_REQUESTS = 5;
 /** Active Runs shown as cards, while their components fit Discord's 40. */
 const ACTIVE_CARDS_MAX = 8;
 const COMPONENTS_MAX = 40;
@@ -72,10 +74,6 @@ const PLAYING_NAMED = 3;
 /** Past Runs listed before "and N older Runs". */
 const PAST_SHOWN_MAX = 20;
 
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
-
 function view(components: (ContainerBuilder | TextDisplayBuilder)[]): IChallengeView {
   return {
     components: components.map((component) => component.toJSON()),
@@ -84,21 +82,11 @@ function view(components: (ContainerBuilder | TextDisplayBuilder)[]): IChallenge
   };
 }
 
-async function memberRuns(
+function memberRuns(
   api: Pick<IChallengeRunsApi, "listMemberRuns">,
   userId: string,
 ): Promise<IChallengeRun[]> {
-  const runs: IChallengeRun[] = [];
-  for (let page = 1; page <= RUNS_MAX_REQUESTS; page += 1) {
-    const result = await api.listMemberRuns(userId, userId, page, RUNS_PER_REQUEST);
-    runs.push(...result.items);
-    if (page >= result.pages) break;
-  }
-  return runs;
-}
-
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
+  return readRunPages((page, per) => api.listMemberRuns(userId, userId, page, per));
 }
 
 /** The advice for a Pool Run: what is left, and what you're playing that counts. */
@@ -106,7 +94,7 @@ function poolAdvice(run: IChallengeRun): string[] {
   const name = `**${runChallengeName(run)}**`;
   const { cleared, target } = run.progress;
   const left = Math.max(0, target - cleared);
-  let first = `${name} needs ${plural(left, "more Cleared game", "more Cleared games")}.`;
+  let first = `${name} needs ${plural(left, "more Cleared game")}.`;
   if (target === 0) first = `${name} has no games in its Pool yet.`;
   else if (left === 0) first = `${name} has all the Cleared games it needs.`;
   const lines = [first];
@@ -145,7 +133,7 @@ function slotsAdvice(run: IChallengeRun, facts: ISlotsFacts): string[] {
     const next = nextSlotYear(run);
     if (next) lines.push(`The ${next} slot opens on 1 January.`);
   } else {
-    lines.push(`${name} has ${plural(open.length, "open year", "open years")}: ${yearsText(open)}.`);
+    lines.push(`${name} has ${plural(open.length, "open year")}: ${yearsText(open)}.`);
   }
   for (const entry of entriesIn(run, "in_progress").slice(0, PLAYING_NAMED)) {
     const title = `**${escapeChallengeText(entry.title)}**`;
@@ -206,7 +194,7 @@ function runCard(
   const closes = runClosesText(run);
   if (format !== "slots" || closes) lines.push(`-# ${closes ?? "Always Open, no end date"}`);
   const container = new ContainerBuilder().setAccentColor(CHALLENGE_FORMAT_INKS[format]);
-  const body = text(lines.join("\n"));
+  const body = buildTextDisplay(lines.join("\n"));
   let components = 2;
   if (coverUrl) {
     const section = new SectionBuilder().addTextDisplayComponents(body);
@@ -273,11 +261,11 @@ function pastView(past: readonly IChallengeRun[]): IChallengeView {
   if (!past.length) lines.push("You have no past Runs yet.");
   lines.push(...past.slice(0, PAST_SHOWN_MAX).map(pastRunText));
   const more = past.length - PAST_SHOWN_MAX;
-  if (more > 0) lines.push(`-# And ${plural(more, "older Run", "older Runs")}.`);
+  if (more > 0) lines.push(`-# And ${plural(more, "older Run")}.`);
   if (past.length) {
     lines.push(`-# Remove one with ${commandMention("challenge delete-run")}.`);
   }
-  return view([new ContainerBuilder().addTextDisplayComponents(text(lines.join("\n")))]);
+  return view([new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(lines.join("\n")))]);
 }
 
 /**
@@ -305,7 +293,7 @@ export async function buildMyRunsView(
   if (input.past) return pastView(past);
 
   const header = new ContainerBuilder().addTextDisplayComponents(
-    text("## What's next for your Runs"),
+    buildTextDisplay("## What's next for your Runs"),
   );
   const components: (ContainerBuilder | TextDisplayBuilder)[] = [header];
   const candidates = active.slice(0, ACTIVE_CARDS_MAX);
@@ -326,10 +314,10 @@ export async function buildMyRunsView(
   for (const edition of signups) {
     components.push(new ContainerBuilder()
       .setAccentColor(CHALLENGE_FORMAT_INKS.assignment)
-      .addTextDisplayComponents(text(signedUpLine(edition))));
+      .addTextDisplayComponents(buildTextDisplay(signedUpLine(edition))));
   }
   if (!active.length && !signups.length) {
-    header.addTextDisplayComponents(text(
+    header.addTextDisplayComponents(buildTextDisplay(
       `You have no Active Runs. Find an Open Challenge with ${commandMention("challenge list")} ` +
         `and start a Run with ${commandMention("challenge start")}.`,
     ));
@@ -342,10 +330,10 @@ export async function buildMyRunsView(
   }
   if (past.length) {
     footer.push(
-      `-# ${plural(past.length, "past Run", "past Runs")} · ` +
+      `-# ${plural(past.length, "past Run")} · ` +
         `${commandMention("challenge my-runs")} past:True`,
     );
   }
-  if (footer.length) components.push(text(footer.join("\n")));
+  if (footer.length) components.push(buildTextDisplay(footer.join("\n")));
   return view(components);
 }

@@ -4,24 +4,20 @@ import {
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   SectionBuilder,
-  TextDisplayBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { escapeChallengeText, memberName } from "../functions/ChallengeCopy.js";
 import { buildChallengeSlotsId } from "../functions/ChallengeCustomIds.js";
 import { decadeOf, nextSlotYear } from "../functions/ChallengeSlotsCopy.js";
-import { DISCORD_BUTTON_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
+import { DISCORD_BUTTON_LABEL_MAX } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import type { IChallenge, IChallengeRun } from "./ChallengeApi.js";
-import {
-  payloadChallenge,
-  type IChallengeJobDeps,
-  type IChallengePost,
-} from "./ChallengeAnnouncements.js";
-import { payloadRun } from "./ChallengeRunFinished.js";
+import { type IChallengeJobDeps, type IChallengePost } from "./ChallengeAnnouncements.js";
 import { formatRunDate } from "./ChallengeRuns.js";
 import { composeYearPoster, type IPosterYear } from "./ChallengeSlotsImage.js";
+import { plural } from "../utilities/TextUtils.js";
+import { payloadChallenge, payloadRun } from "./ChallengePayloads.js";
 
 // The Caught Up post in #challenges (`run_caught_up`, design 3B "Shelf"): a Slots Run
 // that grows each year, with every year so far Cleared, as a poster of its years.
@@ -30,10 +26,6 @@ import { composeYearPoster, type IPosterYear } from "./ChallengeSlotsImage.js";
 const COVERS_AT_ONCE = 8;
 
 const LOG_CONTEXT = "ChallengeCaughtUp";
-
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
 
 async function coversOf(
   gameIds: readonly number[],
@@ -90,7 +82,7 @@ function bodyText(run: IChallengeRun): string {
   }
   const count = run.progress.target;
   lines.push(
-    `-# ${count} ${count === 1 ? "slot" : "slots"} · Run started ${formatRunDate(run.started_at)}`,
+    `-# ${plural(count, "slot")} · Run started ${formatRunDate(run.started_at)}`,
   );
   return lines.join("\n");
 }
@@ -111,7 +103,7 @@ export function buildCaughtUpPost(
     }))
     .setLabel(memberName(run.user).slice(0, DISCORD_BUTTON_LABEL_MAX))
     .setStyle(ButtonStyle.Secondary);
-  const heading = new SectionBuilder().addTextDisplayComponents(text(
+  const heading = new SectionBuilder().addTextDisplayComponents(buildTextDisplay(
     `## Caught Up\n**${escapeChallengeText(challenge.name)}**`,
   ));
   heading.setButtonAccessory(member);
@@ -123,7 +115,7 @@ export function buildCaughtUpPost(
         .setDescription(`${memberName(run.user)}'s years`),
     ));
   }
-  container.addTextDisplayComponents(text(bodyText(run)));
+  container.addTextDisplayComponents(buildTextDisplay(bodyText(run)));
   return {
     components: [container.toJSON()],
     flags: MessageFlags.IsComponentsV2,
