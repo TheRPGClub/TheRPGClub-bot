@@ -27,14 +27,20 @@ const COVERS_AT_ONCE = 8;
 
 const LOG_CONTEXT = "ChallengeCaughtUp";
 
+/** Each Cleared game's cover by game ID, from the Run's entries' `cover_url`. */
 async function coversOf(
+  run: IChallengeRun,
   gameIds: readonly number[],
   deps: IChallengeJobDeps,
 ): Promise<Map<number, Buffer | null>> {
+  const urls = new Map((run.entries ?? []).map((entry) => [entry.game_id, entry.cover_url]));
   const covers = new Map<number, Buffer | null>();
   for (let i = 0; i < gameIds.length; i += COVERS_AT_ONCE) {
     const batch = gameIds.slice(i, i + COVERS_AT_ONCE);
-    const images = await Promise.all(batch.map((id) => deps.coverImage(id)));
+    const images = await Promise.all(batch.map((id) => {
+      const url = urls.get(id);
+      return url ? deps.coverImage(url) : null;
+    }));
     batch.forEach((id, index) => covers.set(id, images[index] ?? null));
   }
   return covers;
@@ -49,7 +55,7 @@ async function posterImage(
   const slots = run.slots;
   if (!slots?.years.length) return null;
   const gameIds = slots.years.flatMap((y) => (y.game_id ? [y.game_id] : []));
-  const covers = await coversOf(gameIds, deps);
+  const covers = await coversOf(run, gameIds, deps);
   const years: IPosterYear[] = slots.years.map((y) => ({
     year: y.year,
     game: y.game_id

@@ -27,7 +27,6 @@ import { CHALLENGE_API } from "../../services/ChallengeApi.js";
 import { challengeTextView, type IChallengeView } from "../../services/ChallengeBrowse.js";
 import {
   clearedGameChoices,
-  fetchReleaseYears,
   fittingOpenYears,
   movePickerView,
   moveYearPickerView,
@@ -107,6 +106,7 @@ async function autocompleteRun(interaction: AutocompleteInteraction): Promise<vo
       interaction.user.id,
       1,
       CHALLENGE_AUTOCOMPLETE_READ,
+      "active",
     );
     return slotsRunChoices(page.items, focusedQuery(interaction));
   });
@@ -126,7 +126,8 @@ async function autocompleteMoveYear(interaction: AutocompleteInteraction): Promi
     const gameId = optionId(interaction, "game");
     const run = runId ? await CHALLENGE_API.getRun(runId, interaction.user.id) : null;
     if (!run || !gameId) return [];
-    const years = fittingOpenYears(run, await fetchReleaseYears(gameId));
+    const entry = (run.entries ?? []).find((e) => e.game_id === gameId);
+    const years = fittingOpenYears(run, entry);
     return yearChoices(years, focusedQuery(interaction));
   });
 }

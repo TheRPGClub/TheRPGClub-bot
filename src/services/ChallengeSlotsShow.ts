@@ -31,7 +31,6 @@ import {
 import {
   CHALLENGE_API,
   readRunPages,
-  type IChallenge,
   type IChallengeApi,
   type IChallengeRun,
 } from "./ChallengeApi.js";
@@ -41,7 +40,7 @@ import { plural } from "../utilities/TextUtils.js";
 // decade per page with every year's game named, buttons for the other decades, and for
 // the Run's member the ways to move a game or pick past play.
 
-export type IChallengeSlotsShowApi = Pick<IChallengeApi, "getRun" | "getChallenge">;
+export type IChallengeSlotsShowApi = Pick<IChallengeApi, "getRun">;
 
 export interface IChallengeSlotsShowDeps {
   api?: IChallengeSlotsShowApi;
@@ -109,11 +108,7 @@ function decadeRow(run: IChallengeRun, decade: number): Row | null {
 }
 
 /** Move a game and Pick past play: the Run's member only, while it is Active. */
-function actionRow(
-  run: IChallengeRun,
-  challenge: Pick<IChallenge, "slots"> | null,
-  actingUserId: string,
-): Row | null {
+function actionRow(run: IChallengeRun, actingUserId: string): Row | null {
   if (run.user.user_id !== actingUserId || run.status !== "active") return null;
   const buttons = [
     new ButtonBuilder()
@@ -122,7 +117,7 @@ function actionRow(
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!clearedEntries(run).length || !openYears(run).length),
   ];
-  if (challenge?.slots?.counts_past_play) {
+  if (run.challenge?.counts_past_play) {
     buttons.push(new ButtonBuilder()
       .setCustomId(buildChallengeSlotsId({ action: "pick", ids: [run.id] }))
       .setLabel("Pick past play")
@@ -133,17 +128,16 @@ function actionRow(
 }
 
 /**
- * The decade page of a Slots Run as it stands, for its Challenge (with Counts past play).
- * `notice` leads it (what a move or pick just did).
+ * The decade page of a Slots Run as it stands, with its Challenge as the Run serves it
+ * (name and Counts past play). `notice` leads it (what a move or pick just did).
  */
 export function slotsRunView(
   run: IChallengeRun,
-  challenge: Pick<IChallenge, "id" | "name" | "slots"> | null,
   options: { decade?: number; actingUserId: string; notice?: string },
 ): IChallengeView {
   const decade = options.decade ?? defaultDecade(run);
-  const challengeId = challenge?.id ?? run.challenge?.id ?? 0;
-  const name = challenge?.name ?? run.challenge?.name ?? `Challenge Run ${run.id}`;
+  const challengeId = run.challenge?.id ?? 0;
+  const name = run.challenge?.name ?? `Challenge Run ${run.id}`;
   const header = buildTextDisplay(headerText(name, run));
   const container = new ContainerBuilder();
   if (options.notice) container.addTextDisplayComponents(buildTextDisplay(options.notice));
@@ -158,7 +152,7 @@ export function slotsRunView(
     container.addTextDisplayComponents(header);
   }
   container.addTextDisplayComponents(buildTextDisplay(decadeText(run, decade)));
-  const rows = [decadeRow(run, decade), actionRow(run, challenge, options.actingUserId)]
+  const rows = [decadeRow(run, decade), actionRow(run, options.actingUserId)]
     .filter((row): row is Row => row !== null);
   return {
     components: [container.toJSON(), ...rows.map((row) => row.toJSON())],
@@ -167,10 +161,7 @@ export function slotsRunView(
   };
 }
 
-/**
- * Reads a Slots Run and its Challenge and shows one of its decades. API errors are thrown
- * for the caller's error reply.
- */
+/** Reads a Slots Run and shows one of its decades. API errors are thrown for the caller. */
 export async function buildSlotsRunView(
   input: { runId: number; decade?: number; actingUserId: string; notice?: string },
   deps: IChallengeSlotsShowDeps = {},
@@ -179,10 +170,7 @@ export async function buildSlotsRunView(
   const run = await api.getRun(input.runId, input.actingUserId);
   if (!run) return challengeTextView(`There is no Run ${input.runId}, or it is hidden from you.`);
   if (!run.slots) return challengeTextView("That Run has no slots: it isn't a Slots Run.");
-  const challenge = run.challenge
-    ? await api.getChallenge(run.challenge.id, input.actingUserId)
-    : null;
-  return slotsRunView(run, challenge, input);
+  return slotsRunView(run, input);
 }
 
 /** The acting member's Run of a Challenge: their Active one, else their newest. */
@@ -213,7 +201,7 @@ export async function buildShowView(
     const challenge = await api.getChallenge(target.challengeId, target.actingUserId);
     if (challenge?.challenge_format === "slots") {
       const run = await memberRunOf(api, challenge.id, target.actingUserId);
-      if (run?.slots) return slotsRunView(run, challenge, { actingUserId: target.actingUserId });
+      if (run?.slots) return slotsRunView(run, { actingUserId: target.actingUserId });
       return buildChallengeShowView({ ...target, view: "member", page: 1 }, deps);
     }
   }

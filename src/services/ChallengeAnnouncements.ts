@@ -31,7 +31,7 @@ import {
 } from "../functions/ChallengeCustomIds.js";
 import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
-import { fetchGameCoverBuffer } from "./GameImageService.js";
+import { fetchImageBuffer } from "./GameImageService.js";
 import { composeYearStrip, stripTiles } from "./ChallengeSlotsImage.js";
 import { getUserEmojiString } from "./UserEmojiService.js";
 import {
@@ -80,8 +80,8 @@ export interface IChallengeJobDeps {
   storeSignupPost(editionId: number, post: ISignupPost): Promise<void>;
   /** The games a Pool resolves to, for its covers when the payload carries none. */
   poolPreview(pool: IPoolDefinition, page: number, per: number): Promise<IPage<IGameSummary>>;
-  /** A game's cover image, or null without one (errors logged, never thrown). */
-  coverImage(gameId: number): Promise<Buffer | null>;
+  /** The image at a game's `cover_url`, or null (errors logged, never thrown). */
+  coverImage(url: string): Promise<Buffer | null>;
   /** DMs a member. Throws the discord.js error (closed DMs: code 50007). */
   sendDm(userId: string, post: IChallengePost): Promise<void>;
   /** The member's avatar emoji (`<:name:id>`), or null when they have none yet. */
@@ -113,7 +113,7 @@ export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
     storeSignupPost: (editionId, post) =>
       CHALLENGE_EDITION_API.storeSignupPost(editionId, post),
     poolPreview: (pool, page, per) => CHALLENGE_API.poolPreview(pool, page, per),
-    coverImage: async (gameId) => (await fetchGameCoverBuffer(gameId))?.buffer ?? null,
+    coverImage: fetchImageBuffer,
     sendDm: async (userId, post) => {
       const user = await client.users.fetch(userId);
       await user.send(discordMessage(post));

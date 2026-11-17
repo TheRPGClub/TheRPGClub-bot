@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { IChallenge, IChallengeRun, IPage } from "../services/ChallengeApi.js";
+import type {
+  IChallenge,
+  IChallengeOpenSignup,
+  IChallengeRun,
+  IPage,
+} from "../services/ChallengeApi.js";
 import { buildMyRunsView, type IMyRunsDeps } from "../services/ChallengeMyRuns.js";
 import type { IChallengeEdition } from "../services/ChallengeEditionApi.js";
 import {
@@ -279,14 +284,12 @@ function santaRun(overrides: Partial<IChallengeRun> = {}): IChallengeRun {
   };
 }
 
-function myRunsDeps(runs: IChallengeRun[], signups: IChallengeEdition[] = []): IMyRunsDeps {
+function myRunsDeps(runs: IChallengeRun[], signups: IChallengeOpenSignup[] = []): IMyRunsDeps {
   return {
     api: {
       listMemberRuns: async (_userId, _acting, page) =>
-        ({ items: runs, page, pages: 1, count: runs.length }),
+        ({ items: runs, page, pages: 1, count: runs.length, signups }),
     },
-    coverUrl: async () => null,
-    santaSignups: async () => signups,
     now: () => new Date("2026-12-10T15:00:00.000Z"),
   };
 }
@@ -355,7 +358,17 @@ test("my-runs: no game could be picked", async () => {
 test("my-runs: an Edition the member signed up for shows until the draw", async () => {
   const view = await buildMyRunsView(
     { actingUserId: "222", past: false },
-    myRunsDeps([], [santaEdition({ signed_up: true })]),
+    // The sign-ups come with the Runs (meta.signups): no Edition is read.
+    myRunsDeps([], [{
+      edition_id: 12,
+      year: 2026,
+      phase: "signup",
+      challenge: { id: 9, name: "Secret Santa" },
+      signed_up_at: "2026-11-02T10:00:00.000Z",
+      signup_cutoff_on: "2026-12-01",
+      pick_deadline_on: "2026-12-15",
+      reveal_on: "2026-12-25",
+    }]),
   );
   const text = textOf(view.components);
 

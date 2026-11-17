@@ -1,6 +1,5 @@
 import { ActionRowBuilder, ContainerBuilder, StringSelectMenuBuilder } from "@discordjs/builders";
 import { MessageFlags } from "discord-api-types/v10";
-import Game from "../classes/Game.js";
 import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { escapeChallengeText, formatChallengeDate } from "../functions/ChallengeCopy.js";
 import { buildChallengeSlotsId } from "../functions/ChallengeCustomIds.js";
@@ -19,6 +18,7 @@ import {
   challengeRefusalText,
   type IChallengeApi,
   type IChallengeRun,
+  type IChallengeRunEntry,
   type IPastPlay,
 } from "./ChallengeApi.js";
 
@@ -30,35 +30,15 @@ import {
 
 export type IChallengeSlotActionsApi = Pick<
   IChallengeApi,
-  "getRun" | "getChallenge" | "slotMove" | "pastPick" | "pastPlay"
+  "getRun" | "slotMove" | "pastPick" | "pastPlay"
 >;
 
 export interface IChallengeSlotActionsDeps {
   api?: IChallengeSlotActionsApi;
-  /**
-   * The years a game came out in, anywhere (its first release and every dated release),
-   * or null when they can't be read. Narrows a move's years to those that fit.
-   */
-  releaseYears?: (gameId: number) => Promise<number[] | null>;
 }
 
 /** What to show: a view, or an error (the API's refusal with its request and response). */
 export type ChallengeSlotResult = { view: IChallengeView } | { error: string };
-
-/** A game's release years from the GameDB, as the API counts them (UTC years). */
-export async function fetchReleaseYears(gameId: number): Promise<number[] | null> {
-  try {
-    const [game, releases] = await Promise.all([
-      Game.getGameById(gameId),
-      Game.getGameReleases(gameId),
-    ]);
-    const dates = [game?.initialReleaseDate ?? null, ...releases.map((r) => r.releaseDate)];
-    const years = dates.flatMap((date) => (date ? [date.getUTCFullYear()] : []));
-    return [...new Set(years)].sort((a, b) => a - b);
-  } catch {
-    return null;
-  }
-}
 
 function pickerView(
   content: string,
@@ -79,10 +59,14 @@ function runName(run: IChallengeRun): string {
   return run.challenge ? escapeChallengeText(run.challenge.name) : `Challenge Run ${run.id}`;
 }
 
-/** The open years of the Run that the game fits: all of them when its years are unknown. */
-export function fittingOpenYears(run: IChallengeRun, released: readonly number[] | null):
+/**
+ * The open years of the Run that its game fits (the entry's release_years): all of them
+ * when the API couldn't give its years.
+ */
+export function fittingOpenYears(run: IChallengeRun, entry: IChallengeRunEntry | undefined):
   number[] {
   const open = openYears(run);
+  const released = entry?.release_years;
   return released ? open.filter((year) => released.includes(year)) : open;
 }
 
@@ -100,19 +84,6 @@ async function readSlotsRun(
   return { run };
 }
 
-async function afterChange(
-  api: IChallengeSlotActionsApi,
-  run: IChallengeRun,
-  year: number,
-  actingUserId: string,
-  notice: string,
-): Promise<IChallengeView> {
-  const challenge = run.challenge
-    ? await api.getChallenge(run.challenge.id, actingUserId).catch(() => null)
-    : null;
-  return slotsRunView(run, challenge, { decade: decadeOf(year), actingUserId, notice });
-}
-
 /** Moves a Cleared game of the acting member's Run to another open year. */
 export async function slotMoveReply(
   input: { runId: number; gameId: number; year: number; actingUserId: string },
@@ -127,9 +98,13 @@ export async function slotMoveReply(
   }
   const entry = (run.entries ?? []).find((e) => e.game_id === input.gameId);
   const title = entry ? `**${escapeChallengeText(entry.title)}**` : "The game";
+  const notice = `Moved ${title} to ${input.year}.`;
   return {
-    view: await afterChange(api, run, input.year, input.actingUserId,
-      `Moved ${title} to ${input.year}.`),
+    view: slotsRunView(run, {
+      decade: decadeOf(input.year),
+      actingUserId: input.actingUserId,
+      notice,
+    }),
   };
 }
 
@@ -150,7 +125,13 @@ export async function pastPickReply(
   const notice = `Picked ${title} for ${input.year}.` +
     (run.status === "finished" ? " That Finished the Run." : "") +
     (run.progress.caught_up ? " You're Caught Up." : "");
-  return { view: await afterChange(api, run, input.year, input.actingUserId, notice) };
+  return {
+    view: slotsRunView(run, {
+      decade: decadeOf(input.year),
+      actingUserId: input.actingUserId,
+      notice,
+    }),
+  };
 }
 
 function yearLabel(year: number | null | undefined): string {
@@ -206,7 +187,6 @@ export async function moveYearPickerView(
   deps: IChallengeSlotActionsDeps = {},
 ): Promise<ChallengeSlotResult> {
   const api = deps.api ?? CHALLENGE_API;
-  const releaseYears = deps.releaseYears ?? fetchReleaseYears;
   try {
     const read = await readSlotsRun(api, input.runId, input.actingUserId);
     if ("view" in read) return read;
@@ -214,15 +194,16 @@ export async function moveYearPickerView(
     const entry = clearedEntries(run).find((e) => e.game_id === input.gameId);
     if (!entry) return { view: challengeTextView("That game isn't Cleared on the Run any more.") };
     const title = `**${escapeChallengeText(entry.title)}**`;
-    const released = await releaseYears(entry.game_id);
-    const years = fittingOpenYears(run, released).slice(-DISCORD_SELECT_OPTIONS_MAX);
+    const years = fittingOpenYears(run, entry).slice(-DISCORD_SELECT_OPTIONS_MAX);
     if (!years.length) {
       return {
         view: challengeTextView(`${title} didn't come out in any open year of the Run.`),
       };
     }
     const lines = [`### Move ${title}`, `It ${yearLabel(entry.slot_year)}. Pick its new year.`];
-    if (!released) lines.push("-# Its release years couldn't be read; the API checks the fit.");
+    if (!entry.release_years) {
+      lines.push("-# Its release years couldn't be read; the API checks the fit.");
+    }
     return {
       view: pickerView(lines.join("\n"), new StringSelectMenuBuilder()
         .setCustomId(buildChallengeSlotsId({ action: "move-year", ids: [run.id, entry.game_id] }))

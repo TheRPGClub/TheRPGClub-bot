@@ -12,6 +12,7 @@ import type { IChallengeJobDeps, IChallengePost } from "../services/ChallengeAnn
 import type { IGameSummary, IPage } from "../services/ChallengeApi.js";
 import {
   buttonsOf,
+  coverIdOf,
   galleryUrls,
   game,
   poolChallenge,
@@ -69,7 +70,8 @@ function fakeDeps(options: {
     storeSignupPost: async () => {},
     poolPreview: async (_pool, page): Promise<IPage<IGameSummary>> =>
       ({ items: [], page, pages: 1, count: 0 }),
-    coverImage: async (gameId) => {
+    coverImage: async (url) => {
+      const gameId = coverIdOf(url);
       deps.coverLookups.push(gameId);
       return !options.covered || options.covered.includes(gameId) ? coverPng() : null;
     },

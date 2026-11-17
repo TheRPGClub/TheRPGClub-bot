@@ -9,6 +9,7 @@ import { processBotJobs } from "../services/BotJobService.js";
 import type { IChallengeJobDeps, IChallengePost } from "../services/ChallengeAnnouncements.js";
 import {
   buttonsOf,
+  coverIdOf,
   galleryUrls,
   slotsChallenge,
   slotsRun,
@@ -53,7 +54,8 @@ function fakeDeps(options: { covered?: number[] } = {}): IFakeDeps {
   const deps: IFakeDeps = {
     posts: [],
     coverLookups: [],
-    coverImage: async (gameId) => {
+    coverImage: async (url) => {
+      const gameId = coverIdOf(url);
       deps.coverLookups.push(gameId);
       return !options.covered || options.covered.includes(gameId) ? coverPng() : null;
     },
@@ -194,7 +196,8 @@ test("run_caught_up: posts the member's year poster in #challenges", async () =>
   assert.equal(galleryUrls(post.components)[0], "attachment://caught-up-90.png");
   const size = await imageSize(post);
   assert.ok(size.width >= 900 && size.height >= 500, `${size.width}x${size.height}`);
-  assert.equal(deps.coverLookups.length, 33);
+  // Each year's cover read from its entry's cover_url.
+  assert.deepEqual(deps.coverLookups, Array.from({ length: 33 }, (_, i) => 1994 + i));
 });
 
 test("run_caught_up: Preview goes to bot-dev and Off posts nothing", async () => {

@@ -82,7 +82,9 @@ async function shelfImage(
   more: number,
   deps: IChallengeJobDeps,
 ): Promise<Buffer | null> {
-  const covers = await Promise.all(games.map((entry) => deps.coverImage(entry.game_id)));
+  const covers = await Promise.all(
+    games.map((entry) => entry.cover_url ? deps.coverImage(entry.cover_url) : null),
+  );
   if (!covers.some(Boolean)) return null;
   const tiles: ShelfTile[] = games.map((entry, index) => ({
     kind: "game",

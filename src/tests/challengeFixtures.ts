@@ -11,6 +11,16 @@ import type {
   ISantaView,
 } from "../services/ChallengeEditionApi.js";
 
+/** The cover URL the fixtures give game `id`. */
+export function coverUrl(id: number): string {
+  return `https://img.example/${id}.jpg`;
+}
+
+/** The game ID in a fixture cover URL, for fakes that read covers by URL. */
+export function coverIdOf(url: string): number {
+  return Number(/\/(\d+)\.jpg$/.exec(url)?.[1] ?? NaN);
+}
+
 // Shared fixtures for the Challenge tests: a Pool Challenge as the API serves it, and a
 // reader for the Components V2 JSON the Challenge views and posts are built from.
 
@@ -43,6 +53,24 @@ export function poolChallenge(overrides: Partial<IChallenge> = {}): IChallenge {
   };
 }
 
+/** A Pool Run's entry, with its fixture cover. */
+export function entry(
+  id: number,
+  title: string,
+  state: "cleared" | "in_progress",
+  clearedOn: string | null = null,
+): IChallengeRunEntry {
+  return {
+    game_id: id,
+    title,
+    cover_url: coverUrl(id),
+    state,
+    cleared_on: clearedOn,
+    picked_by_hand: false,
+    release_years: null,
+  };
+}
+
 /** Lufia's Active Run of the Fall of Final Fantasy: 2 of 3 Cleared, FF X In Progress. */
 export function poolRun(overrides: Partial<IChallengeRun> = {}): IChallengeRun {
   return {
@@ -52,6 +80,8 @@ export function poolRun(overrides: Partial<IChallengeRun> = {}): IChallengeRun {
       name: "Fall of Final Fantasy",
       challenge_format: "pool",
       schedule: "seasonal",
+      counts_past_play: false,
+      slots: null,
     },
     user: { user_id: "222", username: "lufia", global_name: "Lufia" },
     status: "active",
@@ -60,9 +90,9 @@ export function poolRun(overrides: Partial<IChallengeRun> = {}): IChallengeRun {
     window: { starts_on: "2026-09-22", ends_on: "2026-12-21" },
     progress: { in_progress: 1, cleared: 2, target: 3 },
     entries: [
-      { game_id: 9, title: "Final Fantasy IX", state: "cleared", cleared_on: "2026-10-02" },
-      { game_id: 6, title: "Final Fantasy VI", state: "cleared", cleared_on: "2026-10-30" },
-      { game_id: 10, title: "Final Fantasy X", state: "in_progress", cleared_on: null },
+      entry(9, "Final Fantasy IX", "cleared", "2026-10-02"),
+      entry(6, "Final Fantasy VI", "cleared", "2026-10-30"),
+      entry(10, "Final Fantasy X", "in_progress"),
     ],
     ...overrides,
   };
@@ -199,26 +229,37 @@ export function slotsRun(
       entries.push({
         game_id: year,
         title: `Game ${year}`,
+        cover_url: coverUrl(year),
         state: "cleared",
         cleared_on: "2025-05-01",
         completion_id: 5000 + year,
         slot_year: year,
         picked_by_hand: false,
+        release_years: [year],
       });
     }
   }
   entries.push({
     game_id: 77,
     title: "Tales of Arise",
+    cover_url: coverUrl(77),
     state: "in_progress",
     cleared_on: null,
     slot_year: null,
     picked_by_hand: false,
+    release_years: [2021],
   });
   const cleared = years.filter((y) => y.game_id !== null).length;
   return {
     id: 90,
-    challenge: { id: 12, name: "Years Alive", challenge_format: "slots", schedule: "always_open" },
+    challenge: {
+      id: 12,
+      name: "Years Alive",
+      challenge_format: "slots",
+      schedule: "always_open",
+      counts_past_play: true,
+      slots: { first_year: "birth_year", last_year: "current_year", counts_past_play: true },
+    },
     user: { user_id: "333", username: "tamsin", global_name: "Tamsin" },
     status: "active",
     started_at: "2024-03-04T15:00:00.000Z",
@@ -241,7 +282,7 @@ export function game(id: number, title: string, year = 1990 + id): IGameSummary 
     game_id: id,
     title,
     initial_release_date: `${year}-06-01T00:00:00.000Z`,
-    cover_url: `https://img.example/${id}.jpg`,
+    cover_url: coverUrl(id),
   };
 }
 

@@ -119,7 +119,10 @@ async function revealSheet(
     const tags: IGiftTag[] = await Promise.all(drawn.map(async (a) => ({
       recipient: memberName(a.recipient),
       game: a.game
-        ? { title: a.game.title, cover: await deps.coverImage(a.game.game_id) }
+        ? {
+          title: a.game.title,
+          cover: a.game.cover_url ? await deps.coverImage(a.game.cover_url) : null,
+        }
         : null,
     })));
     const rest = assignments.slice(drawn.length).map((a): IGiftTag => ({

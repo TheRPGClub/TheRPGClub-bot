@@ -3,7 +3,6 @@ import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
 import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { buildChallengeSantaId } from "../functions/ChallengeCustomIds.js";
 import { escapeChallengeText, listJoin } from "../functions/ChallengeCopy.js";
-import { logError } from "../utilities/LogUtils.js";
 import { commandMention } from "./CommandMentionService.js";
 import { challengeTextView, type IChallengeView } from "./ChallengeBrowse.js";
 import {
@@ -11,6 +10,7 @@ import {
   challengeRefusalText,
   type IChallenge,
   type IChallengeApi,
+  type IChallengeOpenSignup,
   type IChallengeRun,
 } from "./ChallengeApi.js";
 import {
@@ -294,41 +294,12 @@ export function santaWithdrawReply(
   return withdraw(input.editionId, input.actingUserId, deps);
 }
 
-/**
- * The Editions in sign-up the member joined, for /challenge my-runs (a sign-up has no Run
- * until the draw). Reads the Secret Santas, then each Edition taking sign-ups as the
- * member; a failure is logged and shows none.
- */
-export async function signedUpEditions(
-  actingUserId: string,
-  deps: ISantaSignupDeps = {},
-): Promise<IChallengeEdition[]> {
-  const challenges = deps.challenges ?? CHALLENGE_API;
-  const editions = deps.editions ?? CHALLENGE_EDITION_API;
-  try {
-    const page = await challenges.listChallenges({
-      actingUserId,
-      challengeFormat: "assignment",
-      page: 1,
-      per: CHALLENGE_ASSIGNMENT_READ,
-    });
-    const open = page.items
-      .map((challenge) => challenge.assignment?.edition)
-      .filter((edition) => edition?.phase === "signup");
-    const read = await Promise.all(
-      open.map((edition) => editions.getEdition(edition!.id, actingUserId)),
-    );
-    return read.filter((edition): edition is IChallengeEdition => !!edition?.signed_up);
-  } catch (err: unknown) {
-    logError("ChallengeSignup.signedUpEditions", err);
-    return [];
-  }
-}
-
 /** "**Secret Santa 2026** · you're signed up. The draw is on 1 December." */
-export function signedUpLine(edition: IChallengeEdition): string {
-  return `**${editionName(edition)}** · you're signed up. The draw is on ` +
-    `${editionDay(edition.signup_cutoff_on)}.`;
+export function signedUpLine(
+  signup: Pick<IChallengeOpenSignup, "challenge" | "year" | "signup_cutoff_on">,
+): string {
+  return `**${editionName(signup)}** · you're signed up. The draw is on ` +
+    `${editionDay(signup.signup_cutoff_on)}.`;
 }
 
 /**

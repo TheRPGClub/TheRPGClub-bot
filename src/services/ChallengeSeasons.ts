@@ -125,7 +125,7 @@ async function coverStrip(
 ): Promise<Buffer | null> {
   const shown = games.slice(0, COVER_WALL_MAX);
   const covers = await Promise.all(
-    shown.map((game) => game.cover_url ? deps.coverImage(game.game_id) : null),
+    shown.map((game) => game.cover_url ? deps.coverImage(game.cover_url) : null),
   );
   if (!covers.some(Boolean)) return null;
   const tiles: ShelfTile[] = shown.map((game, index) => ({
