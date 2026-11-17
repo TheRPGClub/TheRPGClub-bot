@@ -422,13 +422,13 @@ test("addPreviewNote: an edit that keeps the message body is left alone", () => 
   assert.deepEqual(addPreviewNote(embedsOnly), embedsOnly);
 });
 
-test("feature gate map: every mapped Feature is one of the API registry's 12 keys", async () => {
+test("feature gate map: every mapped Feature is one of the API registry's 13 keys", async () => {
   const { FEATURE_COMMANDS, FEATURE_COMPONENT_PREFIXES } = await import(
     "../config/featureGate.js",
   );
   const registry = new Set([
     "game_index", "voting_gotm", "backlog", "collection", "now_playing", "game_completions",
-    "reviews", "achievement_hub", "giveaways", "journals", "suggestions", "news_hub",
+    "reviews", "achievement_hub", "giveaways", "journals", "suggestions", "news_hub", "challenges",
   ]);
   const mapped = [
     ...Object.values(FEATURE_COMMANDS),

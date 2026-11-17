@@ -14,6 +14,7 @@ import {
   ANNOUNCEMENT_CHANNEL_ID,
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
+  CHALLENGES_CHANNEL_ID,
   GIVEAWAY_LOG_CHANNEL_ID,
   LIVE_EVENT_FORUM_ID,
 } from "../config/channels.js";
@@ -98,6 +99,11 @@ import {
 import { featureOffNotice, getFeatureState } from "./FeaturePostRouting.js";
 import { refreshFeatureFlagCache } from "./FeatureAccessService.js";
 import { buildFeatureFlagChangedNotice, isFeatureState } from "./FeatureFlagService.js";
+import {
+  announceNewChallenge,
+  createChallengeJobDeps,
+  type IChallengeJobDeps,
+} from "./ChallengeAnnouncements.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -237,6 +243,11 @@ export interface IBotJobSurface {
    * and the News Item endpoints. Optional so fakes for other jobs need not build it.
    */
   newsHub?: INewsHubJobDeps;
+  /**
+   * What the Challenge jobs post and read (spec api#376). Optional so fakes for other jobs
+   * need not build it.
+   */
+  challenges?: IChallengeJobDeps;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -310,6 +321,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       await refreshGiveawayHubMessage(client, 0, { featureState: state });
     },
     newsHub: createNewsHubJobDeps(client),
+    challenges: createChallengeJobDeps(client),
   };
 }
 
@@ -1006,6 +1018,42 @@ export const handleNewsCatchUp: BotJobHandler = async (_payload, surface) => {
 };
 
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
+function challengeDeps(surface: IBotJobSurface): IChallengeJobDeps {
+  if (!surface.challenges) throw new Error("This bot job surface cannot reach Challenges.");
+  return surface.challenges;
+}
+
+/** The #challenges posts, by the payload's `event`; later tickets add their events here. */
+const CHALLENGE_ANNOUNCERS: Readonly<Record<
+  string,
+  (payload: Record<string, unknown>, channelId: string, deps: IChallengeJobDeps) =>
+    Promise<string>
+>> = {
+  challenge_created: announceNewChallenge,
+};
+
+/**
+ * Payload `{ event, challenge, ..., feature_key }` (ChallengeAnnounceJobPayload): posts in
+ * #challenges, in the bot-dev channel while Challenges is in Preview, and nowhere while it
+ * is Off. An event this bot has no post for fails the job, naming it.
+ */
+export const handleChallengeAnnounce: BotJobHandler = async (payload, surface, context) => {
+  const event = requireString(payload, "event");
+  const announce = Object.hasOwn(CHALLENGE_ANNOUNCERS, event)
+    ? CHALLENGE_ANNOUNCERS[event]
+    : undefined;
+  if (!announce) {
+    throw new Error(`This bot has no post for the Challenge event "${event}".`);
+  }
+  const featureKey = POST_FEATURE_KEYS.challenges;
+  const channelId = routeFeaturePost(
+    await jobFeatureState(featureKey, surface, context),
+    CHALLENGES_CHANNEL_ID,
+  );
+  if (!channelId) return featureOffNotice(featureKey);
+  return announce(payload, channelId, challengeDeps(surface));
+};
+
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
   giveaway_claim_notice: handleGiveawayClaimNotice,
@@ -1025,4 +1073,5 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   feature_flag_changed: handleFeatureFlagChanged,
   news_images_renew: handleNewsImagesRenew,
   news_catch_up: handleNewsCatchUp,
+  challenge_announce: handleChallengeAnnounce,
 };

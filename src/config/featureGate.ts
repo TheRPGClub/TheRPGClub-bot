@@ -4,12 +4,21 @@
  * admin and superadmin commands, help, profile, and shared pickers such as `igdb-select`.
  */
 
-import { NEWS_CATEGORY_PICK_PREFIX } from "./customIdPrefixes.js";
+import {
+  CHALLENGE_CUSTOM_ID_PREFIX,
+  NEWS_CATEGORY_PICK_PREFIX,
+} from "./customIdPrefixes.js";
 import {
   CHANGE_NEWS_CATEGORY_COMMAND,
   NEWS_COMMAND,
   NEWS_IMPORT_COMMAND,
 } from "./newsHub.js";
+
+/**
+ * Challenges (spec api#376): `/challenge`, its components, and the #challenges posts. Its
+ * DMs (`challenge_dm`) go out in Preview too; only the posts move to bot-dev.
+ */
+export const CHALLENGES_FEATURE_KEY = "challenges";
 
 /** Top-level slash command or context menu name -> Feature key. */
 export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
@@ -40,6 +49,7 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   [CHANGE_NEWS_CATEGORY_COMMAND]: "news_hub",
   // /news share: staff only in Preview, everyone when Live (spec api#367).
   [NEWS_COMMAND]: "news_hub",
+  challenge: CHALLENGES_FEATURE_KEY,
 };
 
 /**
@@ -94,6 +104,8 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
   ["todo-review-suggestions", "suggestions"],
 
   [`${NEWS_CATEGORY_PICK_PREFIX}:`, "news_hub"],
+
+  [CHALLENGE_CUSTOM_ID_PREFIX, CHALLENGES_FEATURE_KEY],
 ];
 
 /**
@@ -113,4 +125,5 @@ export const POST_FEATURE_KEYS = {
   giveawayHub: "giveaways",
   giveawayClaimLog: "giveaways",
   suggestions: "suggestions",
+  challenges: CHALLENGES_FEATURE_KEY,
 } as const;
