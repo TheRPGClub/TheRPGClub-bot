@@ -288,7 +288,11 @@ const HELP_TOPICS: HelpTopic[] = [
     summary:
       "View, edit, and search profiles; manage Now Playing; and log completed games (view/search are private by default).",
     syntax:
-      "Use /profile help for subcommands (view/edit/search/nowplaying-add/nowplaying-remove/completion-add/completion-list/completion-edit/completion-delete) and parameters.",
+      "Use /profile help for subcommands (view/edit/search/nowplaying-add/" +
+      "nowplaying-remove/completion-add/completion-list/completion-edit/completion-delete) " +
+      "and parameters. " +
+      "/profile birth-date [date:<YYYY-MM-DD>] [remove:true] [member:<user>] sees or " +
+      "sets your Birth Date privately (twice a month; staff can set any member's).",
   },
   {
     id: "gamedb",

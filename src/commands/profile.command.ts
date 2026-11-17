@@ -50,6 +50,11 @@ import {
 import { truncateLabel } from "../config/textLimits.js";
 import { chunk } from "../utilities/ArrayUtils.js";
 import { formatApiError } from "../utilities/ApiErrorUtils.js";
+import {
+  BIRTH_DATE_FORMAT_HINT,
+  birthDateReply,
+  type BirthDateAction,
+} from "../services/BirthDateService.js";
 
 export { formatDiscordTimestamp, formatPlaytimeHours, formatTableDate };
 
@@ -725,6 +730,56 @@ export class ProfileCommand {
 
       await safeReply(interaction, buildTextReply(msg, true));
     }, "Error updating profile");
+  }
+
+  @Slash({ description: "See, set or remove your Birth Date (private)", name: "birth-date" })
+  @SlashGroup("profile")
+  async profileBirthDate(
+    @SlashOption({
+      description: `Your Birth Date. ${BIRTH_DATE_FORMAT_HINT}`,
+      name: "date",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    date: string | undefined,
+    @SlashOption({
+      description: "Remove your Birth Date.",
+      name: "remove",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    remove: boolean | undefined,
+    @SlashOption({
+      description: "Member whose Birth Date to see or set; staff only.",
+      name: "member",
+      required: false,
+      type: ApplicationCommandOptionType.User,
+    })
+    member: User | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    // Always private: only the member and staff may see the full date.
+    await safeDeferReply(interaction, { flags: ephemeralFlag(true) });
+    const typed = date ? sanitizeUserInput(date, { preserveNewlines: false }).trim() : "";
+    if (typed && remove) {
+      await safeReply(
+        interaction,
+        buildTextReply("Pick a date or remove, not both.", true),
+      );
+      return;
+    }
+    let action: BirthDateAction = { kind: "view" };
+    if (typed) action = { kind: "set", date: typed };
+    else if (remove) action = { kind: "remove" };
+
+    await withErrorReply(interaction, async () => {
+      const text = await birthDateReply({
+        actingUserId: interaction.user.id,
+        targetUserId: (member ?? interaction.user).id,
+        action,
+      });
+      await safeReply(interaction, buildTextReply(text, true));
+    }, "Error with the Birth Date");
   }
 
 }
