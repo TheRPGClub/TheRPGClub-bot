@@ -104,7 +104,8 @@ test("pick: the recipient's eligible backlog with taste hints, privately", async
   assert.equal(
     textOf(components),
     "## You're Lufia's Santa\n" +
-      "Pick one game from their backlog. Nobody else sees this. Picks close on 15 December.\n" +
+      "Pick one game from their backlog. Nobody else sees this. Picks close on 15 December, " +
+      "and Secret Santa 2026 is revealed on 25 December.\n" +
       "-# To help you choose · Lufia plays most on PlayStation 2 · Their top genres: " +
       "Role-playing (RPG), Adventure and Strategy",
   );
@@ -115,8 +116,11 @@ test("pick: the recipient's eligible backlog with taste hints, privately", async
     ["Dragon Quest XI S", "2", false],
     ["Chained Echoes", "3", false],
   ]);
-  assert.match(JSON.stringify(components), /"description":"PlayStation 2 · 1991"/);
-  assert.match(JSON.stringify(components), /"description":"Nintendo Switch · 1992"/);
+  // The mock's HowLongToBeat time; a game without one shows its release year instead.
+  assert.match(JSON.stringify(components), /"description":"PlayStation 2 · about 50 hours"/);
+  assert.match(JSON.stringify(components), /"description":"Nintendo Switch · about 80 hours"/);
+  assert.match(JSON.stringify(components), /"label":"Chained Echoes","value":"3"/);
+  assert.match(JSON.stringify(components), /"description":"1993"/);
   assert.match(JSON.stringify(components), /"placeholder":"Pick a game for Lufia"/);
   assert.deepEqual(
     buttonsOf(components).map((b) => [b.label, b.customId]),
@@ -237,7 +241,10 @@ test("choose: records the pick and shows it, still changeable", async () => {
     textOf(components),
     /^You picked \*\*Dragon Quest XI S\*\* for Lufia\. Nobody else sees this\. You can change /m,
   );
-  assert.match(textOf(components), /it until picks close on 15 December\.$/m);
+  assert.match(
+    textOf(components),
+    /it until picks close on 15 December\. Secret Santa 2026 is revealed on 25 December\.$/m,
+  );
   const [select] = selectsOf(components);
   assert.deepEqual(select?.options.filter((o) => o.default).map((o) => o.value), ["2"]);
 });

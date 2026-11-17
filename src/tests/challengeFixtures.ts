@@ -156,6 +156,7 @@ export function backlogEntry(
   id: number,
   title: string,
   platform: string | null = "PlayStation 2",
+  hours: number | null = null,
 ): ISantaBacklogEntry {
   return {
     entry_id: 500 + id,
@@ -163,6 +164,7 @@ export function backlogEntry(
     platform_id: platform ? 7 : null,
     game: game(id, title),
     platform: platform ? { platform_id: 7, platform_name: platform } : null,
+    hours,
   };
 }
 
@@ -171,6 +173,8 @@ export function santaView(overrides: Partial<ISantaView> = {}): ISantaView {
   return {
     edition_id: 12,
     year: 2026,
+    challenge: { id: 9, name: "Secret Santa" },
+    reveal_on: "2026-12-25",
     recipient: { user_id: "101", username: "lufia", global_name: "Lufia" },
     taste: {
       genres: [
@@ -184,8 +188,8 @@ export function santaView(overrides: Partial<ISantaView> = {}): ISantaView {
     pick_deadline_on: "2026-12-15",
     picks_open: true,
     backlog: [
-      backlogEntry(1, "Shadow Hearts: Covenant"),
-      backlogEntry(2, "Dragon Quest XI S", "Nintendo Switch"),
+      backlogEntry(1, "Shadow Hearts: Covenant", "PlayStation 2", 49.5),
+      backlogEntry(2, "Dragon Quest XI S", "Nintendo Switch", 80),
       backlogEntry(3, "Chained Echoes", null),
     ],
     ...overrides,

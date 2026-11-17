@@ -214,12 +214,17 @@ function followUpPost(
   };
 }
 
-/** "-# 2 members sit this one out with too few games in their backlog." or null. */
-function leftOutLine(leftOut: number, past: boolean): string | null {
+/**
+ * "-# 2 members sit this one out with fewer than 5 games in their backlog." or null. The
+ * payload's `minimum` names the bar ("too few" without it).
+ */
+function leftOutLine(payload: Record<string, unknown>, past: boolean): string | null {
+  const leftOut = payloadCount(payload, "left_out");
   if (!leftOut) return null;
+  const minimum = payloadCount(payload, "minimum");
   const verb = past ? "sat" : leftOut === 1 ? "sits" : "sit";
-  return `-# ${plural(leftOut, "member")} ${verb} this one out with too few ` +
-    "games in their backlog.";
+  const games = minimum ? `fewer than ${plural(minimum, "game")}` : "too few games";
+  return `-# ${plural(leftOut, "member")} ${verb} this one out with ${games} in their backlog.`;
 }
 
 /** "Three days left: 14 members have signed up. Sign up before 1 December." */
@@ -253,8 +258,8 @@ export async function announceSignupClosing(
 }
 
 /**
- * Payload `{ event: "signup_closed", challenge, edition, joined, left_out, signup_post }`:
- * the draw is done; a reply with the members drawn.
+ * Payload `{ event: "signup_closed", challenge, edition, joined, left_out, minimum,
+ * signup_post }`: the draw is done; a reply with the members drawn.
  */
 export async function announceSignupClosed(
   payload: Record<string, unknown>,
@@ -267,7 +272,7 @@ export async function announceSignupClosed(
   const lines = [
     `Sign-up is closed with **${plural(joined, "member")}**. The draw is done: ` +
       `Santas, check ${commandMention("challenge santa pick")}.`,
-    leftOutLine(payloadCount(payload, "left_out"), false),
+    leftOutLine(payload, false),
   ].filter((line): line is string => !!line);
   await deps.postMessage(channelId, followUpPost(edition, replyTo, lines.join("\n"), false));
   return `Posted the draw for ${edition.challenge.name} ${edition.year}: ` +
@@ -275,7 +280,7 @@ export async function announceSignupClosed(
 }
 
 /**
- * Payload `{ event: "edition_cancelled", challenge, edition, joined, left_out,
+ * Payload `{ event: "edition_cancelled", challenge, edition, joined, left_out, minimum,
  * signup_post }`: fewer than 2 members could be drawn; a reply saying so, and when the
  * next Edition's sign-up opens (the day after this one's reveal).
  */
@@ -296,7 +301,7 @@ export async function announceEditionCancelled(
     `${editionName(edition)} is cancelled: the circle needs at least 2 Santas, and ` +
       `${drawn}.` +
       (nextOpens ? ` Sign-up for ${next} opens on ${editionDay(nextOpens)}.` : ""),
-    leftOutLine(payloadCount(payload, "left_out"), true),
+    leftOutLine(payload, true),
   ].filter((line): line is string => !!line);
   await deps.postMessage(channelId, followUpPost(edition, replyTo, lines.join("\n"), false));
   return `Posted that ${edition.challenge.name} ${edition.year} is cancelled ` +

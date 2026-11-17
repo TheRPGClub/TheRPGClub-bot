@@ -42,7 +42,7 @@ import {
 import type { ChallengeRunResult } from "./ChallengeRuns.js";
 import type { IChallengeDm } from "./ChallengeSeasons.js";
 import { resolveEdition, type ISantaSignupDeps, type SantaTarget } from "./ChallengeSignup.js";
-import { editionDay } from "./ChallengeSignupPosts.js";
+import { editionDay, editionName } from "./ChallengeSignupPosts.js";
 import { commandMention } from "./CommandMentionService.js";
 import { plural } from "../utilities/TextUtils.js";
 import { payloadEdition, payloadMember, payloadUserId } from "./ChallengePayloads.js";
@@ -99,16 +99,17 @@ export function tasteLine(name: string, taste: ISantaTaste | null | undefined): 
   return parts.length ? `-# To help you choose · ${parts.join(" · ")}` : null;
 }
 
-/** The view's main line: what to do, or what was picked. */
+/** The view's main line: what to do, or what was picked, and when it is revealed. */
 function statusLine(view: ISantaView, name: string): string {
   const closes = editionDay(view.pick_deadline_on);
+  const revealed = `${editionName(view)} is revealed on ${editionDay(view.reveal_on)}`;
   const game = view.pick?.game ? `**${escapeChallengeText(view.pick.game.title)}**` : null;
   if (view.picks_open) {
     return game
       ? `You picked ${game} for ${name}. Nobody else sees this. You can change it until ` +
-        `picks close on ${closes}.`
+        `picks close on ${closes}. ${revealed}.`
       : "Pick one game from their backlog. Nobody else sees this. Picks close on " +
-        `${closes}.`;
+        `${closes}, and ${revealed}.`;
   }
   if (!game) return `Picks are closed, and nothing could be picked for ${name}.`;
   return view.pick?.picked_randomly
@@ -116,10 +117,16 @@ function statusLine(view: ISantaView, name: string): string {
     : `Picks are closed. You picked ${game} for ${name}.`;
 }
 
-/** "PlayStation 2 · 1991": a select option's second line. */
+/**
+ * "PlayStation 2 · about 50 hours": a select option's second line, the release year in
+ * place of a HowLongToBeat time the game doesn't have.
+ */
 function optionDescription(entry: ISantaBacklogEntry): string | null {
-  const year = entry.game?.initial_release_date?.slice(0, 4);
-  const parts = [entry.platform?.platform_name, year].filter((part): part is string => !!part);
+  const hours = typeof entry.hours === "number" && entry.hours > 0
+    ? `about ${plural(Math.max(1, Math.round(entry.hours)), "hour")}`
+    : null;
+  const length = hours ?? entry.game?.initial_release_date?.slice(0, 4);
+  const parts = [entry.platform?.platform_name, length].filter((part): part is string => !!part);
   return parts.length ? truncateDescription(parts.join(" · ")) : null;
 }
 
