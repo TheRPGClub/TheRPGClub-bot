@@ -104,6 +104,7 @@ import {
   createChallengeJobDeps,
   type IChallengeJobDeps,
 } from "./ChallengeAnnouncements.js";
+import { announceRunFinished } from "./ChallengeRunFinished.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -1030,6 +1031,7 @@ const CHALLENGE_ANNOUNCERS: Readonly<Record<
     Promise<string>
 >> = {
   challenge_created: announceNewChallenge,
+  run_finished: announceRunFinished,
 };
 
 /**
