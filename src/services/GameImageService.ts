@@ -42,3 +42,14 @@ export async function fetchGameCoverBuffer(
     return null;
   }
 }
+
+/** The URL of a game's primary cover, or null without one (errors are logged). */
+export async function fetchGameCoverUrl(gameId: number): Promise<string | null> {
+  try {
+    const result = await apiGet<{ data: ApiGameImage[] }>(`/api/v1/games/${gameId}/images`);
+    return selectPrimaryCover(result?.data ?? [])?.url ?? null;
+  } catch (error) {
+    logError(`GameImageService.fetchGameCoverUrl(${gameId})`, error);
+    return null;
+  }
+}

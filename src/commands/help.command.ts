@@ -342,17 +342,22 @@ const HELP_TOPICS: HelpTopic[] = [
   {
     id: "challenge",
     label: "/challenge",
-    summary: "Create and browse club Challenges.",
+    summary: "Create, browse and take part in club Challenges.",
     syntax:
       "Syntax: /challenge create [club-hosted:<boolean>] | /challenge list [show:<filter>] | " +
       "/challenge show challenge:<challenge> [view:<game|member>] | " +
-      "/challenge edit challenge:<challenge>",
+      "/challenge edit challenge:<challenge> | /challenge start challenge:<challenge> | " +
+      "/challenge my-runs [past:<boolean>] | /challenge abandon run:<run> | " +
+      "/challenge delete-run run:<run>",
     notes:
       "Regulars and staff create Challenges in two short forms, then pick the franchises " +
       "and collections for the Pool and check its covers before saving. New Challenges are " +
       "announced in #challenges. A Challenge's rules lock once someone starts a Run; its " +
       "name, description and end date can still change. Staff can hide a Challenge or hand " +
-      "it to another Host from /challenge edit.",
+      "it to another Host from /challenge edit. Start a Run from /challenge start or a " +
+      "post's Start a Run button: your Game Completions and Now Playing fill it in by " +
+      "themselves, and /challenge my-runs says what's next. Finished Runs are announced in " +
+      "#challenges. An abandoned Run stays on your profile until you delete it.",
   },
   {
     id: "thread",
@@ -1021,7 +1026,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   news: "Share game news in the News Channel.",
   suggestion: "Submit a bot suggestion.",
   giveaway: "Claim or donate game keys.",
-  challenge: "Create and browse club Challenges.",
+  challenge: "Create, browse and take part in club Challenges.",
   "avatar-history": "View a member’s avatar history.",
   mod: "Moderator tools.",
   admin: "Admin tools.",

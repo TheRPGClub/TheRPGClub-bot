@@ -1,6 +1,7 @@
 import {
   CHALLENGE_EDIT_PREFIX,
   CHALLENGE_LIST_PREFIX,
+  CHALLENGE_RUN_PREFIX,
   CHALLENGE_SHOW_PREFIX,
   CHALLENGE_WIZARD_PREFIX,
 } from "../config/customIdPrefixes.js";
@@ -110,4 +111,29 @@ export function parseChallengeEditId(
   return known && challengeId > 0
     ? { action: action as ChallengeEditAction, challengeId }
     : null;
+}
+
+/**
+ * A member's Run actions: `start` takes a Challenge ID (the post's Start a Run button);
+ * `abandon`, `delete` and `keep` take a Run ID (confirming, or keeping it after all).
+ * Each custom ID is `<prefix>:<action>:<ID>`; the clicking member is who acts.
+ */
+export const CHALLENGE_RUN_ACTIONS = ["start", "abandon", "delete", "keep"] as const;
+
+export type ChallengeRunAction = (typeof CHALLENGE_RUN_ACTIONS)[number];
+
+export function buildChallengeRunId(action: ChallengeRunAction, id: number): string {
+  return `${CHALLENGE_RUN_PREFIX}:${action}:${id}`;
+}
+
+export function parseChallengeRunId(
+  customId: string,
+): { action: ChallengeRunAction; id: number } | null {
+  const [prefix, action, raw, ...rest] = customId.split(":");
+  const id = Number(raw);
+  if (prefix !== CHALLENGE_RUN_PREFIX || rest.length || !Number.isInteger(id) || id < 1) {
+    return null;
+  }
+  const known = (CHALLENGE_RUN_ACTIONS as readonly string[]).includes(action ?? "");
+  return known ? { action: action as ChallengeRunAction, id } : null;
 }

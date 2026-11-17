@@ -1,6 +1,7 @@
 import axios from "axios";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import {
+  apiDelete,
   apiGet,
   apiGetOrThrow,
   apiPatchOrThrow,
@@ -92,14 +93,30 @@ export interface IChallengeRunEntry {
   game_id: number;
   title: string;
   state: "in_progress" | "cleared";
+  cleared_on?: string | null;
+}
+
+/** The Challenge a Run belongs to, as the Run serves it. */
+export interface IChallengeRunChallenge {
+  id: number;
+  name: string;
+  challenge_format: ChallengeFormat;
+  schedule: ChallengeSchedule;
 }
 
 export interface IChallengeRun {
   id: number;
+  /** Always served by the API; optional so older fixtures need not carry it. */
+  challenge?: IChallengeRunChallenge;
   user: IChallengeMember;
   status: RunStatus;
   started_at: string;
+  /** When it became Finished, Expired or Abandoned. */
+  ended_at?: string | null;
+  /** When play counts, as club dates (both included); ends_on null while it has no end. */
+  window?: { starts_on: string; ends_on?: string | null };
   progress: { in_progress: number; cleared: number; target: number; caught_up?: boolean };
+  /** The games counted on the Run, Cleared first. */
   entries?: IChallengeRunEntry[];
 }
 
@@ -155,6 +172,20 @@ export interface IChallengeApi {
   /** GET /challenges/:id/runs, newest first. */
   listRuns(challengeId: number, actingUserId: string, page: number, per: number):
     Promise<IPage<IChallengeRun>>;
+  /** GET /users/:user_id/challenge_runs: a member's Runs, current and past, newest first. */
+  listMemberRuns(userId: string, actingUserId: string, page: number, per: number):
+    Promise<IPage<IChallengeRun>>;
+  /** GET /challenge_runs/:id; null when it is gone or hidden from the acting member. */
+  getRun(runId: number, actingUserId: string): Promise<IChallengeRun | null>;
+  /**
+   * POST /challenges/:id/runs for the acting member. Throws the AxiosError on a refusal
+   * (409 challenge_closed, run_active, season_run_exists, birth_date_required, ...).
+   */
+  startRun(challengeId: number, actingUserId: string): Promise<IChallengeRun>;
+  /** POST /challenge_runs/:id/abandon. Throws the AxiosError on a refusal. */
+  abandonRun(runId: number, actingUserId: string): Promise<IChallengeRun>;
+  /** DELETE /challenge_runs/:id. Throws the AxiosError on a refusal; false when gone. */
+  deleteRun(runId: number, actingUserId: string): Promise<boolean>;
   /** POST /challenges/pool_preview: the games a Pool resolves to, oldest release first. */
   poolPreview(pool: IPoolDefinition, page: number, per: number): Promise<IPage<IGameSummary>>;
   /** GET /challenges/pool_sources: franchises then collections whose name holds q. */
@@ -183,6 +214,7 @@ function withQuery(path: string, query: Record<string, string | number | undefin
 }
 
 const CHALLENGES_PATH = "/api/v1/challenges";
+const RUNS_PATH = "/api/v1/challenge_runs";
 
 export const CHALLENGE_API: IChallengeApi = {
   async listChallenges({ actingUserId, open, page, per }) {
@@ -240,6 +272,42 @@ export const CHALLENGE_API: IChallengeApi = {
       }),
     );
     return toPage(payload, page);
+  },
+  async listMemberRuns(userId, actingUserId, page, per) {
+    const payload = await apiGetOrThrow<{ data: IChallengeRun[]; meta?: PageMeta }>(
+      withQuery(`/api/v1/users/${encodeURIComponent(userId)}/challenge_runs`, {
+        acting_user_id: actingUserId,
+        page,
+        per,
+      }),
+    );
+    return toPage(payload, page);
+  },
+  async getRun(runId, actingUserId) {
+    const payload = await apiGet<{ data: IChallengeRun }>(
+      withQuery(`${RUNS_PATH}/${runId}`, { acting_user_id: actingUserId }),
+    );
+    return payload?.data ?? null;
+  },
+  async startRun(challengeId, actingUserId) {
+    const payload = await apiPostOrThrow<{ data: IChallengeRun }>(
+      `${CHALLENGES_PATH}/${challengeId}/runs`,
+      { data: { acting_user_id: actingUserId } },
+    );
+    return payload.data;
+  },
+  async abandonRun(runId, actingUserId) {
+    const payload = await apiPostOrThrow<{ data: IChallengeRun }>(
+      `${RUNS_PATH}/${runId}/abandon`,
+      { data: { acting_user_id: actingUserId } },
+    );
+    return payload.data;
+  },
+  async deleteRun(runId, actingUserId) {
+    const payload = await apiDelete<{ data?: { deleted?: boolean } }>(
+      withQuery(`${RUNS_PATH}/${runId}`, { acting_user_id: actingUserId }),
+    );
+    return payload !== null;
   },
   async poolPreview(pool, page, per) {
     const payload = await apiPostOrThrow<{ data: IGameSummary[]; meta?: PageMeta }>(
