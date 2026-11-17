@@ -191,7 +191,8 @@ export function buildDetailsModal(challenge: IChallenge): ModalBuilder {
 }
 
 /**
- * Saves the details modal: name, description, and the end date when it may change.
+ * Saves the details modal: name, description, and the end date when it may change and the
+ * form had it.
  * Returns the saved Challenge, or the error to show (a date it can't read, or the API's
  * refusal as given with the request and response).
  */
@@ -205,8 +206,11 @@ export async function saveDetails(
     name: (fields[EDIT_FIELDS.name] ?? "").trim().slice(0, NAME_MAX),
     description: (fields[EDIT_FIELDS.description] ?? "").trim().slice(0, DESCRIPTION_MAX),
   };
-  if (endDateEditable(challenge)) {
-    const typed = (fields[EDIT_FIELDS.endsOn] ?? "").trim();
+  // A form opened from a stale panel may lack the End date: only a form that showed it
+  // sends it, so an absent field never clears the date.
+  const endsOnField = fields[EDIT_FIELDS.endsOn];
+  if (endDateEditable(challenge) && endsOnField !== undefined) {
+    const typed = (endsOnField ?? "").trim();
     const endsOn = typed ? parseChallengeDate(typed) : null;
     if (typed && !endsOn) {
       return { error: `End date: "${typed}" is not a date, such as 3 March 2027.` };

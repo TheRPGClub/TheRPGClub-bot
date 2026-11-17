@@ -131,6 +131,31 @@ test("details: a Seasonal Challenge sends no end date, and a bad date is named b
   assert.equal(api.writes.length, 1);
 });
 
+test("details: a form without the End date keeps it; an emptied End date clears it",
+  async () => {
+    // A panel opened before the end date became editable showed a form without it.
+    const api = fakeApi();
+    const alwaysOpen = poolChallenge({
+      schedule: "always_open",
+      season: null,
+      ends_on: "2027-03-03",
+    });
+    await saveDetails(alwaysOpen, {
+      [EDIT_FIELDS.name]: "Fall",
+      [EDIT_FIELDS.description]: "Words.",
+    }, "42", api);
+    await saveDetails(alwaysOpen, {
+      [EDIT_FIELDS.name]: "Fall",
+      [EDIT_FIELDS.description]: "Words.",
+      [EDIT_FIELDS.endsOn]: "",
+    }, "42", api);
+
+    assert.deepEqual(api.writes, [
+      { name: "Fall", description: "Words." },
+      { name: "Fall", description: "Words.", ends_on: null },
+    ]);
+  });
+
 test("details: an API refusal is shown as given", async () => {
   const api = fakeApi({
     error: apiError(403, {
