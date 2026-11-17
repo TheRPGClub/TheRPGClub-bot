@@ -10,6 +10,8 @@ import type { IChallengeJobDeps, IChallengePost } from "../services/ChallengeAnn
 import type { IGameSummary, IPage, IPoolDefinition } from "../services/ChallengeApi.js";
 import {
   buttonsOf,
+  coverIdOf,
+  entry,
   galleryUrls,
   game,
   poolChallenge,
@@ -60,7 +62,8 @@ function fakeDeps(options: {
     posts: [],
     previews: [],
     coverLookups: [],
-    coverImage: async (gameId) => {
+    coverImage: async (url) => {
+      const gameId = coverIdOf(url);
       deps.coverLookups.push(gameId);
       return !options.covered || options.covered.includes(gameId) ? coverPng() : null;
     },
@@ -306,10 +309,11 @@ function finished(extra: Record<string, unknown> = {}): Record<string, unknown> 
       ended_at: "2026-11-15T18:00:00.000Z",
       progress: { in_progress: 1, cleared: 3, target: 3 },
       entries: [
-        { game_id: 9, title: "Final Fantasy IX", state: "cleared", cleared_on: "2026-10-02" },
-        { game_id: 6, title: "Final Fantasy VI", state: "cleared", cleared_on: "2026-10-30" },
-        { game_id: 15, title: "Final Fantasy Tactics", state: "cleared", cleared_on: "2026-11-15" },
-        { game_id: 12, title: "Final Fantasy XII", state: "in_progress", cleared_on: null },
+        entry(9, "Final Fantasy IX", "cleared", "2026-10-02"),
+        entry(6, "Final Fantasy VI", "cleared", "2026-10-30"),
+        // No cover: a title card on the shelf, and no image read.
+        { ...entry(15, "Final Fantasy Tactics", "cleared", "2026-11-15"), cover_url: null },
+        entry(12, "Final Fantasy XII", "in_progress"),
       ],
     }),
     feature_key: "challenges",
@@ -345,7 +349,8 @@ test("run_finished: posts the Run's shelf of Cleared covers in #challenges", asy
     [["Lufia", "https://the-rpg-club-www.vercel.app/members/222"]],
   );
   assert.deepEqual(post.allowedMentions, { parse: [] });
-  assert.deepEqual(deps.coverLookups, [9, 6, 15]);
+  // Each cover read from the entry's cover_url; Tactics has none.
+  assert.deepEqual(deps.coverLookups, [9, 6]);
   assert.deepEqual(galleryUrls(post.components), ["attachment://run-finished-41.png"]);
   assert.equal(post.files?.[0]?.name, "run-finished-41.png");
   const size = await imageSize(post);
@@ -366,12 +371,8 @@ test("run_finished: Preview posts in the bot-dev channel, Off posts nothing", as
 test("run_finished: more than 10 Cleared games shelve 9 covers and the rest as a count",
   async () => {
     const deps = fakeDeps();
-    const entries = Array.from({ length: 12 }, (_, index) => ({
-      game_id: index + 1,
-      title: `Game ${index + 1}`,
-      state: "cleared" as const,
-      cleared_on: "2026-10-01",
-    }));
+    const entries = Array.from({ length: 12 }, (_, index) =>
+      entry(index + 1, `Game ${index + 1}`, "cleared", "2026-10-01"));
     const payload = finished();
     const finishedRun = payload.run as ReturnType<typeof poolRun>;
     const progress = { in_progress: 0, cleared: 12, target: 12 };

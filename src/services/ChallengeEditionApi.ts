@@ -67,6 +67,8 @@ export interface ISantaBacklogEntry {
     platform_name: string;
     platform_abbreviation?: string | null;
   } | null;
+  /** The HowLongToBeat time backlog#pick compares (main, then main + sides); null without. */
+  hours?: number | null;
 }
 
 /** Hints about what the recipient likes: their top genres and the platform they play most. */
@@ -83,6 +85,9 @@ export interface ISantaTaste {
 export interface ISantaView {
   edition_id: number;
   year: number;
+  challenge: { id: number; name: string };
+  /** The picks are revealed on this club day. */
+  reveal_on: string;
   recipient: IChallengeMember;
   taste: ISantaTaste;
   pick: { game?: IGameSummary | null; picked_at: string; picked_randomly: boolean } | null;

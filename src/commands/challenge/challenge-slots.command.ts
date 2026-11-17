@@ -27,7 +27,6 @@ import { CHALLENGE_API } from "../../services/ChallengeApi.js";
 import { challengeTextView, type IChallengeView } from "../../services/ChallengeBrowse.js";
 import {
   clearedGameChoices,
-  fetchReleaseYears,
   fittingOpenYears,
   movePickerView,
   moveYearPickerView,
@@ -44,6 +43,7 @@ import { buildSlotsRunView } from "../../services/ChallengeSlotsShow.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { challengeErrorReply, parseChallengeOption } from "./challenge-interaction.utils.js";
+import { CHALLENGE_AUTOCOMPLETE_READ } from "../../config/challenges.js";
 
 // /challenge slot-move and past-pick, and a Slots Run's components: its decade pages, the
 // by-member select of Runs, and the Move a game and Pick past play steps (spec api#376,
@@ -52,8 +52,6 @@ import { challengeErrorReply, parseChallengeOption } from "./challenge-interacti
 
 type SlotsInteraction = CommandInteraction | ButtonInteraction | StringSelectMenuInteraction;
 
-/** Runs read for the run: autocomplete, newest first. */
-const AUTOCOMPLETE_READ = 100;
 const LOG_CONTEXT = "ChallengeSlotsCommand";
 
 async function showResult(interaction: SlotsInteraction, result: ChallengeSlotResult):
@@ -107,7 +105,8 @@ async function autocompleteRun(interaction: AutocompleteInteraction): Promise<vo
       interaction.user.id,
       interaction.user.id,
       1,
-      AUTOCOMPLETE_READ,
+      CHALLENGE_AUTOCOMPLETE_READ,
+      "active",
     );
     return slotsRunChoices(page.items, focusedQuery(interaction));
   });
@@ -127,7 +126,8 @@ async function autocompleteMoveYear(interaction: AutocompleteInteraction): Promi
     const gameId = optionId(interaction, "game");
     const run = runId ? await CHALLENGE_API.getRun(runId, interaction.user.id) : null;
     if (!run || !gameId) return [];
-    const years = fittingOpenYears(run, await fetchReleaseYears(gameId));
+    const entry = (run.entries ?? []).find((e) => e.game_id === gameId);
+    const years = fittingOpenYears(run, entry);
     return yearChoices(years, focusedQuery(interaction));
   });
 }

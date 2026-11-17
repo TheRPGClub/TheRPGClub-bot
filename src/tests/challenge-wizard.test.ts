@@ -166,25 +166,26 @@ test("basics step: offers the Format's settings next", async () => {
   );
 });
 
-test("settings: Season dates, target and a search lead to the franchise and collection pick", async () => {
-  const api = fakeApi();
-  const { draft, errors } = await applySettings(withBasics(), poolSettings(), api);
+test("settings: Season dates, target and a search lead to the franchise and collection pick",
+  async () => {
+    const api = fakeApi();
+    const { draft, errors } = await applySettings(withBasics(), poolSettings(), api);
 
-  assert.deepEqual(errors, []);
-  assert.deepEqual(draft.season, { start: "06-21", end: "09-22" });
-  assert.equal(draft.pool.target, 2);
-  assert.equal(draft.step, "sources");
-  assert.deepEqual(api.searches, ["suikoden"]);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(draft.season, { start: "06-21", end: "09-22" });
+    assert.equal(draft.pool.target, 2);
+    assert.equal(draft.step, "sources");
+    assert.deepEqual(api.searches, ["suikoden"]);
 
-  const view = await renderWizardStep(SID, draft, api);
-  const [select] = selectsOf(view.components);
-  assert.equal(select?.customId, `challenge-wiz-v1:sources:${SID}`);
-  assert.deepEqual(select?.options.map((o) => [o.label, o.value, o.default]), [
-    ["Suikoden (franchise, 8 games)", "franchise:9", false],
-    ["Genso Suikogaiden (collection, 2 games)", "collection:4", false],
-  ]);
-  assert.equal(select?.minValues, 0);
-});
+    const view = await renderWizardStep(SID, draft, api);
+    const [select] = selectsOf(view.components);
+    assert.equal(select?.customId, `challenge-wiz-v1:sources:${SID}`);
+    assert.deepEqual(select?.options.map((o) => [o.label, o.value, o.default]), [
+      ["Suikoden (franchise, 8 games)", "franchise:9", false],
+      ["Genso Suikogaiden (collection, 2 games)", "collection:4", false],
+    ]);
+    assert.equal(select?.minValues, 0);
+  });
 
 test("settings: dates it can't read and a missing count are named back", async () => {
   const { errors } = await applySettings(

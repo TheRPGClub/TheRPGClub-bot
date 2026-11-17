@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { IChallenge, IChallengeRun, IPastPlay } from "../services/ChallengeApi.js";
+import type {
+  IChallenge,
+  IChallengeRun,
+  IChallengeSlots,
+  IPastPlay,
+} from "../services/ChallengeApi.js";
 import {
   clearedGameChoices,
   movePickerView,
@@ -69,7 +74,7 @@ function fakeApi(options: {
       const items = options.runs ?? [];
       return { items, page, pages: 1, count: items.length };
     },
-    poolPreview: async () => ({ items: [], page: 1, pages: 1, count: 0 }),
+    poolProgress: async () => ({ items: [], page: 1, pages: 1, count: 0 }),
     listMemberRuns: async (userId, actingUserId, page) => {
       api.calls.push(`runs of ${userId} as ${actingUserId} page ${page}`);
       const items = options.memberRuns ?? [];
@@ -162,13 +167,19 @@ test("show: another member's Run has no Move or Pick buttons", async () => {
 });
 
 test("show: without Counts past play there is no Pick past play", async () => {
-  const api = fakeApi({
-    challenge: slotsChallenge({
-      slots: { first_year: "birth_year", last_year: "current_year", counts_past_play: false },
-    }),
+  const slots: IChallengeSlots = {
+    first_year: "birth_year",
+    last_year: "current_year",
+    counts_past_play: false,
+  };
+  const run = lufiaRun({
+    challenge: { ...lufiaRun().challenge!, counts_past_play: false, slots },
   });
+  const api = fakeApi({ run });
   const view = await buildSlotsRunView({ runId: 90, actingUserId: "222" }, { api });
 
+  // The Run's own Challenge says whether Counts past play is on: nothing else is read.
+  assert.deepEqual(api.calls, ["run 90 as 222"]);
   const labels = buttonsOf(view.components).map((b) => b.label);
   assert.ok(labels.includes("Move a game"));
   assert.ok(!labels.includes("Pick past play"));
@@ -216,7 +227,7 @@ test("slot move: moves the game and shows its new decade", async () => {
     { api },
   ));
 
-  assert.equal(api.calls[0], "move 1993 to 2003 on 90 as 222");
+  assert.deepEqual(api.calls, ["move 1993 to 2003 on 90 as 222"]);
   const text = textOf(result.view.components);
   assert.match(text, /^Moved \*\*Game 1993\*\* to 2003\.$/m);
   assert.match(text, /^### 2000s/m);
@@ -297,11 +308,19 @@ test("move a game: the first step offers the Cleared games with their years", as
   assert.match(textOf(result.view.components), /Showing 25 of 34 games/);
 });
 
+/** Lufia's Run, its Game 1993 released in `years` (the entry's release_years). */
+function releasedIn(years: number[] | null): IChallengeRun {
+  const run = lufiaRun();
+  run.entries = run.entries!.map((entry) =>
+    entry.game_id === 1993 ? { ...entry, release_years: years } : entry);
+  return run;
+}
+
 test("move a game: the year step offers only the open years the game came out in",
   async () => {
     const result = viewOf(await moveYearPickerView(
       { runId: 90, gameId: 1993, actingUserId: "222" },
-      { api: fakeApi(), releaseYears: async () => [1993, 2003, 2026] },
+      { api: fakeApi({ run: releasedIn([1993, 2003, 2026]) }) },
     ));
 
     const [select] = selectsOf(result.view.components);
@@ -313,13 +332,13 @@ test("move a game: no open year fits, or unknown release years offer every open 
   async () => {
     const none = viewOf(await moveYearPickerView(
       { runId: 90, gameId: 1993, actingUserId: "222" },
-      { api: fakeApi(), releaseYears: async () => [1993] },
+      { api: fakeApi({ run: releasedIn([1993]) }) },
     ));
     assert.match(textOf(none.view.components), /didn't come out in any open year/);
 
     const unknown = viewOf(await moveYearPickerView(
       { runId: 90, gameId: 1993, actingUserId: "222" },
-      { api: fakeApi(), releaseYears: async () => null },
+      { api: fakeApi({ run: releasedIn(null) }) },
     ));
     assert.deepEqual(
       selectsOf(unknown.view.components)[0]?.options.map((o) => o.value),

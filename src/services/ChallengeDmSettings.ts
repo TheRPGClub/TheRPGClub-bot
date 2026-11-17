@@ -51,7 +51,9 @@ const WHAT_THEY_ARE = "Challenge reminders, such as a Season of your Run ending 
 
 function turnHint(dms: boolean): string {
   const command = commandMention("challenge dms");
-  return dms ? `-# Turn them off with ${command} set:off` : `-# Turn them on with ${command} set:on`;
+  return dms
+    ? `-# Turn them off with ${command} set:off`
+    : `-# Turn them on with ${command} set:on`;
 }
 
 function settingText(dms: boolean, changed: boolean): string {

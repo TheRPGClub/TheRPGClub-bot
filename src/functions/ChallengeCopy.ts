@@ -5,6 +5,7 @@ import type {
   IChallengeMember,
   IChallengePool,
 } from "../services/ChallengeApi.js";
+import { plural } from "../utilities/TextUtils.js";
 
 // The words every Challenge view and post shares (spec api#376), in the API glossary's
 // terms: Host, Pool, Season, Always Open, Seasonal, Cleared, Finish.
@@ -71,10 +72,10 @@ export function describePool(pool: IChallengePool): string {
   const sources = [
     namedGroup((pool.franchises ?? []).map((f) => f.name), "franchise", "franchises"),
     namedGroup((pool.collections ?? []).map((c) => c.name), "collection", "collections"),
-    included ? `${included} ${included === 1 ? "game" : "games"} added by hand` : null,
+    included ? `${plural(included, "game")} added by hand` : null,
   ].filter((part): part is string => part !== null);
   const count = pool.game_count;
-  const games = typeof count === "number" ? `${count} ${count === 1 ? "game" : "games"}` : "Games";
+  const games = typeof count === "number" ? `${plural(count, "game")}` : "Games";
   return sources.length ? `${games} from ${listJoin(sources)}` : games;
 }
 
@@ -120,9 +121,16 @@ export function clubToday(now: Date = new Date()): string {
   return DateTime.fromJSDate(now).setZone(CHALLENGE_TIME_ZONE).toISODate() ?? "";
 }
 
-function seasonDate(year: number, monthDay: string): DateTime {
+/**
+ * A Season's first or last day in a year. A 29 February the year lacks falls back as the
+ * API's does (Challenges::Schedule): a Season starts on 1 March and ends on 28 February.
+ */
+function seasonDate(year: number, monthDay: string, edge: "start" | "end"): DateTime {
   const [month, day] = monthDay.split("-").map(Number);
-  return DateTime.fromObject({ year, month, day }, { zone: CHALLENGE_TIME_ZONE });
+  const date = DateTime.fromObject({ year, month, day }, { zone: CHALLENGE_TIME_ZONE });
+  if (date.isValid) return date;
+  const fallback = edge === "start" ? { month: 3, day: 1 } : { month: 2, day: 28 };
+  return DateTime.fromObject({ year, ...fallback }, { zone: CHALLENGE_TIME_ZONE });
 }
 
 /**
@@ -134,12 +142,12 @@ export function nextOpenChange(challenge: IChallenge, now: Date = new Date()): D
   if (challenge.schedule === "seasonal" && challenge.season) {
     const { start, end } = challenge.season;
     if (challenge.open) {
-      let endDay = seasonDate(today.year, end);
-      if (endDay < today) endDay = seasonDate(today.year + 1, end);
+      let endDay = seasonDate(today.year, end, "end");
+      if (endDay < today) endDay = seasonDate(today.year + 1, end, "end");
       return endDay.plus({ days: 1 }).toJSDate();
     }
-    let startDay = seasonDate(today.year, start);
-    if (startDay <= today) startDay = seasonDate(today.year + 1, start);
+    let startDay = seasonDate(today.year, start, "start");
+    if (startDay <= today) startDay = seasonDate(today.year + 1, start, "start");
     return startDay.toJSDate();
   }
   if (!challenge.open || !challenge.ends_on) return null;

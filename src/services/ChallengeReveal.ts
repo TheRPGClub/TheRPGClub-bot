@@ -1,24 +1,20 @@
-import {
-  ContainerBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
-  TextDisplayBuilder,
-} from "@discordjs/builders";
+import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builders";
 import { MessageFlags } from "discord-api-types/v10";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   escapeChallengeText,
   formatChallengeDate,
   listJoin,
   memberName,
 } from "../functions/ChallengeCopy.js";
-import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
 import type { IChallengeJobDeps, IChallengePost } from "./ChallengeAnnouncements.js";
 import type { IChallengeEdition, IEditionAssignment } from "./ChallengeEditionApi.js";
 import { composeGiftTags, GIFT_TAGS_MAX, type IGiftTag } from "./ChallengeGiftTagsImage.js";
 import { commandMention } from "./CommandMentionService.js";
-import { editionDay, editionName, payloadEdition, replyTarget } from "./ChallengeSignupPosts.js";
+import { editionDay, editionName, replyTarget } from "./ChallengeSignupPosts.js";
+import { plural } from "../utilities/TextUtils.js";
+import { payloadEdition } from "./ChallengePayloads.js";
 
 // The Secret Santa reveal (spec api#376, bot#1552), design 7C "Gift tags": on the reveal
 // date one post, replying to the Edition's opening post, shows every gift as one generated
@@ -27,10 +23,6 @@ import { editionDay, editionName, payloadEdition, replyTarget } from "./Challeng
 
 /** A media gallery item's description holds at most this many characters. */
 const ALT_TEXT_MAX = 1024;
-
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
 
 /** "To Lufia: Vagrant Story", or ": nothing to pick" when no game could be picked. */
 function giftLine(assignment: IEditionAssignment): string {
@@ -60,7 +52,7 @@ function closingLine(edition: IChallengeEdition, assignments: IEditionAssignment
   const parts = [
     `Full list: ${commandMention("challenge show")} ` +
       escapeChallengeText(edition.challenge.name),
-    `${games} ${games === 1 ? "game" : "games"}`,
+    `${plural(games, "game")}`,
   ];
   if (random.length) {
     parts.push(`${possessives(random)} ${random.length === 1 ? "was" : "were"} picked at random`);
@@ -80,11 +72,11 @@ export function buildRevealPost(
 ): IChallengePost {
   const fileName = `secret-santa-${edition.year}-reveal.png`;
   const assignments = edition.assignments ?? [];
-  const container = new ContainerBuilder().addTextDisplayComponents(text(
+  const container = buildTextContainer(
     `# ${editionName(edition)}\n` +
       "The presents are open. Clear yours before " +
       `${formatChallengeDate(edition.ends_on)} to Finish.`,
-  ));
+  );
   if (sheet) {
     container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
       new MediaGalleryItemBuilder()
@@ -93,12 +85,12 @@ export function buildRevealPost(
     ));
   } else if (assignments.length) {
     // No picture: the gifts in words instead.
-    container.addTextDisplayComponents(text(assignments.map((a) =>
+    container.addTextDisplayComponents(buildTextDisplay(assignments.map((a) =>
       `**To ${escapeChallengeText(memberName(a.recipient))}:** ` +
         escapeChallengeText(a.game?.title ?? "nothing to pick")).join("\n")));
   }
   if (assignments.length) {
-    container.addTextDisplayComponents(text(closingLine(edition, assignments)));
+    container.addTextDisplayComponents(buildTextDisplay(closingLine(edition, assignments)));
   }
   return {
     components: [container.toJSON()],
@@ -123,7 +115,10 @@ async function revealSheet(
     const tags: IGiftTag[] = await Promise.all(drawn.map(async (a) => ({
       recipient: memberName(a.recipient),
       game: a.game
-        ? { title: a.game.title, cover: await deps.coverImage(a.game.game_id) }
+        ? {
+          title: a.game.title,
+          cover: a.game.cover_url ? await deps.coverImage(a.game.cover_url) : null,
+        }
         : null,
     })));
     const rest = assignments.slice(drawn.length).map((a): IGiftTag => ({

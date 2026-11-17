@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { IChallenge, IChallengeRun, IStartedRun } from "../services/ChallengeApi.js";
+import type { IChallengeRun, IStartedRun } from "../services/ChallengeApi.js";
 import type { IBirthDateApi } from "../services/BirthDateService.js";
 import { buildMyRunsView } from "../services/ChallengeMyRuns.js";
 import {
@@ -10,14 +10,7 @@ import {
   type ChallengeRunResult,
   type IChallengeRunsApi,
 } from "../services/ChallengeRuns.js";
-import {
-  apiError,
-  buttonsOf,
-  poolRun,
-  slotsChallenge,
-  slotsRun,
-  textOf,
-} from "./challengeFixtures.js";
+import { apiError, buttonsOf, poolRun, slotsRun, textOf } from "./challengeFixtures.js";
 
 // Slots Runs (bot#1550): starting a birth-year Run (the notice, and the Birth Date it may
 // ask for), and the my-runs advice for a Slots Run (design 5C).
@@ -26,7 +19,11 @@ const BIRTH_REQUIRED = apiError(409, {
   error: "birth_date_required",
   message: "Years Alive starts at your birth year. Enter your Birth Date first; " +
     "the birth year shows on the Run, never the full date.",
-}, { method: "post", url: "/api/v1/challenges/12/runs", data: { data: { acting_user_id: "333" } } });
+}, {
+  method: "post",
+  url: "/api/v1/challenges/12/runs",
+  data: { data: { acting_user_id: "333" } },
+});
 
 function startedRun(): IStartedRun {
   return {
@@ -144,15 +141,14 @@ test("birth date: a date the API won't take is shown, and no Run starts", async 
 
 // my-runs: design 5C, What's next.
 
-function myRunsDeps(runs: IChallengeRun[], challenge: IChallenge | null = slotsChallenge()) {
+// The Run serves all a card needs: its Challenge's Counts past play and its entries'
+// release years and covers. Nothing else is read.
+function myRunsDeps(runs: IChallengeRun[]) {
   return {
     api: {
       listMemberRuns: async (_u: string, _a: string, page: number) =>
         ({ items: runs, page, pages: 1, count: runs.length }),
     },
-    challenge: async () => challenge,
-    coverUrl: async (gameId: number) => `https://img.example/${gameId}.jpg`,
-    releaseYears: async (gameId: number) => (gameId === 77 ? [2021] : null),
   };
 }
 
@@ -178,13 +174,17 @@ test("my-runs: a Slots Run names its open years and what would fill one", async 
 });
 
 test("my-runs: a Caught Up Run says when its next slot opens", async () => {
-  const run = slotsRun();
-  const view = await buildMyRunsView(
-    { actingUserId: "333", past: false },
-    myRunsDeps([run], slotsChallenge({
+  const run = slotsRun({}, {
+    challenge: {
+      id: 12,
+      name: "Years Alive",
+      challenge_format: "slots",
+      schedule: "always_open",
+      counts_past_play: false,
       slots: { first_year: "birth_year", last_year: "current_year", counts_past_play: false },
-    })),
-  );
+    },
+  });
+  const view = await buildMyRunsView({ actingUserId: "333", past: false }, myRunsDeps([run]));
 
   const text = textOf(view.components);
   assert.match(
@@ -205,11 +205,9 @@ test("my-runs: an In Progress game whose years are filled, and one of unknown ye
       state: "in_progress",
       slot_year: null,
       picked_by_hand: false,
+      release_years: null,
     });
-    const deps = {
-      ...myRunsDeps([run]),
-      releaseYears: async (id: number) => (id === 77 ? [2021] : null),
-    };
+    const deps = myRunsDeps([run]);
     const text = textOf((await buildMyRunsView({ actingUserId: "333", past: false }, deps))
       .components);
 

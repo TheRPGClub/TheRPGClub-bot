@@ -4,10 +4,9 @@ import {
   ContainerBuilder,
   SectionBuilder,
   StringSelectMenuBuilder,
-  TextDisplayBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { escapeChallengeText, memberName } from "../functions/ChallengeCopy.js";
 import {
   buildChallengeShowId,
@@ -21,7 +20,7 @@ import {
   openYears,
   runDecades,
 } from "../functions/ChallengeSlotsCopy.js";
-import { DISCORD_BUTTON_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
+import { DISCORD_BUTTON_LABEL_MAX } from "../config/textLimits.js";
 import {
   buildChallengeShowView,
   challengeTextView,
@@ -31,16 +30,17 @@ import {
 } from "./ChallengeBrowse.js";
 import {
   CHALLENGE_API,
-  type IChallenge,
+  readRunPages,
   type IChallengeApi,
   type IChallengeRun,
 } from "./ChallengeApi.js";
+import { plural } from "../utilities/TextUtils.js";
 
 // A Slots Run in /challenge show (spec api#376, bot#1550), design 4D "Flip the view": one
 // decade per page with every year's game named, buttons for the other decades, and for
 // the Run's member the ways to move a game or pick past play.
 
-export type IChallengeSlotsShowApi = Pick<IChallengeApi, "getRun" | "getChallenge">;
+export type IChallengeSlotsShowApi = Pick<IChallengeApi, "getRun">;
 
 export interface IChallengeSlotsShowDeps {
   api?: IChallengeSlotsShowApi;
@@ -48,19 +48,8 @@ export interface IChallengeSlotsShowDeps {
 
 /** Decade buttons fit one row; a Run of more decades gets a select instead. */
 const DECADE_BUTTONS_MAX = 5;
-/** Runs read per request, and at most this many requests, finding the member's Run. */
-const RUNS_PER_REQUEST = 100;
-const RUNS_MAX_REQUESTS = 5;
-
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
 
 type Row = ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>;
-
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
 
 /** The decade a Run opens on: its first open year's, else its last. */
 export function defaultDecade(run: IChallengeRun): number {
@@ -73,7 +62,7 @@ function headerText(challengeName: string, run: IChallengeRun): string {
   const { cleared, target, caught_up: caughtUp } = run.progress;
   const parts = [`**${escapeChallengeText(memberName(run.user))}**'s Run`];
   if (run.status !== "active") parts.push(RUN_STATUS_LABELS[run.status] ?? run.status);
-  parts.push(`${cleared} of ${plural(target, "year", "years")}`);
+  parts.push(`${cleared} of ${plural(target, "year")}`);
   if (caughtUp) parts.push("Caught Up");
   return `## ${escapeChallengeText(challengeName)}\n${parts.join(" · ")}`;
 }
@@ -119,11 +108,7 @@ function decadeRow(run: IChallengeRun, decade: number): Row | null {
 }
 
 /** Move a game and Pick past play: the Run's member only, while it is Active. */
-function actionRow(
-  run: IChallengeRun,
-  challenge: Pick<IChallenge, "slots"> | null,
-  actingUserId: string,
-): Row | null {
+function actionRow(run: IChallengeRun, actingUserId: string): Row | null {
   if (run.user.user_id !== actingUserId || run.status !== "active") return null;
   const buttons = [
     new ButtonBuilder()
@@ -132,7 +117,7 @@ function actionRow(
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!clearedEntries(run).length || !openYears(run).length),
   ];
-  if (challenge?.slots?.counts_past_play) {
+  if (run.challenge?.counts_past_play) {
     buttons.push(new ButtonBuilder()
       .setCustomId(buildChallengeSlotsId({ action: "pick", ids: [run.id] }))
       .setLabel("Pick past play")
@@ -143,20 +128,19 @@ function actionRow(
 }
 
 /**
- * The decade page of a Slots Run as it stands, for its Challenge (with Counts past play).
- * `notice` leads it (what a move or pick just did).
+ * The decade page of a Slots Run as it stands, with its Challenge as the Run serves it
+ * (name and Counts past play). `notice` leads it (what a move or pick just did).
  */
 export function slotsRunView(
   run: IChallengeRun,
-  challenge: Pick<IChallenge, "id" | "name" | "slots"> | null,
   options: { decade?: number; actingUserId: string; notice?: string },
 ): IChallengeView {
   const decade = options.decade ?? defaultDecade(run);
-  const challengeId = challenge?.id ?? run.challenge?.id ?? 0;
-  const name = challenge?.name ?? run.challenge?.name ?? `Challenge Run ${run.id}`;
-  const header = text(headerText(name, run));
+  const challengeId = run.challenge?.id ?? 0;
+  const name = run.challenge?.name ?? `Challenge Run ${run.id}`;
+  const header = buildTextDisplay(headerText(name, run));
   const container = new ContainerBuilder();
-  if (options.notice) container.addTextDisplayComponents(text(options.notice));
+  if (options.notice) container.addTextDisplayComponents(buildTextDisplay(options.notice));
   if (challengeId > 0) {
     const section = new SectionBuilder().addTextDisplayComponents(header);
     section.setButtonAccessory(new ButtonBuilder()
@@ -167,8 +151,8 @@ export function slotsRunView(
   } else {
     container.addTextDisplayComponents(header);
   }
-  container.addTextDisplayComponents(text(decadeText(run, decade)));
-  const rows = [decadeRow(run, decade), actionRow(run, challenge, options.actingUserId)]
+  container.addTextDisplayComponents(buildTextDisplay(decadeText(run, decade)));
+  const rows = [decadeRow(run, decade), actionRow(run, options.actingUserId)]
     .filter((row): row is Row => row !== null);
   return {
     components: [container.toJSON(), ...rows.map((row) => row.toJSON())],
@@ -177,10 +161,7 @@ export function slotsRunView(
   };
 }
 
-/**
- * Reads a Slots Run and its Challenge and shows one of its decades. API errors are thrown
- * for the caller's error reply.
- */
+/** Reads a Slots Run and shows one of its decades. API errors are thrown for the caller. */
 export async function buildSlotsRunView(
   input: { runId: number; decade?: number; actingUserId: string; notice?: string },
   deps: IChallengeSlotsShowDeps = {},
@@ -189,10 +170,7 @@ export async function buildSlotsRunView(
   const run = await api.getRun(input.runId, input.actingUserId);
   if (!run) return challengeTextView(`There is no Run ${input.runId}, or it is hidden from you.`);
   if (!run.slots) return challengeTextView("That Run has no slots: it isn't a Slots Run.");
-  const challenge = run.challenge
-    ? await api.getChallenge(run.challenge.id, input.actingUserId)
-    : null;
-  return slotsRunView(run, challenge, input);
+  return slotsRunView(run, input);
 }
 
 /** The acting member's Run of a Challenge: their Active one, else their newest. */
@@ -201,12 +179,9 @@ async function memberRunOf(
   challengeId: number,
   actingUserId: string,
 ): Promise<IChallengeRun | null> {
-  const runs: IChallengeRun[] = [];
-  for (let page = 1; page <= RUNS_MAX_REQUESTS; page += 1) {
-    const result = await api.listMemberRuns(actingUserId, actingUserId, page, RUNS_PER_REQUEST);
-    runs.push(...result.items.filter((run) => run.challenge?.id === challengeId));
-    if (page >= result.pages) break;
-  }
+  const runs = (await readRunPages((page, per) =>
+    api.listMemberRuns(actingUserId, actingUserId, page, per)))
+    .filter((run) => run.challenge?.id === challengeId);
   return runs.find((run) => run.status === "active") ?? runs[0] ?? null;
 }
 
@@ -226,7 +201,7 @@ export async function buildShowView(
     const challenge = await api.getChallenge(target.challengeId, target.actingUserId);
     if (challenge?.challenge_format === "slots") {
       const run = await memberRunOf(api, challenge.id, target.actingUserId);
-      if (run?.slots) return slotsRunView(run, challenge, { actingUserId: target.actingUserId });
+      if (run?.slots) return slotsRunView(run, { actingUserId: target.actingUserId });
       return buildChallengeShowView({ ...target, view: "member", page: 1 }, deps);
     }
   }

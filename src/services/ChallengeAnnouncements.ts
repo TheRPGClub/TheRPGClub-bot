@@ -1,10 +1,8 @@
 import {
   ActionRowBuilder,
   ButtonBuilder,
-  ContainerBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
-  TextDisplayBuilder,
 } from "@discordjs/builders";
 import {
   ButtonStyle,
@@ -12,7 +10,7 @@ import {
   type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
 import type { Client, MessageCreateOptions } from "discord.js";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   clubToday,
   describePool,
@@ -30,9 +28,9 @@ import {
   buildChallengeRunId,
   buildChallengeShowId,
 } from "../functions/ChallengeCustomIds.js";
-import { DISCORD_SELECT_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
+import { DISCORD_SELECT_LABEL_MAX } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
-import { fetchGameCoverBuffer } from "./GameImageService.js";
+import { fetchImageBuffer } from "./GameImageService.js";
 import { composeYearStrip, stripTiles } from "./ChallengeSlotsImage.js";
 import { getUserEmojiString } from "./UserEmojiService.js";
 import {
@@ -50,6 +48,7 @@ import {
   signupEditionOf,
   storeSignupPost,
 } from "./ChallengeSignupPosts.js";
+import { payloadChallenge } from "./ChallengePayloads.js";
 
 // The #challenges posts (spec api#376). This file holds the new-Challenge post
 // (`challenge_created`, design 1B "Cover wall", with a year strip for Slots), the post
@@ -80,8 +79,8 @@ export interface IChallengeJobDeps {
   storeSignupPost(editionId: number, post: ISignupPost): Promise<void>;
   /** The games a Pool resolves to, for its covers when the payload carries none. */
   poolPreview(pool: IPoolDefinition, page: number, per: number): Promise<IPage<IGameSummary>>;
-  /** A game's cover image, or null without one (errors logged, never thrown). */
-  coverImage(gameId: number): Promise<Buffer | null>;
+  /** The image at a game's `cover_url`, or null (errors logged, never thrown). */
+  coverImage(url: string): Promise<Buffer | null>;
   /** DMs a member. Throws the discord.js error (closed DMs: code 50007). */
   sendDm(userId: string, post: IChallengePost): Promise<void>;
   /** The member's avatar emoji (`<:name:id>`), or null when they have none yet. */
@@ -113,7 +112,7 @@ export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
     storeSignupPost: (editionId, post) =>
       CHALLENGE_EDITION_API.storeSignupPost(editionId, post),
     poolPreview: (pool, page, per) => CHALLENGE_API.poolPreview(pool, page, per),
-    coverImage: async (gameId) => (await fetchGameCoverBuffer(gameId))?.buffer ?? null,
+    coverImage: fetchImageBuffer,
     sendDm: async (userId, post) => {
       const user = await client.users.fetch(userId);
       await user.send(discordMessage(post));
@@ -126,20 +125,6 @@ export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
 export const COVER_WALL_MAX = 10;
 
 const LOG_CONTEXT = "ChallengeAnnouncements";
-
-/** The `challenge` of a job payload, or a thrown error naming what is wrong. */
-export function payloadChallenge(payload: Record<string, unknown>): IChallenge {
-  const challenge = payload.challenge as Partial<IChallenge> | undefined;
-  if (
-    !challenge || typeof challenge !== "object" ||
-    typeof challenge.id !== "number" || typeof challenge.name !== "string"
-  ) {
-    throw new Error(`Invalid payload: challenge must be a Challenge, got ${
-      JSON.stringify(challenge)
-    }.`);
-  }
-  return challenge as IChallenge;
-}
 
 function payloadGames(payload: Record<string, unknown>): IGameSummary[] | null {
   const games = payload.pool_games;
@@ -181,10 +166,6 @@ export function buildCoverWall(games: readonly IGameSummary[]): MediaGalleryBuil
   return items.length ? new MediaGalleryBuilder().addItems(...items) : null;
 }
 
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
-
 /** The rule lines under the description: what counts, what it takes, and when. */
 export function challengeRuleLines(challenge: IChallenge): string[] {
   const lines: string[] = [];
@@ -198,7 +179,9 @@ export function challengeRuleLines(challenge: IChallenge): string[] {
   }
   const schedule = describeSchedule(challenge);
   lines.push(`**${schedule.label}** ${schedule.value}`);
-  if (challenge.slots?.counts_past_play) lines.push(`**Counts past play** ${COUNTS_PAST_PLAY_LINE}`);
+  if (challenge.slots?.counts_past_play) {
+    lines.push(`**Counts past play** ${COUNTS_PAST_PLAY_LINE}`);
+  }
   const edition = signupEditionOf(challenge);
   if (edition) lines.push(editionRuleLine(edition));
   return lines;
@@ -213,10 +196,10 @@ export function buildNewChallengePost(
   games: readonly IGameSummary[],
   yearStrip: Buffer | null = null,
 ): IChallengePost {
-  const container = new ContainerBuilder().addTextDisplayComponents(text(
+  const container = buildTextContainer(
     `# ${escapeChallengeText(challenge.name)}\n` +
       `-# New Challenge · hosted by ${hostLabel(challenge)}`,
-  ));
+  );
   const wall = buildCoverWall(games);
   if (wall) container.addMediaGalleryComponents(wall);
   const stripName = `year-strip-${challenge.id}.png`;
@@ -229,7 +212,7 @@ export function buildNewChallengePost(
         }`.slice(0, DISCORD_SELECT_LABEL_MAX)),
     ));
   }
-  container.addTextDisplayComponents(text(
+  container.addTextDisplayComponents(buildTextDisplay(
     [challenge.description.trim(), ...challengeRuleLines(challenge)].filter(Boolean).join("\n"),
   ));
 
@@ -264,7 +247,7 @@ export function buildNewChallengePost(
   const shown = wall ? wall.items.length : 0;
   if (hasGames && shown) {
     container.addTextDisplayComponents(
-      text(`-# Showing ${shown} of ${gameCount} games in the Pool`),
+      buildTextDisplay(`-# Showing ${shown} of ${gameCount} games in the Pool`),
     );
   }
   return {

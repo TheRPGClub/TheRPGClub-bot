@@ -44,9 +44,13 @@ function fakeApi(options: {
       if (options.error) throw options.error;
       return true;
     },
-    listMemberRuns: async (userId, actingUserId, page, per) => {
-      api.calls.push(`runs of ${userId} as ${actingUserId} page ${page} per ${per}`);
-      const items = options.runs ?? [];
+    listMemberRuns: async (userId, actingUserId, page, per, status) => {
+      api.calls.push(
+        `runs of ${userId} as ${actingUserId} page ${page} per ${per}` +
+          (status ? ` status ${status}` : ""),
+      );
+      const items = (options.runs ?? []).filter((run) => !status ||
+        (status === "ended" ? run.status !== "active" : run.status === status));
       return { items, page, pages: 1, count: items.length };
     },
   };
@@ -239,22 +243,9 @@ test("delete: confirming deletes it, and the API's refusal is shown", async () =
 
 // /challenge my-runs: design 5C "What's next".
 
-function myRunsDeps(runs: IChallengeRun[], covers: Record<number, string> = {}) {
+function myRunsDeps(runs: IChallengeRun[]) {
   const api = fakeApi({ runs });
-  const coverLookups: number[] = [];
-  return {
-    api,
-    coverLookups,
-    deps: {
-      api,
-      now: () => NOW,
-      santaSignups: async () => [],
-      coverUrl: async (gameId: number) => {
-        coverLookups.push(gameId);
-        return covers[gameId] ?? null;
-      },
-    },
-  };
+  return { api, deps: { api, now: () => NOW } };
 }
 
 function thumbnails(components: unknown): string[] {
@@ -273,7 +264,7 @@ const pastRuns = [
 ];
 
 test("my-runs: each Active Run says what is left and what you play that counts", async () => {
-  const { deps, api } = myRunsDeps([poolRun(), ...pastRuns], { 10: "https://img/ffx.jpg" });
+  const { deps, api } = myRunsDeps([poolRun(), ...pastRuns]);
   const view = await buildMyRunsView({ actingUserId: "222", past: false }, deps);
   const text = textOf(view.components);
 
@@ -285,7 +276,8 @@ test("my-runs: each Active Run says what is left and what you play that counts",
   ), text);
   assert.match(text, /^-# Season closes <t:\d+:R>$/m);
   assert.match(text, /^-# 2 past Runs · \/challenge my-runs past:True$/m);
-  assert.deepEqual(thumbnails(view.components), ["https://img/ffx.jpg"]);
+  // The cover of the game being played, from the Run's entry.
+  assert.deepEqual(thumbnails(view.components), ["https://img.example/10.jpg"]);
 });
 
 test("my-runs: a Run with nothing In Progress points at the Pool", async () => {
@@ -321,9 +313,12 @@ test("my-runs: without Active Runs it says how to start one", async () => {
 });
 
 test("my-runs: past lists the Runs that ended, newest first", async () => {
-  const { deps } = myRunsDeps([poolRun(), ...pastRuns]);
+  const { deps, api } = myRunsDeps([poolRun(), ...pastRuns]);
   const text = textOf((await buildMyRunsView({ actingUserId: "222", past: true }, deps))
     .components);
+
+  // Only the Runs that ended are read, one page of those shown.
+  assert.deepEqual(api.calls, ["runs of 222 as 222 page 1 per 20 status ended"]);
 
   assert.match(text, /^## Your past Runs$/m);
   assert.match(text, /\*\*Fall of Final Fantasy\*\* · Finished · 2 of 3 Cleared/);
@@ -356,7 +351,12 @@ test("run choices: abandon offers Active Runs, delete-run the others, matching t
         id: 30,
         status: "finished",
         started_at: "2025-09-23T14:00:00.000Z",
-        challenge: { id: 8, name: "Tales Forever", challenge_format: "pool", schedule: "always_open" },
+        challenge: {
+          id: 8,
+          name: "Tales Forever",
+          challenge_format: "pool",
+          schedule: "always_open",
+        },
       }),
     ];
 

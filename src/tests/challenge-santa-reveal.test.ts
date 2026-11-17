@@ -8,7 +8,7 @@ import { BOT_JOB_HANDLERS, type IBotJobSurface } from "../services/BotJobHandler
 import { processBotJobs } from "../services/BotJobService.js";
 import type { IChallengeJobDeps, IChallengePost } from "../services/ChallengeAnnouncements.js";
 import type { IEditionAssignment } from "../services/ChallengeEditionApi.js";
-import { game, santaChallenge, santaEdition, textOf } from "./challengeFixtures.js";
+import { coverIdOf, game, santaChallenge, santaEdition, textOf } from "./challengeFixtures.js";
 
 // The Secret Santa reveal (spec api#376, bot#1552), design 7C "Gift tags": one generated
 // sheet of covers tagged with their recipients, as a reply to the opening post, and never
@@ -59,7 +59,8 @@ function fakeDeps(options: { noCovers?: boolean } = {}): IFakeDeps {
     storeSignupPost: async () => {},
     sendDm: async () => {},
     poolPreview: async (_pool, page) => ({ items: [], page, pages: 1, count: 0 }),
-    coverImage: async (gameId) => {
+    coverImage: async (url) => {
+      const gameId = coverIdOf(url);
       deps.covers.push(gameId);
       return options.noCovers ? null : cover();
     },

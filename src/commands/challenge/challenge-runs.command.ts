@@ -46,6 +46,7 @@ import {
   challengeErrorReply,
   parseChallengeOption,
 } from "./challenge-interaction.utils.js";
+import { CHALLENGE_AUTOCOMPLETE_READ } from "../../config/challenges.js";
 
 // /challenge start, abandon, delete-run and my-runs, and the Run buttons: Start a Run on a
 // #challenges post, and the abandon and delete confirmations (spec api#376, bot#1547).
@@ -53,9 +54,6 @@ import {
 // the buttons work after a restart.
 
 type RunInteraction = CommandInteraction | ButtonInteraction | ModalSubmitInteraction;
-
-/** Runs read for the run: autocomplete, newest first. */
-const AUTOCOMPLETE_READ = 100;
 
 async function showResult(interaction: RunInteraction, result: ChallengeRunResult):
   Promise<void> {
@@ -74,7 +72,7 @@ function autocompleteRuns(action: "abandon" | "delete") {
         interaction.user.id,
         interaction.user.id,
         1,
-        AUTOCOMPLETE_READ,
+        CHALLENGE_AUTOCOMPLETE_READ,
       );
       await safeRespond(interaction, runChoices(page.items, action, query));
     } catch (err: unknown) {

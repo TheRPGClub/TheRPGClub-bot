@@ -1,15 +1,13 @@
 import {
   ActionRowBuilder,
   ButtonBuilder,
-  ContainerBuilder,
   LabelBuilder,
   ModalBuilder,
-  TextDisplayBuilder,
   TextInputBuilder,
   UserSelectMenuBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags, TextInputStyle } from "discord-api-types/v10";
-import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_LABELS,
   describeScheduleShort,
@@ -22,7 +20,6 @@ import {
   buildChallengeEditId,
   type ChallengeEditAction,
 } from "../functions/ChallengeCustomIds.js";
-import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import type { IChallengeView } from "./ChallengeBrowse.js";
 import {
   CHALLENGE_API,
@@ -31,6 +28,7 @@ import {
   type IChallengeApi,
   type IChallengeWrite,
 } from "./ChallengeApi.js";
+import { plural } from "../utilities/TextUtils.js";
 
 // /challenge edit (spec api#376): the edit panel, its name and description modal, and the
 // staff controls (hide, unhide, change the Host). The rules open the create wizard in
@@ -62,10 +60,6 @@ function endDateEditable(challenge: IChallenge): boolean {
     challenge.challenge_format !== "assignment";
 }
 
-function text(content: string): TextDisplayBuilder {
-  return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
-}
-
 function button(
   action: ChallengeEditAction,
   challengeId: number,
@@ -84,7 +78,7 @@ function lockText(challenge: IChallenge): string[] {
   const runs = challenge.run_count ?? 0;
   if (rulesLocked(challenge)) {
     lines.push(
-      `**The rules are locked:** this Challenge has ${runs} ${runs === 1 ? "Run" : "Runs"}, ` +
+      `**The rules are locked:** this Challenge has ${plural(runs, "Run")}, ` +
         "so its Format, schedule, Season and Pool can't change. " +
         "Its name, description and end date still can.",
     );
@@ -118,7 +112,7 @@ export function buildEditPanel(
     `-# ${summary.join(" · ")}`,
     ...lockText(challenge),
   ];
-  const container = new ContainerBuilder().addTextDisplayComponents(text(lines.join("\n")));
+  const container = buildTextContainer(lines.join("\n"));
   const rows: ActionRowBuilder<ButtonBuilder | UserSelectMenuBuilder>[] = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       button("details", id, "Name and description", { style: ButtonStyle.Primary }),
@@ -191,7 +185,8 @@ export function buildDetailsModal(challenge: IChallenge): ModalBuilder {
 }
 
 /**
- * Saves the details modal: name, description, and the end date when it may change.
+ * Saves the details modal: name, description, and the end date when it may change and the
+ * form had it.
  * Returns the saved Challenge, or the error to show (a date it can't read, or the API's
  * refusal as given with the request and response).
  */
@@ -205,8 +200,11 @@ export async function saveDetails(
     name: (fields[EDIT_FIELDS.name] ?? "").trim().slice(0, NAME_MAX),
     description: (fields[EDIT_FIELDS.description] ?? "").trim().slice(0, DESCRIPTION_MAX),
   };
-  if (endDateEditable(challenge)) {
-    const typed = (fields[EDIT_FIELDS.endsOn] ?? "").trim();
+  // A form opened from a stale panel may lack the End date: only a form that showed it
+  // sends it, so an absent field never clears the date.
+  const endsOnField = fields[EDIT_FIELDS.endsOn];
+  if (endDateEditable(challenge) && endsOnField !== undefined) {
+    const typed = (endsOnField ?? "").trim();
     const endsOn = typed ? parseChallengeDate(typed) : null;
     if (typed && !endsOn) {
       return { error: `End date: "${typed}" is not a date, such as 3 March 2027.` };

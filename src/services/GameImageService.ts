@@ -43,13 +43,13 @@ export async function fetchGameCoverBuffer(
   }
 }
 
-/** The URL of a game's primary cover, or null without one (errors are logged). */
-export async function fetchGameCoverUrl(gameId: number): Promise<string | null> {
+/** The image at `url` (a game's `cover_url`), or null when it can't be read (logged). */
+export async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   try {
-    const result = await apiGet<{ data: ApiGameImage[] }>(`/api/v1/games/${gameId}/images`);
-    return selectPrimaryCover(result?.data ?? [])?.url ?? null;
+    const response = await axios.get<ArrayBuffer>(url, { responseType: "arraybuffer" });
+    return Buffer.from(response.data);
   } catch (error) {
-    logError(`GameImageService.fetchGameCoverUrl(${gameId})`, error);
+    logError(`GameImageService.fetchImageBuffer(${url})`, error);
     return null;
   }
 }

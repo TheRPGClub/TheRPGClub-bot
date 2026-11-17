@@ -8,15 +8,14 @@ import {
 import type {
   IChallenge,
   IChallengeRun,
-  IGameSummary,
   IPage,
-  IPoolDefinition,
+  IPoolGameProgress,
 } from "../services/ChallengeApi.js";
+import { describeOpen } from "../functions/ChallengeCopy.js";
 import { buttonsOf, game, poolChallenge, selectsOf, textOf } from "./challengeFixtures.js";
 
 interface IFakeBrowseApi extends IChallengeBrowseApi {
   calls: string[];
-  previews: { pool: IPoolDefinition; page: number; per: number }[];
 }
 
 function page<T>(items: T[], pageNumber: number, per: number): IPage<T> {
@@ -33,11 +32,10 @@ function fakeApi(options: {
   challenge?: IChallenge | null;
   challenges?: IChallenge[];
   runs?: IChallengeRun[];
-  games?: IGameSummary[];
+  games?: IPoolGameProgress[];
 } = {}): IFakeBrowseApi {
   const api: IFakeBrowseApi = {
     calls: [],
-    previews: [],
     getChallenge: async (id, actingUserId) => {
       api.calls.push(`get ${id} as ${actingUserId}`);
       return options.challenge === undefined ? poolChallenge() : options.challenge;
@@ -50,8 +48,8 @@ function fakeApi(options: {
       api.calls.push(`runs ${challengeId} page=${p} per=${per} as ${actingUserId}`);
       return page(options.runs ?? [], p, per);
     },
-    poolPreview: async (pool, p, per) => {
-      api.previews.push({ pool, page: p, per });
+    poolProgress: async (challengeId, actingUserId, p, per) => {
+      api.calls.push(`progress ${challengeId} page=${p} per=${per} as ${actingUserId}`);
       return page(options.games ?? [], p, per);
     },
   };
@@ -72,17 +70,36 @@ function run(
     status,
     started_at: "2026-09-22T12:00:00Z",
     progress: { cleared, in_progress: entries.length - cleared, target },
-    entries: entries.map(([gameId, state]) => ({ game_id: gameId, title: `Game ${gameId}`, state })),
+    entries: entries.map(([gameId, state]) =>
+      ({ game_id: gameId, title: `Game ${gameId}`, state })),
   };
 }
 
 const NOW = new Date("2026-11-17T15:00:00Z");
 
-const games = [
-  game(1, "Final Fantasy", 1987),
-  game(4, "Final Fantasy IV", 1991),
-  game(5, "Final Fantasy V", 1992),
-  game(10, "Final Fantasy X", 2001),
+function member(name: string, runId: number) {
+  return {
+    user_id: String(100 + runId),
+    username: name.toLowerCase(),
+    global_name: name,
+    run_id: runId,
+  };
+}
+
+/** The Pool's progress as the API serves it: who Cleared each game, who plays it. */
+const games: IPoolGameProgress[] = [
+  { ...game(1, "Final Fantasy", 1987), cleared_by: [member("ashtear", 1)], in_progress: [] },
+  {
+    ...game(4, "Final Fantasy IV", 1991),
+    cleared_by: [member("ashtear", 1), member("tenpenny", 2)],
+    in_progress: [],
+  },
+  {
+    ...game(5, "Final Fantasy V", 1992),
+    cleared_by: [member("ashtear", 1), member("Zeal", 3)],
+    in_progress: [member("moogle_mail", 4)],
+  },
+  { ...game(10, "Final Fantasy X", 2001), cleared_by: [], in_progress: [member("tenpenny", 2)] },
 ];
 
 const runs = [
@@ -124,22 +141,16 @@ test("show by game: each Pool game with who Cleared it and who has it In Progres
   assert.match(text, /^### By game · 1 to 4 of 4$/m);
   assert.match(text, /^\*\*Final Fantasy\*\* `1987`\n-# Cleared by ashtear$/m);
   assert.match(text, /^\*\*Final Fantasy IV\*\* `1991`\n-# Cleared by ashtear, tenpenny$/m);
-  // Zeal abandoned, but Cleared it; moogle_mail is still playing it.
   assert.match(
     text,
     /^\*\*Final Fantasy V\*\* `1992`\n-# Cleared by ashtear, Zeal · In Progress: moogle\\_mail$/m,
   );
-  // In Progress counts only on Active Runs.
   assert.match(
     text,
     /^\*\*Final Fantasy X\*\* `2001`\n-# Cleared by nobody yet · In Progress: tenpenny$/m,
   );
-  assert.deepEqual(api.calls, ["get 7 as 42", "runs 7 page=1 per=100 as 42"]);
-  assert.deepEqual(api.previews, [{
-    pool: { franchise_ids: [5], collection_ids: [], included_game_ids: [], excluded_game_ids: [] },
-    page: 1,
-    per: 10,
-  }]);
+  // One page of the Pool's progress: no Runs are read.
+  assert.deepEqual(api.calls, ["get 7 as 42", "progress 7 page=1 per=10 as 42"]);
 });
 
 test("show by game: the buttons flip the view and page through the Pool", async () => {
@@ -194,6 +205,23 @@ test("show: a Closed Seasonal Challenge says when it opens", async () => {
   assert.ok(textOf(view.components).includes(`Closed, opens <t:${opens}:R>`));
 });
 
+test("a 29 February Season day falls back like the API's in a year without one", () => {
+  // 2027 has no 29 February: a Season starting then opens on 1 March, and one ending then
+  // ends on 28 February (so it closes as 1 March begins).
+  const closed = poolChallenge({
+    open: false,
+    season: { start: "02-29", end: "03-31", crosses_new_year: false },
+  });
+  const opens = Math.floor(Date.parse("2027-03-01T05:00:00Z") / 1000);
+  assert.equal(describeOpen(closed, NOW), `Closed, opens <t:${opens}:R>`);
+
+  const open = poolChallenge({
+    open: true,
+    season: { start: "11-01", end: "02-29", crosses_new_year: true },
+  });
+  assert.equal(describeOpen(open, NOW), `Open, closes <t:${opens}:R>`);
+});
+
 test("show: a club-hosted Challenge names the club, with no Host button", async () => {
   const challenge = poolChallenge({ hosted_by_club: true, host: null });
   const view = await show(fakeApi({ challenge, games }));
@@ -224,36 +252,37 @@ function listed(id: number, name: string, overrides: Partial<IChallenge> = {}): 
   return poolChallenge({ id, name, run_count: null, ...overrides });
 }
 
-test("list: the Challenges with their Format, schedule and Host, and a select to show one", async () => {
-  const api = fakeApi({
-    challenges: [
-      listed(9, "Summer of Suikoden", { open: false, hosted_by_club: true, host: null }),
-      listed(7, "Fall of Final Fantasy"),
-    ],
-  });
-  const view = await buildChallengeListView(
-    { actingUserId: "42", filter: "all", page: 1 },
-    { api, now: () => NOW },
-  );
-  const text = textOf(view.components);
+test("list: the Challenges with their Format, schedule and Host, and a select to show one",
+  async () => {
+    const api = fakeApi({
+      challenges: [
+        listed(9, "Summer of Suikoden", { open: false, hosted_by_club: true, host: null }),
+        listed(7, "Fall of Final Fantasy"),
+      ],
+    });
+    const view = await buildChallengeListView(
+      { actingUserId: "42", filter: "all", page: 1 },
+      { api, now: () => NOW },
+    );
+    const text = textOf(view.components);
 
-  assert.match(text, /^## Challenges$/m);
-  assert.ok(text.includes(
-    "**Summer of Suikoden** · Pool · Seasonal, 22 September to 21 December · Closed\n" +
-      "-# Hosted by the club\n",
-  ), text);
-  assert.match(
-    text,
-    /^\*\*Fall of Final Fantasy\*\* · Pool · .* · Open\n-# Hosted by Kaiserkaze$/m,
-  );
-  assert.deepEqual(api.calls, ["list open=undefined page=1 as 42"]);
-  const [select] = selectsOf(view.components);
-  assert.equal(select?.customId, "challenge-list-v1:show");
-  assert.deepEqual(select?.options.map((o) => [o.label, o.value]), [
-    ["Summer of Suikoden", "9"],
-    ["Fall of Final Fantasy", "7"],
-  ]);
-});
+    assert.match(text, /^## Challenges$/m);
+    assert.ok(text.includes(
+      "**Summer of Suikoden** · Pool · Seasonal, 22 September to 21 December · Closed\n" +
+        "-# Hosted by the club\n",
+    ), text);
+    assert.match(
+      text,
+      /^\*\*Fall of Final Fantasy\*\* · Pool · .* · Open\n-# Hosted by Kaiserkaze$/m,
+    );
+    assert.deepEqual(api.calls, ["list open=undefined page=1 as 42"]);
+    const [select] = selectsOf(view.components);
+    assert.equal(select?.customId, "challenge-list-v1:show");
+    assert.deepEqual(select?.options.map((o) => [o.label, o.value]), [
+      ["Summer of Suikoden", "9"],
+      ["Fall of Final Fantasy", "7"],
+    ]);
+  });
 
 test("list: the Open filter asks the API for Open Challenges and pages", async () => {
   const challenges = Array.from({ length: 12 }, (_, i) => listed(i + 1, `Challenge ${i + 1}`));

@@ -363,11 +363,23 @@ async function sendSayMessage(client: Client, message: ISayMessage): Promise<voi
  * the thread or event) and the done ack carries it to the website's activity list; resolve
  * with nothing when there is nothing worth saying. Plain words: staff read it as is.
  */
-export type BotJobHandler = (
+export type BotJobHandler = ((
   payload: Record<string, unknown>,
   surface: IBotJobSurface,
   context?: IBotJobContext,
-) => Promise<string | void>;
+) => Promise<string | void>) & {
+  /**
+   * The handler only DMs a member, though its Feature routes public posts: its result
+   * carries no Preview note and its Off log speaks of no held posts (it decides what Off
+   * means itself). Set by dmOnly().
+   */
+  readonly dmOnly?: true;
+};
+
+/** Marks a handler that only DMs (see BotJobHandler.dmOnly). */
+function dmOnly(handler: BotJobHandler): BotJobHandler {
+  return Object.assign(handler, { dmOnly: true as const });
+}
 
 /** What the dispatcher read before running a job, so the handler need not read it again. */
 export interface IBotJobContext {
@@ -1094,7 +1106,7 @@ const CHALLENGE_DMS: Readonly<Record<
  * Off. A member with DMs closed can never get it, so that is acked done with the reason
  * rather than failed and retried. An event this bot has no DM for fails the job.
  */
-export const handleChallengeDm: BotJobHandler = async (payload, surface, context) => {
+export const handleChallengeDm: BotJobHandler = dmOnly(async (payload, surface, context) => {
   const event = requireString(payload, "event");
   const build = Object.hasOwn(CHALLENGE_DMS, event) ? CHALLENGE_DMS[event] : undefined;
   if (!build) throw new Error(`This bot has no DM for the Challenge event "${event}".`);
@@ -1111,12 +1123,11 @@ export const handleChallengeDm: BotJobHandler = async (payload, surface, context
       logError("BotJobHandlers.challenge_dm", err);
       return `Not delivered: member ${dm.userId}'s DMs are closed, so ${dm.about} was not sent.`;
     }
-    throw new Error(`Could not DM member ${dm.userId}: ${describeRequestError(err)}`, {
-      cause: err,
-    });
+    // Temporary (Discord 5xx, rate limited) stays temporary, so the lease retries the DM.
+    throw stepFailed(`DM to member ${dm.userId}`, err);
   }
   return `DMed member ${dm.userId} ${dm.about}.`;
-};
+});
 
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,

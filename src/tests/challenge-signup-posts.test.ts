@@ -238,16 +238,17 @@ test("signup_closing: a late day and a lone member read naturally", async () => 
   );
 });
 
-test("signup_closing: without the opening post here, it posts with the Edition's name", async () => {
-  for (const signupPost of [null, { channel_id: BOT_DEV_CHANNEL_ID, message_id: "555" }]) {
-    const deps = fakeDeps();
-    await run(deps, later("signup_closing", { days_left: 3, signup_post: signupPost }));
+test("signup_closing: without the opening post here, it posts with the Edition's name",
+  async () => {
+    for (const signupPost of [null, { channel_id: BOT_DEV_CHANNEL_ID, message_id: "555" }]) {
+      const deps = fakeDeps();
+      await run(deps, later("signup_closing", { days_left: 3, signup_post: signupPost }));
 
-    const { post } = deps.posts[0]!;
-    assert.equal(post.replyTo, undefined);
-    assert.match(textOf(post.components), /^### Secret Santa 2026\nThree days left/);
-  }
-});
+      const { post } = deps.posts[0]!;
+      assert.equal(post.replyTo, undefined);
+      assert.match(textOf(post.components), /^### Secret Santa 2026\nThree days left/);
+    }
+  });
 
 test("signup_closed: replies with the members drawn and points Santas at their pick", async () => {
   const deps = fakeDeps();
@@ -269,32 +270,35 @@ test("signup_closed: replies with the members drawn and points Santas at their p
 
 test("signup_closed: says how many sit this one out", async () => {
   const deps = fakeDeps();
-  await run(deps, later("signup_closed", { joined: 12, left_out: 2 }));
+  await run(deps, later("signup_closed", { joined: 12, left_out: 2, minimum: 5 }));
 
+  // The payload's minimum names the bar they missed.
   assert.match(
     textOf(deps.posts[0]!.post.components),
-    /\n-# 2 members sit this one out with too few games in their backlog\.$/,
+    /\n-# 2 members sit this one out with fewer than 5 games in their backlog\.$/,
   );
 });
 
-test("edition_cancelled: replies that the circle was too small, and when the next opens", async () => {
-  const deps = fakeDeps();
-  const acks = await run(deps, later("edition_cancelled", {
-    edition: santaEdition({ phase: "cancelled" }),
-    joined: 1,
-    left_out: 1,
-  }));
+test("edition_cancelled: replies that the circle was too small, and when the next opens",
+  async () => {
+    const deps = fakeDeps();
+    const acks = await run(deps, later("edition_cancelled", {
+      edition: santaEdition({ phase: "cancelled" }),
+      joined: 1,
+      left_out: 1,
+      minimum: 5,
+    }));
 
-  assert.equal(acks[0]?.status, "done");
-  const { post } = deps.posts[0]!;
-  assert.equal(post.replyTo, "555");
-  assert.equal(
-    textOf(post.components),
-    "Secret Santa 2026 is cancelled: the circle needs at least 2 Santas, and only 1 " +
-      "member could be drawn. Sign-up for Secret Santa 2027 opens on 26 December.\n" +
-      "-# 1 member sat this one out with too few games in their backlog.",
-  );
-});
+    assert.equal(acks[0]?.status, "done");
+    const { post } = deps.posts[0]!;
+    assert.equal(post.replyTo, "555");
+    assert.equal(
+      textOf(post.components),
+      "Secret Santa 2026 is cancelled: the circle needs at least 2 Santas, and only 1 " +
+        "member could be drawn. Sign-up for Secret Santa 2027 opens on 26 December.\n" +
+        "-# 1 member sat this one out with fewer than 5 games in their backlog.",
+    );
+  });
 
 test("edition_cancelled: nobody drawn", async () => {
   const deps = fakeDeps();

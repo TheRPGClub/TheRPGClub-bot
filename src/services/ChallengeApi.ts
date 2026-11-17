@@ -1,4 +1,8 @@
 import axios from "axios";
+import {
+  CHALLENGE_RUNS_MAX_REQUESTS,
+  CHALLENGE_RUNS_PER_REQUEST,
+} from "../config/challenges.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import {
   apiDelete,
@@ -63,7 +67,7 @@ export interface IChallenge {
   pool?: IChallengePool | null;
   slots?: IChallengeSlots | null;
   assignment?: IChallengeAssignment | null;
-  /** Every Run of it; on a show only (null in lists). */
+  /** Every Run of it, whatever its status. */
   run_count?: number | null;
   hidden: boolean;
   ended_at?: string | null;
@@ -93,10 +97,14 @@ export interface IPoolSource {
 }
 
 export type RunStatus = "active" | "finished" | "expired" | "abandoned";
+/** A Run list's `status` filter: a status, or `ended` (Finished, Expired and Abandoned). */
+export type RunStatusFilter = RunStatus | "ended";
 
 export interface IChallengeRunEntry {
   game_id: number;
   title: string;
+  /** The game's cover; null when it has none. */
+  cover_url?: string | null;
   state: "in_progress" | "cleared";
   cleared_on?: string | null;
   /** The Game Completion that Cleared it. */
@@ -105,6 +113,11 @@ export interface IChallengeRunEntry {
   slot_year?: number | null;
   /** The member placed it there themselves (a slot move or a past-play pick). */
   picked_by_hand?: boolean;
+  /**
+   * Slots: every year the game fits (its first release and each dated release), oldest
+   * first, not narrowed to the Run; null for other Formats.
+   */
+  release_years?: number[] | null;
 }
 
 /** A Slots Run's years so far, each with the game filling it (null while open). */
@@ -122,6 +135,10 @@ export interface IChallengeRunChallenge {
   name: string;
   challenge_format: ChallengeFormat;
   schedule: ChallengeSchedule;
+  /** Counts past play is on (Slots only; false otherwise). */
+  counts_past_play?: boolean;
+  /** Slots only: the Challenge's range and Counts past play. */
+  slots?: IChallengeSlots | null;
 }
 
 export interface IChallengeRun {
@@ -199,6 +216,33 @@ export interface IPage<T> {
   count: number;
 }
 
+/** A Secret Santa sign-up whose Edition is still in sign-up (no Run until the draw). */
+export interface IChallengeOpenSignup {
+  edition_id: number;
+  year: number;
+  phase: "signup";
+  challenge: { id: number; name: string };
+  signed_up_at: string;
+  /** Sign-up closes at the start of this day, and the draw happens on it. */
+  signup_cutoff_on: string;
+  pick_deadline_on: string;
+  reveal_on: string;
+}
+
+/** A page of a member's Runs, with their sign-ups that have no Run yet (every page). */
+export interface IMemberRunsPage extends IPage<IChallengeRun> {
+  signups?: IChallengeOpenSignup[];
+}
+
+/** A member on a Pool game's progress, with the Run that counts it. */
+export type IPoolProgressMember = IChallengeMember & { run_id: number };
+
+/** A Pool game with who Cleared it (earliest first) and who has it In Progress. */
+export interface IPoolGameProgress extends IGameSummary {
+  cleared_by?: (IPoolProgressMember & { cleared_on?: string | null })[];
+  in_progress?: IPoolProgressMember[];
+}
+
 export interface IChallengeApi {
   /** GET /challenges, newest first, as the acting member may see them. */
   listChallenges(params: {
@@ -224,9 +268,23 @@ export interface IChallengeApi {
   /** GET /challenges/:id/runs, newest first. */
   listRuns(challengeId: number, actingUserId: string, page: number, per: number):
     Promise<IPage<IChallengeRun>>;
-  /** GET /users/:user_id/challenge_runs: a member's Runs, current and past, newest first. */
-  listMemberRuns(userId: string, actingUserId: string, page: number, per: number):
-    Promise<IPage<IChallengeRun>>;
+  /**
+   * GET /users/:user_id/challenge_runs: a member's Runs, current and past (or those of
+   * `status`), newest first, with their sign-ups in sign-up.
+   */
+  listMemberRuns(
+    userId: string,
+    actingUserId: string,
+    page: number,
+    per: number,
+    status?: RunStatusFilter,
+  ): Promise<IMemberRunsPage>;
+  /**
+   * GET /challenges/:id/pool_progress: the Pool's games, oldest release first, with who
+   * Cleared each and who has it In Progress this Season (every Run when Always Open).
+   */
+  poolProgress(challengeId: number, actingUserId: string, page: number, per: number):
+    Promise<IPage<IPoolGameProgress>>;
   /** GET /challenge_runs/:id; null when it is gone or hidden from the acting member. */
   getRun(runId: number, actingUserId: string): Promise<IChallengeRun | null>;
   /**
@@ -340,9 +398,23 @@ export const CHALLENGE_API: IChallengeApi = {
     );
     return toPage(payload, page);
   },
-  async listMemberRuns(userId, actingUserId, page, per) {
-    const payload = await apiGetOrThrow<{ data: IChallengeRun[]; meta?: PageMeta }>(
+  async listMemberRuns(userId, actingUserId, page, per, status) {
+    const payload = await apiGetOrThrow<{
+      data: IChallengeRun[];
+      meta?: PageMeta & { signups?: IChallengeOpenSignup[] };
+    }>(
       withQuery(`/api/v1/users/${encodeURIComponent(userId)}/challenge_runs`, {
+        acting_user_id: actingUserId,
+        status,
+        page,
+        per,
+      }),
+    );
+    return { ...toPage(payload, page), signups: payload.meta?.signups ?? [] };
+  },
+  async poolProgress(challengeId, actingUserId, page, per) {
+    const payload = await apiGetOrThrow<{ data: IPoolGameProgress[]; meta?: PageMeta }>(
+      withQuery(`${CHALLENGES_PATH}/${challengeId}/pool_progress`, {
         acting_user_id: actingUserId,
         page,
         per,
@@ -415,6 +487,22 @@ export const CHALLENGE_API: IChallengeApi = {
     return payload.data ?? [];
   },
 };
+
+/**
+ * Every item of a Run list, read CHALLENGE_RUNS_PER_REQUEST at a time, stopping after
+ * CHALLENGE_RUNS_MAX_REQUESTS pages so a long list can't stall a reply.
+ */
+export async function readRunPages<T>(
+  read: (page: number, per: number) => Promise<IPage<T>>,
+): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; page <= CHALLENGE_RUNS_MAX_REQUESTS; page += 1) {
+    const result = await read(page, CHALLENGE_RUNS_PER_REQUEST);
+    items.push(...result.items);
+    if (page >= result.pages) break;
+  }
+  return items;
+}
 
 /** The Pool definition a stored Pool Challenge resolves from. */
 export function poolDefinitionOf(pool: IChallengePool): IPoolDefinition {
