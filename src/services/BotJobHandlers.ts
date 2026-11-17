@@ -118,6 +118,8 @@ import {
   announceSignupOpened,
   leftOutOfDrawDm,
 } from "./ChallengeSignupPosts.js";
+import { announceEditionRevealed } from "./ChallengeReveal.js";
+import { pickReminderDm } from "./ChallengeSantaPick.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -1051,6 +1053,7 @@ const CHALLENGE_ANNOUNCERS: Readonly<Record<
   signup_closing: announceSignupClosing,
   signup_closed: announceSignupClosed,
   edition_cancelled: announceEditionCancelled,
+  edition_revealed: announceEditionRevealed,
 };
 
 /**
@@ -1082,6 +1085,7 @@ const CHALLENGE_DMS: Readonly<Record<
 >> = {
   season_ending: seasonEndingDm,
   left_out_of_draw: leftOutOfDrawDm,
+  pick_reminder: pickReminderDm,
 };
 
 /**

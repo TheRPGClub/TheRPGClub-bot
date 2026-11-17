@@ -351,6 +351,7 @@ const HELP_TOPICS: HelpTopic[] = [
       "/challenge delete-run run:<run> | /challenge dms [set:<on|off>] | " +
       "/challenge santa join [challenge:<challenge>] | " +
       "/challenge santa leave [challenge:<challenge>] | " +
+      "/challenge santa pick [challenge:<challenge>] | " +
       "/challenge slot-move run:<run> game:<game> year:<year> | " +
       "/challenge past-pick run:<run> game:<game> year:<year>",
     notes:
@@ -366,9 +367,13 @@ const HELP_TOPICS: HelpTopic[] = [
       "DMs members whose Run is still going; /challenge dms set:off turns those DMs off. " +
       "Secret Santa: sign up with /challenge santa join or the post's Sign up button (you " +
       "need 5 games in your backlog); /challenge santa leave takes you off before the " +
-      "draw, or drops your pick after it, until the pick deadline. A Slots Challenge has " +
-      "one slot per release year: a birth-year one asks for your Birth Date and shows only " +
-      "the year. /challenge slot-move moves a Cleared game to another year it came out in, " +
+      "draw, or drops your pick after it, until the pick deadline. After the draw, " +
+      "/challenge santa pick privately shows the backlog of the member you're Santa for, " +
+      "with hints about what they like; pick one of their games before the pick deadline " +
+      "(you can change it until then), or a random one is picked for them. Every gift is " +
+      "revealed in #challenges on the reveal date, without naming the Santas. A Slots " +
+      "Challenge has one slot per release year: a birth-year one asks for your Birth Date " +
+      "and shows only the year. /challenge slot-move moves a Cleared game to another year it came out in, " +
       "and /challenge past-pick picks an earlier Game Completion when the Challenge counts " +
       "past play. Caught Up Runs are announced in #challenges.",
   },

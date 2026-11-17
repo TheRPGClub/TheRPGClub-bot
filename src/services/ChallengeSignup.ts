@@ -46,10 +46,41 @@ export type SantaTarget =
 /** Assignment Challenges read when none is named. */
 const ASSIGNMENT_READ = 100;
 
-/** The phases each command acts in: join while sign-up runs, leave until the picks close. */
-const PHASES: Readonly<Record<"join" | "leave", readonly EditionPhase[]>> = {
-  join: ["signup"],
-  leave: ["signup", "picking"],
+/** What a Secret Santa command does to an Edition. */
+export type SantaAction = "join" | "leave" | "pick";
+
+/**
+ * The phases each command acts in (join while sign-up runs, leave until the picks close,
+ * pick between the draw and the reveal), and how its replies say there is no such Edition.
+ */
+const ACTIONS: Readonly<Record<SantaAction, {
+  phases: readonly EditionPhase[];
+  /** "Secret Santa has no Edition <state> right now." */
+  state: string;
+  /** "A and B both <doing>." */
+  doing: string;
+  none: string;
+}>> = {
+  join: {
+    phases: ["signup"],
+    state: "taking sign-ups",
+    doing: "take sign-ups",
+    none: "No Secret Santa is taking sign-ups right now. Sign-up opens the day after each " +
+      "reveal.",
+  },
+  leave: {
+    phases: ["signup", "picking"],
+    state: "under way",
+    doing: "are under way",
+    none: "No Secret Santa is under way right now, so there is nothing to leave.",
+  },
+  pick: {
+    phases: ["picking"],
+    state: "taking picks",
+    doing: "take picks",
+    none: "No Secret Santa is taking picks right now. Santas pick after the draw, until " +
+      "the pick deadline.",
+  },
 };
 
 function text(content: string): TextDisplayBuilder {
@@ -87,7 +118,7 @@ function santaButton(
 /** A named Challenge's latest Edition when it is in one of `phases`. */
 async function namedEdition(
   challengeId: number,
-  input: { actingUserId: string; action: "join" | "leave" },
+  input: { actingUserId: string; action: SantaAction },
   api: NonNullable<ISantaSignupDeps["challenges"]>,
 ): Promise<{ editionId: number } | ChallengeRunResult> {
   let challenge: IChallenge | null;
@@ -111,16 +142,17 @@ async function namedEdition(
     };
   }
   const edition = challenge.assignment?.edition;
-  if (!edition || !PHASES[input.action].includes(edition.phase)) {
-    const what = input.action === "join" ? "taking sign-ups" : "under way";
-    return { view: challengeTextView(`${name} has no Edition ${what} right now.`) };
+  if (!edition || !ACTIONS[input.action].phases.includes(edition.phase)) {
+    return {
+      view: challengeTextView(`${name} has no Edition ${ACTIONS[input.action].state} right now.`),
+    };
   }
   return { editionId: edition.id };
 }
 
 /** The one Secret Santa whose latest Edition is in one of `phases`, when none is named. */
 async function onlyEdition(
-  input: { actingUserId: string; action: "join" | "leave" },
+  input: { actingUserId: string; action: SantaAction },
   api: NonNullable<ISantaSignupDeps["challenges"]>,
 ): Promise<{ editionId: number } | ChallengeRunResult> {
   let challenges: IChallenge[];
@@ -138,19 +170,12 @@ async function onlyEdition(
   const live = challenges.filter((challenge) => {
     const phase = challenge.assignment?.edition?.phase;
     return challenge.challenge_format === "assignment" && !!phase &&
-      PHASES[input.action].includes(phase);
+      ACTIONS[input.action].phases.includes(phase);
   });
   if (live.length === 1) return { editionId: live[0]!.assignment!.edition!.id };
-  if (!live.length) {
-    return {
-      view: challengeTextView(input.action === "join"
-        ? "No Secret Santa is taking sign-ups right now. Sign-up opens the day after each " +
-          "reveal."
-        : "No Secret Santa is under way right now, so there is nothing to leave."),
-    };
-  }
+  if (!live.length) return { view: challengeTextView(ACTIONS[input.action].none) };
   const names = listJoin(live.map((challenge) => escapeChallengeText(challenge.name)));
-  const doing = input.action === "join" ? "take sign-ups" : "are under way";
+  const doing = ACTIONS[input.action].doing;
   return {
     view: challengeTextView(
       `${names} ${live.length === 2 ? "both " : "all "}${doing}. Pick one with the ` +
@@ -159,10 +184,11 @@ async function onlyEdition(
   };
 }
 
-async function resolveEdition(
+/** The Edition a command acts on: the one named, or found by its Challenge. */
+export async function resolveEdition(
   target: SantaTarget,
-  action: "join" | "leave",
-  deps: ISantaSignupDeps,
+  action: SantaAction,
+  deps: Pick<ISantaSignupDeps, "challenges">,
 ): Promise<{ editionId: number } | ChallengeRunResult> {
   if ("editionId" in target) return { editionId: target.editionId };
   const api = deps.challenges ?? CHALLENGE_API;

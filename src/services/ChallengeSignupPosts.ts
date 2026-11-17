@@ -214,7 +214,10 @@ function payloadCount(payload: Record<string, unknown>, key: string): number {
  * The opening post's message ID when it is in `channelId` (a reply must be in the same
  * channel: a post made in Preview lives in bot-dev), else null.
  */
-function replyTarget(payload: Record<string, unknown>, channelId: string): string | null {
+export function replyTarget(
+  payload: Record<string, unknown>,
+  channelId: string,
+): string | null {
   const post = payload.signup_post as Partial<ISignupPost> | null | undefined;
   if (!post || typeof post !== "object") return null;
   return post.channel_id === channelId && typeof post.message_id === "string"
