@@ -43,9 +43,7 @@ export function buildFileComponent(name: string): FileBuilder {
 }
 
 export function buildTextContainer(content: string): ContainerBuilder {
-  return new ContainerBuilder().addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(safeV2TextContent(content, 3500)),
-  );
+  return new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content));
 }
 
 export function buildContentContainer(

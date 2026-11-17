@@ -7,7 +7,7 @@ import {
   ThumbnailBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_INKS,
   clubToday,
@@ -238,7 +238,7 @@ function pastView(past: IPage<IChallengeRun>): IChallengeView {
   if (past.items.length) {
     lines.push(`-# Remove one with ${commandMention("challenge delete-run")}.`);
   }
-  return view([new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(lines.join("\n")))]);
+  return view([buildTextContainer(lines.join("\n"))]);
 }
 
 /**

@@ -8,7 +8,7 @@ import {
 import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
 import { DateTime } from "luxon";
 import sharp from "sharp";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { escapeChallengeText, formatMonthDay } from "../functions/ChallengeCopy.js";
 import { buildChallengeSantaId } from "../functions/ChallengeCustomIds.js";
 import { logError } from "../utilities/LogUtils.js";
@@ -331,7 +331,7 @@ export async function leftOutOfDrawDm(payload: Record<string, unknown>):
   return {
     userId,
     post: {
-      components: [new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content)).toJSON()],
+      components: [buildTextContainer(content).toJSON()],
       flags: MessageFlags.IsComponentsV2,
       allowedMentions: { parse: [] },
     },

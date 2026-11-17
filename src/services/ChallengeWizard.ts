@@ -14,7 +14,7 @@ import {
   MessageFlags,
   TextInputStyle,
 } from "discord-api-types/v10";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_LABELS,
   describePool,
@@ -525,7 +525,10 @@ function sourceOptions(draft: IChallengeDraft): { value: string; label: string }
       `${source.game_count === 1 ? "game" : "games"})`,
   }));
   const chosen = [
-    ...draft.pool.franchises.map((f) => ({ value: `franchise:${f.id}`, label: `${f.name} (franchise)` })),
+    ...draft.pool.franchises.map((f) => ({
+      value: `franchise:${f.id}`,
+      label: `${f.name} (franchise)`,
+    })),
     ...draft.pool.collections.map((c) => ({
       value: `collection:${c.id}`,
       label: `${c.name} (collection)`,
@@ -701,10 +704,11 @@ function basicsView(sessionId: string, draft: IChallengeDraft, notice: string[])
   const lines = [
     ...noticeLines(notice),
     `### ${stepTitle(draft)} (1 of 2)`,
-    `**${escapeChallengeText(draft.name)}** · ${CHALLENGE_FORMAT_LABELS[draft.format]} · ${schedule}`,
+    `**${escapeChallengeText(draft.name)}** · ${CHALLENGE_FORMAT_LABELS[draft.format]} · ` +
+      schedule,
     `Next: the ${settingsLabel(draft)}.`,
   ];
-  return wizardView(new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(lines.join("\n"))), [
+  return wizardView(buildTextContainer(lines.join("\n")), [
     buttonRow(
       button(sessionId, "settings", settingsLabel(draft), ButtonStyle.Primary),
       button(sessionId, "basics", "Edit basics"),
@@ -754,7 +758,7 @@ function sourcesView(sessionId: string, draft: IChallengeDraft, notice: string[]
     button(sessionId, "settings", "Search again"),
     button(sessionId, "cancel", "Cancel"),
   ));
-  return wizardView(new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(lines.join("\n"))), rows);
+  return wizardView(buildTextContainer(lines.join("\n")), rows);
 }
 
 function scheduleSummary(draft: IChallengeDraft): string {
@@ -788,7 +792,7 @@ function assignmentPreview(
     `**Each Edition** Sign-up closes ${formatMonthDay(signupCutoff)}, Santas pick by ` +
       `${formatMonthDay(pickDeadline)}, and the picks are revealed ${formatMonthDay(reveal)}.`,
   ].filter(Boolean);
-  return wizardView(new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(lines.join("\n"))), [
+  return wizardView(buildTextContainer(lines.join("\n")), [
     buttonRow(
       saveButton(sessionId, draft),
       button(sessionId, "basics", "Back"),
@@ -814,7 +818,7 @@ function slotsPreview(
     draft.description,
     ...rules,
   ].filter(Boolean);
-  return wizardView(new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(lines.join("\n"))), [
+  return wizardView(buildTextContainer(lines.join("\n")), [
     buttonRow(
       saveButton(sessionId, draft),
       button(sessionId, "basics", "Back"),
@@ -863,16 +867,17 @@ async function poolPreview(
     included_games: draft.pool.included.map((g) => ({ game_id: g.id, title: g.title })),
     game_count: resolved.count,
   };
-  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay([
+  const container = buildTextContainer([
     ...noticeLines(notice),
     `## Preview: ${escapeChallengeText(draft.name)}`,
     `-# Pool · ${describePoolTarget(pool)} · ${scheduleSummary(draft)}`,
-  ].join("\n")));
+  ].join("\n"));
   const wall = buildCoverWall(resolved.items);
   if (wall) container.addMediaGalleryComponents(wall);
   const details = [describePool(pool)];
   if (draft.pool.excluded.length) {
-    details.push(`-# Left out: ${listJoin(draft.pool.excluded.map((g) => escapeChallengeText(g.title)))}`);
+    const titles = draft.pool.excluded.map((g) => escapeChallengeText(g.title));
+    details.push(`-# Left out: ${listJoin(titles)}`);
   }
   if (candidates.pages > 1) {
     details.push(`-# Leave games out below: page ${draft.previewPage} of ${candidates.pages}`);
@@ -950,7 +955,7 @@ export async function renderWizardStep(
 
 /** The message that ends the wizard, for a cancel or a timed-out session. */
 export function wizardClosedView(content: string): IChallengeView {
-  return wizardView(new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content)), []);
+  return wizardView(buildTextContainer(content), []);
 }
 
 /**
@@ -1135,7 +1140,9 @@ export function buildSettingsModal(sessionId: string, draft: IChallengeDraft): M
         value: formatMonthDay(signupCutoff),
         description: "The draw happens that day.",
       }),
-      textInput(WIZARD_FIELDS.pickDeadline, "Santas pick by", { value: formatMonthDay(pickDeadline) }),
+      textInput(WIZARD_FIELDS.pickDeadline, "Santas pick by", {
+        value: formatMonthDay(pickDeadline),
+      }),
       textInput(WIZARD_FIELDS.reveal, "Picks revealed", { value: formatMonthDay(reveal) }),
     );
   }

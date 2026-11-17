@@ -19,7 +19,11 @@ const BIRTH_REQUIRED = apiError(409, {
   error: "birth_date_required",
   message: "Years Alive starts at your birth year. Enter your Birth Date first; " +
     "the birth year shows on the Run, never the full date.",
-}, { method: "post", url: "/api/v1/challenges/12/runs", data: { data: { acting_user_id: "333" } } });
+}, {
+  method: "post",
+  url: "/api/v1/challenges/12/runs",
+  data: { data: { acting_user_id: "333" } },
+});
 
 function startedRun(): IStartedRun {
   return {

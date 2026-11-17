@@ -238,16 +238,17 @@ test("signup_closing: a late day and a lone member read naturally", async () => 
   );
 });
 
-test("signup_closing: without the opening post here, it posts with the Edition's name", async () => {
-  for (const signupPost of [null, { channel_id: BOT_DEV_CHANNEL_ID, message_id: "555" }]) {
-    const deps = fakeDeps();
-    await run(deps, later("signup_closing", { days_left: 3, signup_post: signupPost }));
+test("signup_closing: without the opening post here, it posts with the Edition's name",
+  async () => {
+    for (const signupPost of [null, { channel_id: BOT_DEV_CHANNEL_ID, message_id: "555" }]) {
+      const deps = fakeDeps();
+      await run(deps, later("signup_closing", { days_left: 3, signup_post: signupPost }));
 
-    const { post } = deps.posts[0]!;
-    assert.equal(post.replyTo, undefined);
-    assert.match(textOf(post.components), /^### Secret Santa 2026\nThree days left/);
-  }
-});
+      const { post } = deps.posts[0]!;
+      assert.equal(post.replyTo, undefined);
+      assert.match(textOf(post.components), /^### Secret Santa 2026\nThree days left/);
+    }
+  });
 
 test("signup_closed: replies with the members drawn and points Santas at their pick", async () => {
   const deps = fakeDeps();

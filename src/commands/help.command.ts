@@ -373,9 +373,9 @@ const HELP_TOPICS: HelpTopic[] = [
       "(you can change it until then), or a random one is picked for them. Every gift is " +
       "revealed in #challenges on the reveal date, without naming the Santas. A Slots " +
       "Challenge has one slot per release year: a birth-year one asks for your Birth Date " +
-      "and shows only the year. /challenge slot-move moves a Cleared game to another year it came out in, " +
-      "and /challenge past-pick picks an earlier Game Completion when the Challenge counts " +
-      "past play. Caught Up Runs are announced in #challenges.",
+      "and shows only the year. /challenge slot-move moves a Cleared game to another year " +
+      "it came out in, and /challenge past-pick picks an earlier Game Completion when the " +
+      "Challenge counts past play. Caught Up Runs are announced in #challenges.",
   },
   {
     id: "thread",

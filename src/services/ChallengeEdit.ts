@@ -1,14 +1,13 @@
 import {
   ActionRowBuilder,
   ButtonBuilder,
-  ContainerBuilder,
   LabelBuilder,
   ModalBuilder,
   TextInputBuilder,
   UserSelectMenuBuilder,
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags, TextInputStyle } from "discord-api-types/v10";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_LABELS,
   describeScheduleShort,
@@ -113,7 +112,7 @@ export function buildEditPanel(
     `-# ${summary.join(" · ")}`,
     ...lockText(challenge),
   ];
-  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(lines.join("\n")));
+  const container = buildTextContainer(lines.join("\n"));
   const rows: ActionRowBuilder<ButtonBuilder | UserSelectMenuBuilder>[] = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       button("details", id, "Name and description", { style: ButtonStyle.Primary }),

@@ -517,7 +517,11 @@ export class ChallengeCreateCommand {
     const target = parseChallengeEditId(interaction.customId);
     const hostUserId = interaction.values[0];
     if (!target || !hostUserId) return;
-    await this.runStaff(interaction, { action: "host", challengeId: target.challengeId, hostUserId });
+    await this.runStaff(interaction, {
+      action: "host",
+      challengeId: target.challengeId,
+      hostUserId,
+    });
   }
 
   private async runStaff(

@@ -1,6 +1,6 @@
-import { ActionRowBuilder, ContainerBuilder, StringSelectMenuBuilder } from "@discordjs/builders";
+import { ActionRowBuilder, StringSelectMenuBuilder } from "@discordjs/builders";
 import { MessageFlags } from "discord-api-types/v10";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer } from "../functions/ComponentsV2Utils.js";
 import { escapeChallengeText, formatChallengeDate } from "../functions/ChallengeCopy.js";
 import { buildChallengeSlotsId } from "../functions/ChallengeCustomIds.js";
 import { clearedEntries, decadeOf, openYears } from "../functions/ChallengeSlotsCopy.js";
@@ -44,7 +44,7 @@ function pickerView(
   content: string,
   select: StringSelectMenuBuilder | null,
 ): IChallengeView {
-  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content));
+  const container = buildTextContainer(content);
   const rows = select
     ? [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)]
     : [];

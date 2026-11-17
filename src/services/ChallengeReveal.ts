@@ -1,10 +1,6 @@
-import {
-  ContainerBuilder,
-  MediaGalleryBuilder,
-  MediaGalleryItemBuilder,
-} from "@discordjs/builders";
+import { MediaGalleryBuilder, MediaGalleryItemBuilder } from "@discordjs/builders";
 import { MessageFlags } from "discord-api-types/v10";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   escapeChallengeText,
   formatChallengeDate,
@@ -76,11 +72,11 @@ export function buildRevealPost(
 ): IChallengePost {
   const fileName = `secret-santa-${edition.year}-reveal.png`;
   const assignments = edition.assignments ?? [];
-  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(
+  const container = buildTextContainer(
     `# ${editionName(edition)}\n` +
       "The presents are open. Clear yours before " +
       `${formatChallengeDate(edition.ends_on)} to Finish.`,
-  ));
+  );
   if (sheet) {
     container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
       new MediaGalleryItemBuilder()

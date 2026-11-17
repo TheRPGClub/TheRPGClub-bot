@@ -12,7 +12,7 @@ import {
   SeparatorSpacingSize,
   type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_LABELS,
   describeOpen,
@@ -83,7 +83,7 @@ function view(
 
 /** A one-line private reply in the Challenge views' shape. */
 export function challengeTextView(content: string): IChallengeView {
-  return view(new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content)));
+  return view(buildTextContainer(content));
 }
 
 function separator(): SeparatorBuilder {
@@ -119,7 +119,8 @@ function addHeader(container: ContainerBuilder, challenge: IChallenge, now: Date
   const sub = [`-# ${summaryLine(challenge, now)}`];
   const host = challenge.hosted_by_club ? null : challenge.host;
   if (host) {
-    const section = new SectionBuilder().addTextDisplayComponents(buildTextDisplay(heading.join("\n")));
+    const section = new SectionBuilder()
+      .addTextDisplayComponents(buildTextDisplay(heading.join("\n")));
     section.setButtonAccessory(new ButtonBuilder()
       .setURL(memberProfileUrl(host.user_id))
       .setLabel(memberName(host).slice(0, DISCORD_BUTTON_LABEL_MAX))
@@ -333,9 +334,9 @@ export async function buildChallengeListView(
     per: CHALLENGE_PAGE_SIZE,
   });
   const title = LIST_TITLES[input.filter];
-  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(
+  const container = buildTextContainer(
     `## Challenges\n-# ${title} · page ${Math.min(input.page, result.pages)} of ${result.pages}`,
-  ));
+  );
   if (!result.items.length) {
     const none = input.filter === "all" ? "No Challenges yet." : `No ${title}.`;
     container.addTextDisplayComponents(buildTextDisplay(

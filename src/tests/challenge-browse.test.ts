@@ -70,7 +70,8 @@ function run(
     status,
     started_at: "2026-09-22T12:00:00Z",
     progress: { cleared, in_progress: entries.length - cleared, target },
-    entries: entries.map(([gameId, state]) => ({ game_id: gameId, title: `Game ${gameId}`, state })),
+    entries: entries.map(([gameId, state]) =>
+      ({ game_id: gameId, title: `Game ${gameId}`, state })),
   };
 }
 
@@ -251,36 +252,37 @@ function listed(id: number, name: string, overrides: Partial<IChallenge> = {}): 
   return poolChallenge({ id, name, run_count: null, ...overrides });
 }
 
-test("list: the Challenges with their Format, schedule and Host, and a select to show one", async () => {
-  const api = fakeApi({
-    challenges: [
-      listed(9, "Summer of Suikoden", { open: false, hosted_by_club: true, host: null }),
-      listed(7, "Fall of Final Fantasy"),
-    ],
-  });
-  const view = await buildChallengeListView(
-    { actingUserId: "42", filter: "all", page: 1 },
-    { api, now: () => NOW },
-  );
-  const text = textOf(view.components);
+test("list: the Challenges with their Format, schedule and Host, and a select to show one",
+  async () => {
+    const api = fakeApi({
+      challenges: [
+        listed(9, "Summer of Suikoden", { open: false, hosted_by_club: true, host: null }),
+        listed(7, "Fall of Final Fantasy"),
+      ],
+    });
+    const view = await buildChallengeListView(
+      { actingUserId: "42", filter: "all", page: 1 },
+      { api, now: () => NOW },
+    );
+    const text = textOf(view.components);
 
-  assert.match(text, /^## Challenges$/m);
-  assert.ok(text.includes(
-    "**Summer of Suikoden** · Pool · Seasonal, 22 September to 21 December · Closed\n" +
-      "-# Hosted by the club\n",
-  ), text);
-  assert.match(
-    text,
-    /^\*\*Fall of Final Fantasy\*\* · Pool · .* · Open\n-# Hosted by Kaiserkaze$/m,
-  );
-  assert.deepEqual(api.calls, ["list open=undefined page=1 as 42"]);
-  const [select] = selectsOf(view.components);
-  assert.equal(select?.customId, "challenge-list-v1:show");
-  assert.deepEqual(select?.options.map((o) => [o.label, o.value]), [
-    ["Summer of Suikoden", "9"],
-    ["Fall of Final Fantasy", "7"],
-  ]);
-});
+    assert.match(text, /^## Challenges$/m);
+    assert.ok(text.includes(
+      "**Summer of Suikoden** · Pool · Seasonal, 22 September to 21 December · Closed\n" +
+        "-# Hosted by the club\n",
+    ), text);
+    assert.match(
+      text,
+      /^\*\*Fall of Final Fantasy\*\* · Pool · .* · Open\n-# Hosted by Kaiserkaze$/m,
+    );
+    assert.deepEqual(api.calls, ["list open=undefined page=1 as 42"]);
+    const [select] = selectsOf(view.components);
+    assert.equal(select?.customId, "challenge-list-v1:show");
+    assert.deepEqual(select?.options.map((o) => [o.label, o.value]), [
+      ["Summer of Suikoden", "9"],
+      ["Fall of Final Fantasy", "7"],
+    ]);
+  });
 
 test("list: the Open filter asks the API for Open Challenges and pages", async () => {
   const challenges = Array.from({ length: 12 }, (_, i) => listed(i + 1, `Challenge ${i + 1}`));

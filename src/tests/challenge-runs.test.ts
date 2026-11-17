@@ -351,7 +351,12 @@ test("run choices: abandon offers Active Runs, delete-run the others, matching t
         id: 30,
         status: "finished",
         started_at: "2025-09-23T14:00:00.000Z",
-        challenge: { id: 8, name: "Tales Forever", challenge_format: "pool", schedule: "always_open" },
+        challenge: {
+          id: 8,
+          name: "Tales Forever",
+          challenge_format: "pool",
+          schedule: "always_open",
+        },
       }),
     ];
 

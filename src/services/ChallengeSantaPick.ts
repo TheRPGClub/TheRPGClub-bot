@@ -10,7 +10,7 @@ import {
 } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags, TextInputStyle } from "discord-api-types/v10";
 import { DateTime } from "luxon";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_TIME_ZONE,
   escapeChallengeText,
@@ -156,7 +156,7 @@ export function buildSantaPickView(view: ISantaView, at: ISantaPage = {}): IChal
       : `${name}'s backlog has no games they haven't Cleared, so there is nothing to pick ` +
         `yet. Check back before ${editionDay(view.pick_deadline_on)}.`);
   }
-  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(lines.join("\n")));
+  const container = buildTextContainer(lines.join("\n"));
   const hints = [
     tasteLine(name, view.taste),
     view.picks_open && query && games.length
@@ -254,9 +254,9 @@ export async function santaPickReply(
 
 function buildGoneView(): IChallengeView {
   return {
-    components: [new ContainerBuilder()
-      .addTextDisplayComponents(buildTextDisplay("That Edition is gone, so there is nothing to pick."))
-      .toJSON()],
+    components: [
+      buildTextContainer("That Edition is gone, so there is nothing to pick.").toJSON(),
+    ],
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: { parse: [] },
   };

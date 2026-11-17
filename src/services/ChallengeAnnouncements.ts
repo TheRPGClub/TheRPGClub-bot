@@ -1,7 +1,6 @@
 import {
   ActionRowBuilder,
   ButtonBuilder,
-  ContainerBuilder,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
 } from "@discordjs/builders";
@@ -11,7 +10,7 @@ import {
   type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
 import type { Client, MessageCreateOptions } from "discord.js";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   clubToday,
   describePool,
@@ -180,7 +179,9 @@ export function challengeRuleLines(challenge: IChallenge): string[] {
   }
   const schedule = describeSchedule(challenge);
   lines.push(`**${schedule.label}** ${schedule.value}`);
-  if (challenge.slots?.counts_past_play) lines.push(`**Counts past play** ${COUNTS_PAST_PLAY_LINE}`);
+  if (challenge.slots?.counts_past_play) {
+    lines.push(`**Counts past play** ${COUNTS_PAST_PLAY_LINE}`);
+  }
   const edition = signupEditionOf(challenge);
   if (edition) lines.push(editionRuleLine(edition));
   return lines;
@@ -195,10 +196,10 @@ export function buildNewChallengePost(
   games: readonly IGameSummary[],
   yearStrip: Buffer | null = null,
 ): IChallengePost {
-  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(
+  const container = buildTextContainer(
     `# ${escapeChallengeText(challenge.name)}\n` +
       `-# New Challenge · hosted by ${hostLabel(challenge)}`,
-  ));
+  );
   const wall = buildCoverWall(games);
   if (wall) container.addMediaGalleryComponents(wall);
   const stripName = `year-strip-${challenge.id}.png`;

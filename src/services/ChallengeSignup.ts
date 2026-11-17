@@ -1,6 +1,6 @@
-import { ActionRowBuilder, ButtonBuilder, ContainerBuilder } from "@discordjs/builders";
+import { ActionRowBuilder, ButtonBuilder } from "@discordjs/builders";
 import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { buildTextContainer } from "../functions/ComponentsV2Utils.js";
 import { buildChallengeSantaId } from "../functions/ChallengeCustomIds.js";
 import { escapeChallengeText, listJoin } from "../functions/ChallengeCopy.js";
 import { commandMention } from "./CommandMentionService.js";
@@ -77,7 +77,7 @@ const ACTIONS: Readonly<Record<SantaAction, {
 };
 
 function viewWithButtons(content: string, buttons: ButtonBuilder[]): IChallengeView {
-  const container = new ContainerBuilder().addTextDisplayComponents(buildTextDisplay(content));
+  const container = buildTextContainer(content);
   return {
     components: [
       container.toJSON(),
