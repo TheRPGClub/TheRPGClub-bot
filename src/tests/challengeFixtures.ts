@@ -1,5 +1,5 @@
 import { AxiosError, AxiosHeaders, type AxiosResponse } from "axios";
-import type { IChallenge, IGameSummary } from "../services/ChallengeApi.js";
+import type { IChallenge, IChallengeRun, IGameSummary } from "../services/ChallengeApi.js";
 
 // Shared fixtures for the Challenge tests: a Pool Challenge as the API serves it, and a
 // reader for the Components V2 JSON the Challenge views and posts are built from.
@@ -29,6 +29,31 @@ export function poolChallenge(overrides: Partial<IChallenge> = {}): IChallenge {
     run_count: 0,
     hidden: false,
     ended_at: null,
+    ...overrides,
+  };
+}
+
+/** Lufia's Active Run of the Fall of Final Fantasy: 2 of 3 Cleared, FF X In Progress. */
+export function poolRun(overrides: Partial<IChallengeRun> = {}): IChallengeRun {
+  return {
+    id: 41,
+    challenge: {
+      id: 7,
+      name: "Fall of Final Fantasy",
+      challenge_format: "pool",
+      schedule: "seasonal",
+    },
+    user: { user_id: "222", username: "lufia", global_name: "Lufia" },
+    status: "active",
+    started_at: "2026-09-23T14:00:00.000Z",
+    ended_at: null,
+    window: { starts_on: "2026-09-22", ends_on: "2026-12-21" },
+    progress: { in_progress: 1, cleared: 2, target: 3 },
+    entries: [
+      { game_id: 9, title: "Final Fantasy IX", state: "cleared", cleared_on: "2026-10-02" },
+      { game_id: 6, title: "Final Fantasy VI", state: "cleared", cleared_on: "2026-10-30" },
+      { game_id: 10, title: "Final Fantasy X", state: "in_progress", cleared_on: null },
+    ],
     ...overrides,
   };
 }

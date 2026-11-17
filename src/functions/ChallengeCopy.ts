@@ -18,6 +18,13 @@ export const CHALLENGE_FORMAT_LABELS: Readonly<Record<ChallengeFormat, string>> 
   assignment: "Assignment",
 };
 
+/** Each Format's ink, for small markers such as a Run card's accent (DESIGN.md). */
+export const CHALLENGE_FORMAT_INKS: Readonly<Record<ChallengeFormat, number>> = {
+  pool: 0x3ba7e0,
+  slots: 0xe0a03b,
+  assignment: 0x3fb57a,
+};
+
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",

@@ -20,9 +20,13 @@ import {
   escapeChallengeText,
   hostLabel,
 } from "../functions/ChallengeCopy.js";
-import { buildChallengeShowId } from "../functions/ChallengeCustomIds.js";
+import {
+  buildChallengeRunId,
+  buildChallengeShowId,
+} from "../functions/ChallengeCustomIds.js";
 import { DISCORD_SELECT_LABEL_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { logError } from "../utilities/LogUtils.js";
+import { fetchGameCoverBuffer } from "./GameImageService.js";
 import {
   CHALLENGE_API,
   poolDefinitionOf,
@@ -40,14 +44,18 @@ export interface IChallengePost {
   components: APIMessageTopLevelComponent[];
   flags: number;
   allowedMentions: { parse: [] };
+  /** Images the post shows by `attachment://<name>`. */
+  files?: { name: string; data: Buffer }[];
 }
 
-/** What the Challenge jobs may do: post in a channel and read the Pool preview. */
+/** What the Challenge jobs may do: post in a channel and read games and their covers. */
 export interface IChallengeJobDeps {
   /** Posts to a text channel. Throws the discord.js error, or when it can't hold posts. */
   postMessage(channelId: string, post: IChallengePost): Promise<void>;
   /** The games a Pool resolves to, for its covers when the payload carries none. */
   poolPreview(pool: IPoolDefinition, page: number, per: number): Promise<IPage<IGameSummary>>;
+  /** A game's cover image, or null without one (errors logged, never thrown). */
+  coverImage(gameId: number): Promise<Buffer | null>;
 }
 
 export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
@@ -57,9 +65,16 @@ export function createChallengeJobDeps(client: Client): IChallengeJobDeps {
       if (!channel || !channel.isSendable()) {
         throw new Error(`Channel ${channelId} is missing or the bot cannot post in it.`);
       }
-      await channel.send(post);
+      const { files, ...message } = post;
+      await channel.send({
+        ...message,
+        ...(files?.length
+          ? { files: files.map((file) => ({ attachment: file.data, name: file.name })) }
+          : {}),
+      });
     },
     poolPreview: (pool, page, per) => CHALLENGE_API.poolPreview(pool, page, per),
+    coverImage: async (gameId) => (await fetchGameCoverBuffer(gameId))?.buffer ?? null,
   };
 }
 
@@ -153,25 +168,37 @@ export function buildNewChallengePost(
     [challenge.description.trim(), ...challengeRuleLines(challenge)].filter(Boolean).join("\n"),
   ));
 
+  const buttons: ButtonBuilder[] = [];
+  if (challenge.challenge_format !== "assignment") {
+    // An Assignment Challenge's Runs come from an Edition's draw, not from starting one.
+    buttons.push(new ButtonBuilder()
+      .setCustomId(buildChallengeRunId("start", challenge.id))
+      .setLabel("Start a Run")
+      .setStyle(ButtonStyle.Primary));
+  }
   const gameCount = challenge.pool?.game_count;
-  if (challenge.pool && typeof gameCount === "number" && gameCount > 0) {
-    container.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(buildChallengeShowId({
-          challengeId: challenge.id,
-          view: "game",
-          page: 1,
-          reply: "new",
-        }))
-        .setLabel(`See all ${gameCount} games`)
-        .setStyle(ButtonStyle.Secondary),
-    ));
-    const shown = wall ? wall.items.length : 0;
-    if (shown) {
-      container.addTextDisplayComponents(
-        text(`-# Showing ${shown} of ${gameCount} games in the Pool`),
-      );
-    }
+  const hasGames = !!challenge.pool && typeof gameCount === "number" && gameCount > 0;
+  if (hasGames) {
+    buttons.push(new ButtonBuilder()
+      .setCustomId(buildChallengeShowId({
+        challengeId: challenge.id,
+        view: "game",
+        page: 1,
+        reply: "new",
+      }))
+      .setLabel(`See all ${gameCount} games`)
+      .setStyle(ButtonStyle.Secondary));
+  }
+  if (buttons.length) {
+    container.addActionRowComponents(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons),
+    );
+  }
+  const shown = wall ? wall.items.length : 0;
+  if (hasGames && shown) {
+    container.addTextDisplayComponents(
+      text(`-# Showing ${shown} of ${gameCount} games in the Pool`),
+    );
   }
   return {
     components: [container.toJSON()],

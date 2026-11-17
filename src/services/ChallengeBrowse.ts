@@ -195,7 +195,7 @@ async function byGameText(
   return { text: lines.join("\n"), pages: games.pages };
 }
 
-const RUN_STATUS_LABELS: Readonly<Record<RunStatus, string>> = {
+export const RUN_STATUS_LABELS: Readonly<Record<RunStatus, string>> = {
   active: "Active",
   finished: "Finished",
   expired: "Expired",

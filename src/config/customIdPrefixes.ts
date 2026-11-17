@@ -63,5 +63,7 @@ export const CHALLENGE_WIZARD_PREFIX = "challenge-wiz-v1";
 export const CHALLENGE_SHOW_PREFIX = "challenge-show-v1";
 /** /challenge list: the page and the Open filter. */
 export const CHALLENGE_LIST_PREFIX = "challenge-list-v1";
+/** A member's Run: start one from a post, and confirm abandoning or deleting it. */
+export const CHALLENGE_RUN_PREFIX = "challenge-run-v1";
 /** /challenge edit: the edit panel's buttons and the Host picker, with the Challenge ID. */
 export const CHALLENGE_EDIT_PREFIX = "challenge-edit-v1";
