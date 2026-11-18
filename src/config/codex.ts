@@ -2,6 +2,13 @@
 
 /** A Fun Fact's most characters, mention tokens included (the API's limit too). */
 export const FUN_FACT_MAX_LENGTH = 300;
+/**
+ * /funfact answers the draw without a defer when it is back this soon after the member ran
+ * it, leaving a second of Discord's 3 for a defer when it isn't.
+ */
+export const FUN_FACT_ANSWER_BY_MS = 2000;
+/** The longest /funfact waits on the draw before deferring, whatever the clocks say. */
+export const FUN_FACT_DRAW_WAIT_MAX_MS = 1500;
 /** The Fun Facts ink (design picks, www#122): the edge of every Fun Fact card in Discord. */
 export const FUN_FACT_INK = 0xff8ad8;
 

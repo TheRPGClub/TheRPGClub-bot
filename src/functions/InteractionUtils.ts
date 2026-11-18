@@ -765,6 +765,24 @@ export async function safeFollowUpIfSettled(
   });
 }
 
+/**
+ * Swaps a public deferred reply for a private one: deletes the reply, then follows up with
+ * `options` (which carry their own Ephemeral flag). The delete is awaited, not left to run
+ * on with safeIgnore, so the follow-up goes only once the public placeholder is gone. A
+ * failed delete is logged and the member still gets the follow-up.
+ */
+export async function replaceWithPrivateReply(
+  interaction: AnyRepliable,
+  options: object,
+): Promise<void> {
+  try {
+    await interaction.deleteReply();
+  } catch (err: unknown) {
+    logError("InteractionUtils.replaceWithPrivateReply", err);
+  }
+  await safeFollowUpIfSettled(interaction, options);
+}
+
 async function sendSafeReply(interaction: AnyRepliable, options: any): Promise<any> {
   const aug = interaction as AugmentedInteraction;
   if (shouldBlockDevChannelInteraction(interaction)) {
