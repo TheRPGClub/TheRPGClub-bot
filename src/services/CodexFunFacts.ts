@@ -6,7 +6,6 @@ import {
   escapeMarkdown,
   MessageFlags,
 } from "discord.js";
-import { CODEX_AUTOCOMPLETE_READ } from "../config/codex.js";
 import {
   DISCORD_AUTOCOMPLETE_CHOICES_MAX,
   truncateLabel,
@@ -77,27 +76,30 @@ export async function addFunFactReply(
 export type FunFactPick = "edit" | "delete";
 
 /**
- * Autocomplete for `fact:`: the member's own Fun Facts, or every one for a Moderator and
- * above, as the API's `viewer` flags say, narrowed to what they typed. The value is the
- * Fun Fact's ID. Nothing on a failed read: an autocomplete can't show an error.
+ * Autocomplete for `fact:`: the Fun Facts the member may edit (their own, or every one for
+ * a Moderator and above), matching what they typed, as the API finds them. The delete pick
+ * also drops any the API says they may not delete. The value is the Fun Fact's ID.
+ * Nothing on a failed read: an autocomplete can't show an error.
  */
 export async function funFactChoices(
   input: { actingUserId: string; query: string; action: FunFactPick },
   deps: ICodexFunFactDeps = {},
 ): Promise<{ name: string; value: string }[]> {
   const api = deps.api ?? FUN_FACT_API;
-  const query = input.query.trim().toLowerCase();
   try {
-    const facts = await api.list(input.actingUserId, 1, CODEX_AUTOCOMPLETE_READ);
+    const facts = await api.list({
+      actingUserId: input.actingUserId,
+      page: 1,
+      per: DISCORD_AUTOCOMPLETE_CHOICES_MAX,
+      editable: true,
+      q: input.query.trim(),
+    });
     return facts
-      .filter((f) => (input.action === "edit" ? f.viewer.can_edit : f.viewer.can_delete))
+      .filter((f) => input.action === "edit" || f.viewer.can_delete)
       .map((f) => ({
-        name: plainCodexText(f.body, f.mentions).replace(/\s+/g, " ").trim(),
+        name: truncateLabel(plainCodexText(f.body, f.mentions).replace(/\s+/g, " ").trim()),
         value: String(f.id),
-      }))
-      .filter((c) => !query || c.name.toLowerCase().includes(query))
-      .slice(0, DISCORD_AUTOCOMPLETE_CHOICES_MAX)
-      .map((c) => ({ name: truncateLabel(c.name), value: c.value }));
+      }));
   } catch (err: unknown) {
     logError("CodexFunFacts.funFactChoices", err);
     return [];
