@@ -84,19 +84,22 @@ function searchFor(searchTerm: string, filters: ISearchFilters): Promise<SearchR
 
 /** Each platform once, with its regions unless they are all Worldwide: "PS5 (NA, JP)". */
 function formatUpcomingPlatforms(releases: IUpcomingReleaseItem[]): string {
-  const regionsByPlatform = new Map<string, Array<{ code: string; worldwide: boolean }>>();
+  type PlatformRegions = { label: string; regions: Array<{ code: string; worldwide: boolean }> };
+  const byPlatform = new Map<number, PlatformRegions>();
   for (const r of releases) {
-    const platform = (r.platformAbbreviation ?? r.platformName).trim();
-    const regions = regionsByPlatform.get(platform) ?? [];
-    if (!regions.some((region) => region.code === r.regionCode)) {
-      regions.push({ code: r.regionCode, worldwide: r.regionName === "Worldwide" });
+    const platform = byPlatform.get(r.platformId) ?? {
+      label: (r.platformAbbreviation?.trim() || r.platformName).trim(),
+      regions: [],
+    };
+    if (!platform.regions.some((region) => region.code === r.regionCode)) {
+      platform.regions.push({ code: r.regionCode, worldwide: r.regionName === "Worldwide" });
     }
-    regionsByPlatform.set(platform, regions);
+    byPlatform.set(r.platformId, platform);
   }
-  return Array.from(regionsByPlatform, ([platform, regions]) =>
+  return Array.from(byPlatform.values(), ({ label, regions }) =>
     regions.every((region) => region.worldwide)
-      ? platform
-      : `${platform} (${regions.map((region) => region.code).join(", ")})`,
+      ? label
+      : `${label} (${regions.map((region) => region.code).join(", ")})`,
   ).join(", ");
 }
 

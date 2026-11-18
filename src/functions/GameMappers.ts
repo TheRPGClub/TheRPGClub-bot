@@ -93,6 +93,7 @@ export function mapUpcomingReleaseFromApi(
     date,
     datePrecision: mapDatePrecision(data.date_precision, Boolean(date)),
     releases: (data.releases ?? []).map((r) => ({
+      platformId: Number(r.platform_id),
       platformName: String(r.platform_name),
       platformAbbreviation: r.platform_abbreviation ?? null,
       regionCode: String(r.region_code),

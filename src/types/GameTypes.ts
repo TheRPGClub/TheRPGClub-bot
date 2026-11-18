@@ -52,6 +52,7 @@ export type IGameSearchResult = IGameWithPlatforms;
 
 /** One Release inside an Upcoming Release, with the names a search row shows. */
 export interface IUpcomingReleaseItem {
+  platformId: number;
   platformName: string;
   platformAbbreviation: string | null;
   regionCode: string;

@@ -6,12 +6,19 @@ import { encodeBase64Url } from "../functions/CustomIdUtils.js";
 
 const OWNER = "333333333333333333";
 
-function release(platform: string, region: string) {
+const PLATFORM_IDS: Record<string, number> = { PS5: 1, Switch: 2 };
+
+function release(
+  platform: string,
+  region: string,
+  platformId = PLATFORM_IDS[platform] ?? 1,
+  abbreviation: string | null = platform,
+) {
   return {
     release_id: 1,
-    platform_id: 1,
+    platform_id: platformId,
     platform_name: `${platform} full name`,
-    platform_abbreviation: platform,
+    platform_abbreviation: abbreviation,
     region_id: 1,
     region_code: region,
     region_name: region === "WW" ? "Worldwide" : region,
@@ -158,4 +165,30 @@ test("an upcoming search that the API rejects reports the request and response",
   const text = JSON.stringify(sent.map((c: any) => renderedJson(c.opts)));
   assert.match(text, /upcoming_releases/);
   assert.match(text, /boom/);
+});
+
+test("upcoming platforms are told apart by platform, not by their short name", async (t) => {
+  const api = fakeApi([
+    entry(1, "Twin Ports", "2027-03-05", "day", [
+      release("Sega Saturn", "NA", 30, "SAT"),
+      release("Satellaview", "JP", 31, "SAT"),
+      release("Arcade", "WW", 32, ""),
+    ]),
+  ]);
+  const realSearch = GameSearchService.searchUpcomingReleases.bind(GameSearchService);
+  t.mock.method(
+    GameSearchService,
+    "searchUpcomingReleases",
+    (query: string, filters: any) => realSearch(query, filters, api),
+  );
+  const interaction = fakePageClick(
+    `gamedb-search-page:${OWNER}:1:${encodeBase64Url("")}:u:prev`,
+  );
+
+  await new GameDbSearchCommand().handleSearchPage(interaction);
+
+  const edit = interaction.calls.find((c: any) => c.method === "editReply");
+  assert.deepEqual(selectOptions(edit.opts).map((o) => o.description), [
+    "03/05/2027 - SAT (NA), SAT (JP), Arcade full name",
+  ]);
 });
