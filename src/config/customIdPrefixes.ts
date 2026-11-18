@@ -83,3 +83,9 @@ export const CODEX_FUN_FACT_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}fun-fact`;
 export const CODEX_LORE_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}lore`;
 /** /codex history: Newer and Older, keyed by page and owner. */
 export const CODEX_HISTORY_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}history`;
+
+/**
+ * /profile birth-date's panel (bot#1557): share, stop sharing, change the date (button and
+ * modal) and remove, each with the member's Discord ID. Not a Feature, so ungated.
+ */
+export const BIRTH_DATE_PREFIX = "birth-date-v1";
