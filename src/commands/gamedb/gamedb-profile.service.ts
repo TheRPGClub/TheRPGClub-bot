@@ -97,7 +97,8 @@ export function trimTextDisplayContent(content: string): string {
 }
 
 // Only day Releases count toward the earliest release date: a vague Release's stored date
-// is the first day of its period, which would invent a day the game never had.
+// is the first day of its period, which would invent a day the game never had. With no known
+// day the game is not yet known to be released.
 export function isGameReleased(game: IGame, releases: IRelease[]): boolean {
   const releaseDates: Date[] = [];
   for (const release of releases) {
@@ -117,7 +118,7 @@ export function isGameReleased(game: IGame, releases: IRelease[]): boolean {
   }
 
   if (!releaseDates.length) {
-    return true;
+    return false;
   }
 
   const earliestReleaseTimestamp = releaseDates

@@ -163,3 +163,14 @@ test("a game's earliest release date counts only day Releases", () => {
   );
   assert.equal(isGameReleased(profile.game, profile.releases), false);
 });
+
+test("a game with no known release day is not yet known to be released", () => {
+  const profile = mapGameProfileFromApi(
+    apiProfile([
+      apiRelease(1, "PlayStation 5", "Worldwide", "2027-07-01", "quarter"),
+      apiRelease(2, "Switch", "Worldwide", null, "tba"),
+    ]),
+    GAME_ID,
+  );
+  assert.equal(isGameReleased(profile.game, profile.releases), false);
+});
