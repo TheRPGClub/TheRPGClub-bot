@@ -58,6 +58,7 @@ import {
 import { HOME_GUILD_ID } from "../config/guilds.js";
 import { BotJobStepError, isTemporaryJobError, stepFailed } from "./BotJobErrors.js";
 import { logError } from "../utilities/LogUtils.js";
+import { isIsoDate } from "../functions/ClubDate.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { updateBotPresence } from "../functions/SetPresence.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
@@ -1144,7 +1145,7 @@ export const handleChallengeDm: BotJobHandler = dmOnly(async (payload, surface, 
 /** A club date as the API sends it: `YYYY-MM-DD`. */
 function requireClubDate(payload: Record<string, unknown>, field: string): string {
   const value = requireString(payload, field);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+  if (!isIsoDate(value)) {
     throw new Error(`Invalid payload: ${field} must be a YYYY-MM-DD date, got ${
       JSON.stringify(value)
     }.`);

@@ -2,8 +2,13 @@
 
 /** A Fun Fact's most characters, mention tokens included (the API's limit too). */
 export const FUN_FACT_MAX_LENGTH = 300;
-/** Fun Facts an autocomplete reads, newest first (one request). */
-export const CODEX_AUTOCOMPLETE_READ = 100;
+/**
+ * /funfact answers the draw without a defer when it is back this soon after the member ran
+ * it, leaving a second of Discord's 3 for a defer when it isn't.
+ */
+export const FUN_FACT_ANSWER_BY_MS = 2000;
+/** The longest /funfact waits on the draw before deferring, whatever the clocks say. */
+export const FUN_FACT_DRAW_WAIT_MAX_MS = 1500;
 /** The Fun Facts ink (design picks, www#122): the edge of every Fun Fact card in Discord. */
 export const FUN_FACT_INK = 0xff8ad8;
 
@@ -11,10 +16,11 @@ export const FUN_FACT_INK = 0xff8ad8;
 
 /**
  * A Lore Entry page's story text at most, in characters. Discord allows 4000 across a
- * message's text; the rest holds the title, byline and See also.
+ * message's text; the rest holds the title and byline (about 300 at most), and on the last
+ * page as many See also links as fit in what is left.
  */
 export const LORE_PAGE_TEXT_MAX = 2800;
-/** "See also" links a Lore Entry's last page lists before "and N more". */
+/** "See also" links a Lore Entry's last page lists at most before "and N more". */
 export const LORE_SEE_ALSO_MAX = 5;
 /** Lore Entries the `entry:` autocomplete offers (Discord's most). */
 export const LORE_AUTOCOMPLETE_READ = 25;

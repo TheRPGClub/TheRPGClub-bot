@@ -7,10 +7,14 @@ import { BOT_JOB_HANDLERS, type IBotJobSurface } from "../services/BotJobHandler
 import { processBotJobs } from "../services/BotJobService.js";
 import type { ICodexEntry, IFunFactApi } from "../services/CodexApi.js";
 import {
+  answerFunFact,
   drawFunFactReply,
+  funFactDrawWaitMs,
+  type FunFactDrawReply,
   type ICodexJobDeps,
-  type IFunFactPost,
+  type IFunFactAnswerIo,
 } from "../services/CodexFunFactPosts.js";
+import type { IComponentsV2View } from "../functions/ComponentsV2Utils.js";
 import { apiError, buttonsOf, textOf } from "./challengeFixtures.js";
 
 // The Daily Fun Fact BotJob and /funfact (bot#1562): design 1B, the pink card. The API
@@ -67,7 +71,7 @@ function fakeJobApi(): IBotJobApi & { acks: Ack[] } {
 }
 
 interface IFakeCodexDeps extends ICodexJobDeps {
-  posts: { channelId: string; post: IFunFactPost }[];
+  posts: { channelId: string; post: IComponentsV2View }[];
   reads: number[];
 }
 
@@ -297,4 +301,85 @@ test("/funfact shows a failed draw privately with the request and the response",
   assert.match(reply.error, /^Could not draw a Fun Fact\./);
   assert.match(reply.error, /\/api\/v1\/codex\/fun_facts\/draw/);
   assert.match(reply.error, /"boom"/);
+});
+
+/** A /funfact interaction that records each step, and a draw wait that ends on `slow`. */
+function answerIo(options: { slow: boolean }): IFunFactAnswerIo & { steps: string[] } {
+  const steps: string[] = [];
+  const shown = (payload: object): string => {
+    const { flags, components } = payload as { flags?: number; components?: unknown };
+    const where = ((flags ?? 0) & 64) !== 0 ? "private" : "public";
+    return `${where} ${textOf(components).split("\n")[0]}`;
+  };
+  return {
+    steps,
+    reply: async (payload) => { steps.push(`reply ${shown(payload)}`); },
+    deferPublicly: async () => { steps.push("defer public"); },
+    editReply: async (payload) => { steps.push(`edit ${shown(payload)}`); },
+    replaceWithPrivate: async (payload) => { steps.push(`replace ${shown(payload)}`); },
+    wait: (ms) => {
+      steps.push(`wait ${ms}`);
+      return options.slow ? Promise.resolve() : new Promise(() => undefined);
+    },
+  };
+}
+
+/** A draw that settles only after the wait has had its turn. */
+async function lateDraw(reply: FunFactDrawReply): Promise<FunFactDrawReply> {
+  await new Promise((resolve) => setImmediate(resolve));
+  return reply;
+}
+
+test("/funfact answers a quick draw at once: the card, with no thinking placeholder",
+  async () => {
+    const io = answerIo({ slow: false });
+    const reply = await drawFunFactReply({ actingUserId: ASKER }, {
+      api: drawingApi(funFact()),
+    });
+    await answerFunFact(Promise.resolve(reply), io, 1500);
+
+    assert.deepEqual(io.steps, ["wait 1500", "reply public -# Fun Fact"]);
+  });
+
+test("/funfact answers a quick empty draw privately, never posting in the channel",
+  async () => {
+    const io = answerIo({ slow: false });
+    const reply = await drawFunFactReply({ actingUserId: ASKER }, { api: drawingApi(null) });
+    await answerFunFact(Promise.resolve(reply), io, 1500);
+
+    assert.deepEqual(io.steps, ["wait 1500", "reply private There aren't any Fun Facts yet. " +
+      "Regulars can add one with /codex fun-fact add."]);
+  });
+
+test("/funfact answers a quick failed draw privately with the request", async () => {
+  const io = answerIo({ slow: false });
+  await answerFunFact(Promise.resolve({ error: "Could not draw a Fun Fact." }), io, 1500);
+
+  assert.deepEqual(io.steps, ["wait 1500", "reply private Could not draw a Fun Fact."]);
+});
+
+test("/funfact defers publicly for a slow draw, then fills in the card", async () => {
+  const io = answerIo({ slow: true });
+  const reply = await drawFunFactReply({ actingUserId: ASKER }, { api: drawingApi(funFact()) });
+  await answerFunFact(lateDraw(reply), io, 1500);
+
+  assert.deepEqual(io.steps, ["wait 1500", "defer public", "edit public -# Fun Fact"]);
+});
+
+test("/funfact swaps a slow empty draw's placeholder for a private reply", async () => {
+  const io = answerIo({ slow: true });
+  const reply = await drawFunFactReply({ actingUserId: ASKER }, { api: drawingApi(null) });
+  await answerFunFact(lateDraw(reply), io, 1500);
+
+  assert.equal(io.steps.length, 3);
+  assert.deepEqual(io.steps.slice(0, 2), ["wait 1500", "defer public"]);
+  assert.match(io.steps[2], /^replace private There aren't any Fun Facts yet\./);
+});
+
+test("/funfact waits on the draw only while Discord's 3 seconds allow a defer after", () => {
+  const ran = Date.UTC(2026, 10, 18, 15);
+  assert.equal(funFactDrawWaitMs(ran, ran), 1500, "at most 1.5 seconds");
+  assert.equal(funFactDrawWaitMs(ran, ran + 800), 1200, "less once the gate took time");
+  assert.equal(funFactDrawWaitMs(ran, ran + 2500), 0, "none once 2 seconds have gone");
+  assert.equal(funFactDrawWaitMs(ran, ran - 5000), 1500, "a clock behind Discord's");
 });

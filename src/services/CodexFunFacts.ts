@@ -1,12 +1,4 @@
-import {
-  ActionRowBuilder,
-  type APIMessageTopLevelComponent,
-  ButtonBuilder,
-  ButtonStyle,
-  escapeMarkdown,
-  MessageFlags,
-} from "discord.js";
-import { CODEX_AUTOCOMPLETE_READ } from "../config/codex.js";
+import { ButtonBuilder, ButtonStyle, escapeMarkdown } from "discord.js";
 import {
   DISCORD_AUTOCOMPLETE_CHOICES_MAX,
   truncateLabel,
@@ -16,10 +8,11 @@ import {
   parseCodexEntryOption,
 } from "../functions/CodexCustomIds.js";
 import { plainCodexText } from "../functions/CodexText.js";
-import { buildTextContainer } from "../functions/ComponentsV2Utils.js";
+import { codexView } from "../functions/CodexViews.js";
+import type { IComponentsV2View } from "../functions/ComponentsV2Utils.js";
+import { buildApiRefusalMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import {
-  codexRefusalText,
   FUN_FACT_API,
   type ICodexEntry,
   type IFunFactApi,
@@ -29,30 +22,14 @@ import {
 // from Discord; the bot acts for them, so the API's rules decide who may add, edit and
 // delete, and its refusals are shown privately as it words them.
 
-/** A private Club Codex reply. Mentions show as names and never ping. */
-export interface ICodexView {
-  components: APIMessageTopLevelComponent[];
-  flags: number;
-  allowedMentions: { parse: [] };
-}
-
 /** What to show: a view, or an error (the API's refusal with its request and response). */
-export type CodexReplyResult = { view: ICodexView } | { error: string };
+export type CodexReplyResult = { view: IComponentsV2View } | { error: string };
 
 export interface ICodexFunFactDeps {
   api?: IFunFactApi;
 }
 
 const PICK_FROM_LIST = "Pick a Fun Fact from the list.";
-
-/** A private Club Codex reply of text, with an optional row of buttons. */
-export function codexView(content: string, buttons: ButtonBuilder[] = []): ICodexView {
-  const components: APIMessageTopLevelComponent[] = [buildTextContainer(content).toJSON()];
-  if (buttons.length) {
-    components.push(new ActionRowBuilder<ButtonBuilder>().addComponents(buttons).toJSON());
-  }
-  return { components, flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } };
-}
 
 /** The Fun Fact as a quote, so its mention tokens show as names. */
 function quoted(entry: ICodexEntry): string {
@@ -69,7 +46,7 @@ export async function addFunFactReply(
     const entry = await api.create(input.text, input.actingUserId);
     return { view: codexView(["## Fun Fact added", quoted(entry)].join("\n")) };
   } catch (err: unknown) {
-    return { error: codexRefusalText(err, "Could not add your Fun Fact.") };
+    return { error: buildApiRefusalMessage(err, "Could not add your Fun Fact.") };
   }
 }
 
@@ -77,27 +54,30 @@ export async function addFunFactReply(
 export type FunFactPick = "edit" | "delete";
 
 /**
- * Autocomplete for `fact:`: the member's own Fun Facts, or every one for a Moderator and
- * above, as the API's `viewer` flags say, narrowed to what they typed. The value is the
- * Fun Fact's ID. Nothing on a failed read: an autocomplete can't show an error.
+ * Autocomplete for `fact:`: the Fun Facts the member may edit (their own, or every one for
+ * a Moderator and above), matching what they typed, as the API finds them. The delete pick
+ * also drops any the API says they may not delete. The value is the Fun Fact's ID.
+ * Nothing on a failed read: an autocomplete can't show an error.
  */
 export async function funFactChoices(
   input: { actingUserId: string; query: string; action: FunFactPick },
   deps: ICodexFunFactDeps = {},
 ): Promise<{ name: string; value: string }[]> {
   const api = deps.api ?? FUN_FACT_API;
-  const query = input.query.trim().toLowerCase();
   try {
-    const facts = await api.list(input.actingUserId, 1, CODEX_AUTOCOMPLETE_READ);
+    const facts = await api.list({
+      actingUserId: input.actingUserId,
+      page: 1,
+      per: DISCORD_AUTOCOMPLETE_CHOICES_MAX,
+      editable: true,
+      q: input.query.trim(),
+    });
     return facts
-      .filter((f) => (input.action === "edit" ? f.viewer.can_edit : f.viewer.can_delete))
+      .filter((f) => input.action === "edit" || f.viewer.can_delete)
       .map((f) => ({
-        name: plainCodexText(f.body, f.mentions).replace(/\s+/g, " ").trim(),
+        name: truncateLabel(plainCodexText(f.body, f.mentions).replace(/\s+/g, " ").trim()),
         value: String(f.id),
-      }))
-      .filter((c) => !query || c.name.toLowerCase().includes(query))
-      .slice(0, DISCORD_AUTOCOMPLETE_CHOICES_MAX)
-      .map((c) => ({ name: truncateLabel(c.name), value: c.value }));
+      }));
   } catch (err: unknown) {
     logError("CodexFunFacts.funFactChoices", err);
     return [];
@@ -116,11 +96,12 @@ export async function editFunFactReply(
     const entry = await api.edit(factId, input.text, input.actingUserId);
     return { view: codexView(["## Fun Fact edited", quoted(entry)].join("\n")) };
   } catch (err: unknown) {
-    return { error: codexRefusalText(err, "Could not edit that Fun Fact.") };
+    return { error: buildApiRefusalMessage(err, "Could not edit that Fun Fact.") };
   }
 }
 
-function deleteButton(action: "delete" | "keep", factId: number): ButtonBuilder {
+/** The delete question's two buttons: Delete, or Keep it. */
+function deleteQuestionButton(action: "delete" | "keep", factId: number): ButtonBuilder {
   return new ButtonBuilder()
     .setCustomId(buildCodexFunFactId(action, factId))
     .setLabel(action === "delete" ? "Delete" : "Keep it")
@@ -142,7 +123,7 @@ export async function deleteFunFactQuestion(
   try {
     entry = await api.get(factId, input.actingUserId);
   } catch (err: unknown) {
-    return { error: codexRefusalText(err, "Could not read that Fun Fact.") };
+    return { error: buildApiRefusalMessage(err, "Could not read that Fun Fact.") };
   }
   if (!entry) {
     return { view: codexView(`There is no Fun Fact ${factId}. It may have been deleted.`) };
@@ -157,7 +138,7 @@ export async function deleteFunFactQuestion(
         quoted(entry),
         `-# By ${escapeMarkdown(entry.author.name)}. This can't be undone.`,
       ].join("\n"),
-      [deleteButton("delete", factId), deleteButton("keep", factId)],
+      [deleteQuestionButton("delete", factId), deleteQuestionButton("keep", factId)],
     ),
   };
 }
@@ -174,11 +155,11 @@ export async function deleteFunFactReply(
       view: codexView(deleted ? "## Fun Fact deleted" : "That Fun Fact was already deleted."),
     };
   } catch (err: unknown) {
-    return { error: codexRefusalText(err, "Could not delete that Fun Fact.") };
+    return { error: buildApiRefusalMessage(err, "Could not delete that Fun Fact.") };
   }
 }
 
 /** The question's Keep it button. */
-export function keepFunFactView(): ICodexView {
+export function keepFunFactView(): IComponentsV2View {
   return codexView("Kept. Nothing was deleted.");
 }

@@ -10,10 +10,10 @@ import { ButtonStyle, MessageFlags } from "discord-api-types/v10";
 import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_INKS,
-  clubToday,
   escapeChallengeText,
   listJoin,
 } from "../functions/ChallengeCopy.js";
+import { clubToday } from "../functions/ClubDate.js";
 import { buildChallengeSlotsId } from "../functions/ChallengeCustomIds.js";
 import { clearedEntries, nextSlotYear, openYears } from "../functions/ChallengeSlotsCopy.js";
 import { commandMention } from "./CommandMentionService.js";

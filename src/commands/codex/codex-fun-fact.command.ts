@@ -9,19 +9,18 @@ import { ButtonComponent, Discord, Slash, SlashGroup, SlashOption } from "discor
 import { FUN_FACT_MAX_LENGTH } from "../../config/codex.js";
 import { CODEX_FUN_FACT_PREFIX } from "../../config/customIdPrefixes.js";
 import { parseCodexFunFactId } from "../../functions/CodexCustomIds.js";
+import { codexView } from "../../functions/CodexViews.js";
 import { buildErrorReply } from "../../functions/ComponentsV2Utils.js";
-import { resolveFeatureGate } from "../../functions/FeatureGate.js";
 import {
+  isAutocompleteGated,
   safeDeferReply,
   safeDeferUpdate,
   safeEditReply,
   safeRespond,
   type AnyRepliable,
 } from "../../functions/InteractionUtils.js";
-import { featureGateSource } from "../../services/FeatureAccessService.js";
 import {
   addFunFactReply,
-  codexView,
   deleteFunFactQuestion,
   deleteFunFactReply,
   editFunFactReply,
@@ -44,20 +43,12 @@ async function showResult(interaction: AnyRepliable, result: CodexReplyResult): 
   );
 }
 
-/**
- * Autocomplete for `fact:`. The feature gate passes autocomplete through, so it is checked
- * here: a member the Club Codex is hidden from is offered nothing.
- */
+/** Autocomplete for `fact:`. A member the Club Codex is hidden from is offered nothing. */
 async function autocompleteFact(
   interaction: AutocompleteInteraction,
   action: FunFactPick,
 ): Promise<void> {
-  const decision = await resolveFeatureGate(
-    { type: "command", name: interaction.commandName },
-    interaction.user.id,
-    featureGateSource,
-  );
-  if (decision === "not_available") {
+  if (await isAutocompleteGated(interaction)) {
     await safeRespond(interaction, []);
     return;
   }
@@ -99,7 +90,8 @@ export class CodexFunFactCommand {
       description: "The Fun Fact to edit",
       type: ApplicationCommandOptionType.String,
       required: true,
-      autocomplete: (interaction: AutocompleteInteraction) => autocompleteFact(interaction, "edit"),
+      autocomplete: (interaction: AutocompleteInteraction) =>
+        autocompleteFact(interaction, "edit"),
     })
     factRaw: string,
     @SlashOption({

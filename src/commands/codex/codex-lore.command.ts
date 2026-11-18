@@ -11,21 +11,14 @@ import {
   parseCodexEntryOption,
   parseCodexLoreId,
 } from "../../functions/CodexCustomIds.js";
-import { resolveFeatureGate } from "../../functions/FeatureGate.js";
 import {
+  isAutocompleteGated,
   safeDeferReply,
-  safeDeferUpdate,
   safeRespond,
 } from "../../functions/InteractionUtils.js";
-import { codexView } from "../../services/CodexFunFacts.js";
+import { loreChoices, loreReadReply } from "../../services/CodexReading.js";
 import {
-  loreChoices,
-  loreReadReply,
-  pageTurnRefusal,
-} from "../../services/CodexReading.js";
-import { featureGateSource } from "../../services/FeatureAccessService.js";
-import {
-  replyPrivately,
+  openPageButton,
   showButtonResult,
   showCommandResult,
 } from "./codex-read.utils.js";
@@ -34,17 +27,9 @@ import {
 // time. Private by default with Post this page; `public: True` posts it. The buttons hold
 // the Lore Entry, page and the member who ran it, so they work after a restart.
 
-/**
- * Autocomplete for `entry:`. The feature gate passes autocomplete through, so it is checked
- * here: a member the Club Codex is hidden from is offered nothing.
- */
+/** Autocomplete for `entry:`. A member the Club Codex is hidden from is offered nothing. */
 async function autocompleteLore(interaction: AutocompleteInteraction): Promise<void> {
-  const decision = await resolveFeatureGate(
-    { type: "command", name: interaction.commandName },
-    interaction.user.id,
-    featureGateSource,
-  );
-  if (decision === "not_available") {
+  if (await isAutocompleteGated(interaction)) {
     await safeRespond(interaction, []);
     return;
   }
@@ -88,17 +73,8 @@ export class CodexLoreCommand {
 
   @ButtonComponent({ id: new RegExp(`^${CODEX_LORE_PREFIX}:`) })
   async pageButton(interaction: ButtonInteraction): Promise<void> {
-    const target = parseCodexLoreId(interaction.customId);
-    if (!target) {
-      await replyPrivately(interaction, codexView("This button is out of date."));
-      return;
-    }
-    const refusal = pageTurnRefusal(target, interaction.user.id);
-    if (refusal) {
-      await replyPrivately(interaction, refusal);
-      return;
-    }
-    if (!(await safeDeferUpdate(interaction))) return;
+    const target = await openPageButton(interaction, parseCodexLoreId(interaction.customId));
+    if (!target) return;
     const post = target.action === "post";
     const result = await loreReadReply({
       ...target,

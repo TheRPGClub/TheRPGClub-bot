@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ICodexEntry, IFunFactApi } from "../services/CodexApi.js";
+import {
+  funFactListPath,
+  type ICodexEntry,
+  type IFunFactApi,
+} from "../services/CodexApi.js";
 import {
   addFunFactReply,
   deleteFunFactQuestion,
@@ -62,8 +66,9 @@ function fakeApi(options: {
   };
   const api: IFakeFunFactApi = {
     calls: [],
-    list: async (actingUserId, page, per) => {
-      api.calls.push(`list ${actingUserId} ${page} ${per}`);
+    list: async (query) => {
+      const { actingUserId, page, per, editable, q } = query;
+      api.calls.push(`list ${actingUserId} ${page} ${per} editable=${editable} q=${q}`);
       fail();
       return facts;
     },
@@ -133,60 +138,65 @@ test("fun-fact add by a plain member shows the API's refusal privately", async (
   assert.match(result.error, /"forbidden"/);
 });
 
-test("fun-fact autocomplete lists only the Fun Facts the member may edit", async () => {
+test("fun-fact autocomplete asks the API for the Fun Facts the member may edit", async () => {
   const api = fakeApi({
-    facts: [
-      funFact({ id: 7, body: "The club began as a forum thread." }),
-      funFact({
-        id: 6,
-        body: "Someone else's fact.",
-        author: { user_id: "999", name: "Terra", avatar_url: "/api/v1/users/999/avatar" },
-        viewer: { can_edit: false, can_delete: false },
-      }),
-      funFact({ id: 5 }),
-    ],
+    facts: [funFact({ id: 7, body: "The club began as a forum thread." }), funFact({ id: 5 })],
   });
   const choices = await funFactChoices(
     { actingUserId: REGULAR, query: "", action: "edit" },
     { api },
   );
 
-  assert.deepEqual(api.calls, [`list ${REGULAR} 1 100`]);
+  assert.deepEqual(api.calls, [`list ${REGULAR} 1 25 editable=true q=`]);
   assert.deepEqual(choices, [
     { name: "The club began as a forum thread.", value: "7" },
     { name: "@Kaiserkaze was first called Sir Grindsalot.", value: "5" },
   ]);
 });
 
-test("fun-fact autocomplete lists every Fun Fact for a Moderator", async () => {
-  const others = [8, 7, 6].map((id) => funFact({
-    id,
-    body: `Fact number ${id}.`,
-    author: { user_id: "999", name: "Terra", avatar_url: "/api/v1/users/999/avatar" },
-    viewer: { can_edit: true, can_delete: true },
-  }));
+test("fun-fact autocomplete passes what the member typed on to the API", async () => {
+  const api = fakeApi({ facts: [funFact({ id: 5 })] });
   const choices = await funFactChoices(
-    { actingUserId: "555", query: "", action: "delete" },
-    { api: fakeApi({ facts: others }) },
-  );
-
-  assert.deepEqual(choices.map((c) => c.value), ["8", "7", "6"]);
-});
-
-test("fun-fact autocomplete narrows to what the member typed, names included", async () => {
-  const api = fakeApi({
-    facts: [funFact({ id: 7, body: "The club began as a forum thread." }), funFact({ id: 5 })],
-  });
-  const choices = await funFactChoices(
-    { actingUserId: REGULAR, query: "kaiser", action: "edit" },
+    { actingUserId: REGULAR, query: "  Sir Grind  ", action: "edit" },
     { api },
   );
 
+  assert.deepEqual(api.calls, [`list ${REGULAR} 1 25 editable=true q=Sir Grind`]);
   assert.deepEqual(choices.map((c) => c.value), ["5"]);
 });
 
+test("fun-fact autocomplete for delete leaves out what the member can't delete", async () => {
+  const facts = [8, 7, 6].map((id) => funFact({
+    id,
+    body: `Fact number ${id}.`,
+    author: { user_id: "999", name: "Terra", avatar_url: "/api/v1/users/999/avatar" },
+    viewer: { can_edit: true, can_delete: id !== 7 },
+  }));
+  const choices = await funFactChoices(
+    { actingUserId: "555", query: "", action: "delete" },
+    { api: fakeApi({ facts }) },
+  );
+
+  assert.deepEqual(choices.map((c) => c.value), ["8", "6"]);
+});
+
+test("the Fun Fact list asks for the member's editable Fun Facts by text", () => {
+  assert.equal(
+    funFactListPath({ actingUserId: REGULAR, page: 1, per: 25, editable: true, q: "Sir G" }),
+    `/api/v1/codex/fun_facts?acting_user_id=${REGULAR}&page=1&per=25&editable=true&q=Sir+G`,
+  );
+  assert.equal(
+    funFactListPath({ actingUserId: REGULAR, page: 2, per: 50 }),
+    `/api/v1/codex/fun_facts?acting_user_id=${REGULAR}&page=2&per=50`,
+  );
+});
+
 test("fun-fact autocomplete offers nothing when the API fails", async () => {
-  const error = apiError(500, { error: "boom" }, { method: "get", url: "/api/v1/codex/fun_facts" });
+  const error = apiError(
+    500,
+    { error: "boom" },
+    { method: "get", url: "/api/v1/codex/fun_facts" },
+  );
   const choices = await funFactChoices(
     { actingUserId: REGULAR, query: "", action: "edit" },
     { api: fakeApi({ error }) },

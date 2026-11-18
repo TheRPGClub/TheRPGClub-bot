@@ -211,6 +211,32 @@ test("lore read: a long section is paged, never cut, each page fits Discord", as
   assert.equal(words, 200);
 });
 
+test("lore read: a full last page with long See also titles stays within 4000", async () => {
+  // 100-character titles of nothing but brackets (each one escaped, so 200 characters), a
+  // 100-character title of Markdown, and a last page of story as long as a page may be.
+  const bracketed = "[]".repeat(50);
+  const links = [11, 12, 13, 14, 15, 16].map((id) => ({
+    id,
+    part: "lore_entry" as const,
+    title: bracketed,
+  }));
+  const story = "A long night of tonberry raffles, told in full. ".repeat(80).slice(0, 2790);
+  const long = entry({
+    title: "_*".repeat(50),
+    body: `${story.trim()}.`,
+    links,
+    images: [],
+  });
+  const result = await loreReadReply(lore(), { api: fakeApi({ lore: [long] }) });
+  const text = textOf(pageOf(result).components);
+
+  assert.ok(text.length <= 4000, `${text.length} characters`);
+  assert.match(text, /-# See also · \[(\\\[\\\]){50}\]\(/);
+  const shown = (text.match(/\(\S+\/codex\/lore\/1\d\)/g) ?? []).length;
+  assert.ok(shown >= 1 && shown < 5, `${shown} links shown`);
+  assert.match(text, new RegExp(` · and ${links.length - shown} more$`));
+});
+
 test("lore read: a page past the end shows the last page", async () => {
   const result = await loreReadReply(lore({ page: 9 }), { api: fakeApi({ lore: [entry()] }) });
   assert.match(textOf(pageOf(result).components), /page 3 of 3/);

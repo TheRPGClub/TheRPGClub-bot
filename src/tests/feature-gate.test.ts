@@ -15,6 +15,7 @@ import {
   type IFeatureFlag,
   type IFeatureGateSource,
 } from "../functions/FeatureGate.js";
+import { isAutocompleteGated } from "../functions/InteractionUtils.js";
 import {
   createFeatureAccessCache,
   createFeatureFlagCache,
@@ -442,3 +443,14 @@ test("feature gate map: every mapped Feature is one of the API registry's 14 key
   ];
   assert.deepEqual(mapped.filter((key) => !registry.has(key)), []);
 });
+
+test("isAutocompleteGated: hides a Preview command's autocomplete from non-staff only",
+  async () => {
+    const source = gateSource(fakeApi(() => ({ club_codex: "preview" }), ["900"]));
+    const typing = (userId: string) =>
+      ({ commandName: "codex", user: { id: userId } }) as unknown as Parameters<
+        typeof isAutocompleteGated
+      >[0];
+    assert.equal(await isAutocompleteGated(typing("100"), source), true);
+    assert.equal(await isAutocompleteGated(typing("900"), source), false);
+  });

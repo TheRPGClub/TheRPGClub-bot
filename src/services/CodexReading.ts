@@ -10,7 +10,6 @@ import {
 } from "@discordjs/builders";
 import {
   ButtonStyle,
-  MessageFlags,
   SeparatorSpacingSize,
   type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
@@ -24,7 +23,7 @@ import {
   LORE_PAGE_TEXT_MAX,
   LORE_SEE_ALSO_MAX,
 } from "../config/codex.js";
-import { truncateLabel } from "../config/textLimits.js";
+import { DISCORD_V2_TEXT_MAX, truncateLabel } from "../config/textLimits.js";
 import {
   codexFunFactsUrl,
   codexHistoryUrl,
@@ -38,20 +37,22 @@ import {
 } from "../functions/CodexCustomIds.js";
 import { cutAtSentence, splitLorePages } from "../functions/CodexLorePages.js";
 import { formatCodexDate, HISTORY_KIND_LABELS } from "../functions/CodexText.js";
+import { codexView } from "../functions/CodexViews.js";
 import {
+  buildComponentsV2View,
   buildMaskedLink,
   buildTextDisplay,
+  type IComponentsV2View,
 } from "../functions/ComponentsV2Utils.js";
+import { buildApiRefusalMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { plural } from "../utilities/TextUtils.js";
 import {
   CODEX_READ_API,
-  codexRefusalText,
   type ICodexEntry,
   type ICodexLink,
   type ICodexReadApi,
 } from "./CodexApi.js";
-import { codexView, type ICodexView } from "./CodexFunFacts.js";
 
 // /codex lore read and /codex history (spec api#397, bot#1563). Lore Entries and History
 // Events are written on the website; Discord only reads them. Design picks: a Lore Entry
@@ -67,14 +68,12 @@ export interface ICodexReadingDeps {
  * share), a `notice` only the member should see, or an error (the request and response).
  */
 export type CodexReadResult =
-  | { page: ICodexView }
-  | { notice: ICodexView }
+  | { page: IComponentsV2View }
+  | { notice: IComponentsV2View }
   | { error: string };
 
-function page(components: APIMessageTopLevelComponent[]): { page: ICodexView } {
-  return {
-    page: { components, flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } },
-  };
+function pageResult(components: APIMessageTopLevelComponent[]): { page: IComponentsV2View } {
+  return { page: buildComponentsV2View(components) };
 }
 
 function separator(): SeparatorBuilder {
@@ -106,7 +105,7 @@ function linkUrl(link: ICodexLink): string {
 export function pageTurnRefusal(
   target: { ownerId: string },
   clickerId: string,
-): ICodexView | null {
+): IComponentsV2View | null {
   if (target.ownerId === clickerId) return null;
   return codexView(
     `Only <@${target.ownerId}> can turn these pages. Run the command to read it yourself.`,
@@ -141,10 +140,22 @@ function loreByline(entry: ICodexEntry, at: number, count: number): string {
   return `-# ${parts.join(" · ")}`;
 }
 
-function seeAlso(links: readonly ICodexLink[]): string {
-  const shown = links.slice(0, LORE_SEE_ALSO_MAX).map((l) => buildMaskedLink(l.title, linkUrl(l)));
-  const more = links.length - shown.length;
-  return `-# See also · ${shown.join(" · ")}${more > 0 ? ` · and ${more} more` : ""}`;
+/**
+ * A last page's "See also" in at most `room` characters: the first links that fit (up to
+ * `LORE_SEE_ALSO_MAX`), then "and N more". Null when not even one link fits, which the
+ * page budget rules out: a page's story, title and byline leave room for several.
+ */
+function seeAlso(links: readonly ICodexLink[], room: number): string | null {
+  const shown: string[] = [];
+  let best: string | null = null;
+  for (const link of links.slice(0, LORE_SEE_ALSO_MAX)) {
+    shown.push(buildMaskedLink(link.title, linkUrl(link)));
+    const more = links.length - shown.length;
+    const text = `-# See also · ${shown.join(" · ")}${more > 0 ? ` · and ${more} more` : ""}`;
+    if (text.length > room) break;
+    best = text;
+  }
+  return best;
 }
 
 function loreGallery(entry: ICodexEntry): MediaGalleryBuilder | null {
@@ -182,27 +193,32 @@ function loreButtons(
 function lorePage(
   entry: ICodexEntry,
   input: { page: number; ownerId: string; visibility: CodexReplyVisibility },
-): { page: ICodexView } {
+): { page: IComponentsV2View } {
   const pages = splitLorePages(entry.body, LORE_PAGE_TEXT_MAX);
   const at = Math.min(Math.max(input.page, 1), pages.length);
   const card = new ContainerBuilder().setAccentColor(CLUB_LORE_INK);
   const gallery = at === 1 ? loreGallery(entry) : null;
   if (gallery) card.addMediaGalleryComponents(gallery);
-  card.addTextDisplayComponents(buildTextDisplay(
-    `## ${escapeMarkdown(entry.title ?? "Lore Entry")}\n${loreByline(entry, at, pages.length)}`,
-  ));
+  const heading =
+    `## ${escapeMarkdown(entry.title ?? "Lore Entry")}\n${loreByline(entry, at, pages.length)}`;
+  const story = pages[at - 1] || "-# No story yet.";
+  card.addTextDisplayComponents(buildTextDisplay(heading));
   card.addSeparatorComponents(separator());
-  card.addTextDisplayComponents(buildTextDisplay(pages[at - 1] || "-# No story yet."));
-  if (at === pages.length && entry.links.length) {
+  card.addTextDisplayComponents(buildTextDisplay(story));
+  // Discord counts every text display in a message together, so See also gets what's left.
+  const links = at === pages.length && entry.links.length
+    ? seeAlso(entry.links, DISCORD_V2_TEXT_MAX - heading.length - story.length)
+    : null;
+  if (links) {
     card.addSeparatorComponents(separator());
-    card.addTextDisplayComponents(buildTextDisplay(seeAlso(entry.links)));
+    card.addTextDisplayComponents(buildTextDisplay(links));
   }
   const row = loreButtons(
     entry,
     { entryId: entry.id, page: at, ownerId: input.ownerId, visibility: input.visibility },
     pages.length,
   );
-  return page([card.toJSON(), row.toJSON()]);
+  return pageResult([card.toJSON(), row.toJSON()]);
 }
 
 /**
@@ -225,7 +241,7 @@ export async function loreReadReply(
   try {
     entry = await api.getLoreEntry(input.entryId, input.ownerId);
   } catch (err: unknown) {
-    return { error: codexRefusalText(err, "Could not read that Lore Entry.") };
+    return { error: buildApiRefusalMessage(err, "Could not read that Lore Entry.") };
   }
   if (!entry) {
     return {
@@ -276,7 +292,7 @@ export async function historyReply(
   try {
     events = await api.listHistory(input.ownerId);
   } catch (err: unknown) {
-    return { error: codexRefusalText(err, "Could not read Club History.") };
+    return { error: buildApiRefusalMessage(err, "Could not read Club History.") };
   }
   if (!events.length) return { notice: codexView("Club History has no History Events yet.") };
 
@@ -297,7 +313,7 @@ export async function historyReply(
   if (at < pages) row.addComponents(idButton("Older", to(at + 1)));
   row.addComponents(linkButton("The full Club History", codexHistoryUrl()));
 
-  return page([
+  return pageResult([
     buildTextDisplay(`## Club History\n-# ${heading}`).toJSON(),
     ...shown.map((event) => historyCard(event).toJSON()),
     row.toJSON(),

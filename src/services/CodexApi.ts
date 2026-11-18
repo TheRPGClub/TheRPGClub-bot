@@ -1,4 +1,3 @@
-import { buildApiRefusalMessage } from "../utilities/ApiErrorUtils.js";
 import {
   apiDelete,
   apiGet,
@@ -27,7 +26,8 @@ export interface ICodexEntry {
   id: number;
   part: CodexPart;
   title: string | null;
-  rich_body: Record<string, unknown> | null;
+  /** The website's rich text, as Plate nodes. */
+  rich_body: Array<Record<string, unknown>> | null;
   /** The Discord text, members mentioned as `<@discord_id>` tokens. */
   body: string | null;
   occurred_on: string | null;
@@ -44,10 +44,21 @@ export interface ICodexEntry {
   updated_at: string;
 }
 
+/** Which Fun Facts to list, for the member the bot acts for. */
+export interface IFunFactListQuery {
+  actingUserId: string;
+  page: number;
+  per: number;
+  /** Only those the member may edit: their own, or every one for a Moderator and above. */
+  editable?: boolean;
+  /** Words to find in the Fun Fact text (its `<@id>` tokens, not the names they show). */
+  q?: string;
+}
+
 /** /api/v1/codex/fun_facts, for the member the bot acts for. */
 export interface IFunFactApi {
   /** One page of Fun Facts, newest first. */
-  list(actingUserId: string, page: number, per: number): Promise<ICodexEntry[]>;
+  list(query: IFunFactListQuery): Promise<ICodexEntry[]>;
   /**
    * The Fun Fact, or null when there is no such Fun Fact. With no member named, it is read
    * as the bot itself (the Daily Fun Fact), and `viewer` is all false.
@@ -75,11 +86,21 @@ function withQuery(path: string, query: Record<string, string | number>): string
   return `${path}?${params.toString()}`;
 }
 
+/** GET /codex/fun_facts for `query`; an empty `q` and a false `editable` are left out. */
+export function funFactListPath(query: IFunFactListQuery): string {
+  const params: Record<string, string | number> = {
+    acting_user_id: query.actingUserId,
+    page: query.page,
+    per: query.per,
+  };
+  if (query.editable) params.editable = "true";
+  if (query.q) params.q = query.q;
+  return withQuery(FUN_FACTS_PATH, params);
+}
+
 export const FUN_FACT_API: IFunFactApi = {
-  async list(actingUserId, page, per) {
-    const payload = await apiGetOrThrow<{ data: ICodexEntry[] }>(
-      withQuery(FUN_FACTS_PATH, { acting_user_id: actingUserId, page, per }),
-    );
+  async list(query) {
+    const payload = await apiGetOrThrow<{ data: ICodexEntry[] }>(funFactListPath(query));
     return payload.data;
   },
   async get(id, actingUserId) {
@@ -168,12 +189,3 @@ export const CODEX_READ_API: ICodexReadApi = {
     return events;
   },
 };
-
-/**
- * A failed Club Codex call as the member reads it: the API's own `message` for a refusal
- * (403 `forbidden` or `feature_unavailable`, 422 `invalid_entry`), else the fallback, with
- * the request and the response.
- */
-export function codexRefusalText(err: unknown, fallback: string): string {
-  return buildApiRefusalMessage(err, fallback);
-}
