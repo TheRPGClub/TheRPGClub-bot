@@ -14,6 +14,7 @@ import {
   ANNOUNCEMENT_CHANNEL_ID,
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
+  BIRTHDAY_CHANNEL_ID,
   CHALLENGES_CHANNEL_ID,
   FUN_FACT_CHANNEL_ID,
   GIVEAWAY_LOG_CHANNEL_ID,
@@ -127,6 +128,11 @@ import {
   postDailyFunFact,
   type ICodexJobDeps,
 } from "./CodexFunFactPosts.js";
+import {
+  createBirthdayPostDeps,
+  postBirthdays,
+  type IBirthdayPostDeps,
+} from "./BirthdayPost.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -276,6 +282,11 @@ export interface IBotJobSurface {
    * need not build it.
    */
   codex?: ICodexJobDeps;
+  /**
+   * What the Birthday Post reads and posts (spec api#396). Optional so fakes for other jobs
+   * need not build it.
+   */
+  birthdays?: IBirthdayPostDeps;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -351,6 +362,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     newsHub: createNewsHubJobDeps(client),
     challenges: createChallengeJobDeps(client),
     codex: createCodexJobDeps(client),
+    birthdays: createBirthdayPostDeps(client),
   };
 }
 
@@ -1058,7 +1070,6 @@ export const handleNewsCatchUp: BotJobHandler = async (_payload, surface) => {
   return summary;
 };
 
-/** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 function challengeDeps(surface: IBotJobSurface): IChallengeJobDeps {
   if (!surface.challenges) throw new Error("This bot job surface cannot reach Challenges.");
   return surface.challenges;
@@ -1174,6 +1185,17 @@ export const handleDailyFunFact: BotJobHandler = async (payload, surface, contex
   return postDailyFunFact(job, channelId, surface.codex);
 };
 
+/**
+ * Payload `{ club_date, user_ids }` (BirthdayPostJobPayload): the Birthday Post in the
+ * Birthday channel (general chat), pinging every member. Birthdays are not a Feature, so no
+ * flag routes it. A job whose club day has passed in New York is acked done unposted.
+ */
+export const handleBirthdayPost: BotJobHandler = async (payload, surface) => {
+  if (!surface.birthdays) throw new Error("This bot job surface cannot reach Birthdays.");
+  return postBirthdays(payload, BIRTHDAY_CHANNEL_ID, surface.birthdays);
+};
+
+/** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
   giveaway_claim_notice: handleGiveawayClaimNotice,
@@ -1196,4 +1218,5 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   challenge_announce: handleChallengeAnnounce,
   challenge_dm: handleChallengeDm,
   daily_fun_fact: handleDailyFunFact,
+  birthday_post: handleBirthdayPost,
 };
