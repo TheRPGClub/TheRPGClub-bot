@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   buildUpcomingBirthdaysView,
+  upcomingBirthdaysFrom,
   type IBirthdaysApi,
+  type INextBirthday,
   type IUpcomingBirthday,
 } from "../services/UpcomingBirthdaysService.js";
 import { textOf } from "./challengeFixtures.js";
@@ -22,6 +24,7 @@ interface IFakeBirthdaysApi extends IBirthdaysApi {
 
 function fakeApi(options: {
   upcoming?: IUpcomingBirthday[];
+  next?: INextBirthday | null;
   own?: string | null;
   upcomingError?: unknown;
   ownError?: unknown;
@@ -31,7 +34,7 @@ function fakeApi(options: {
     listUpcoming: async () => {
       api.calls.push("upcoming");
       if (options.upcomingError) throw options.upcomingError;
-      return options.upcoming ?? [];
+      return { birthdays: options.upcoming ?? [], next: options.next ?? null };
     },
     getSharedBirthday: async (userId) => {
       api.calls.push(`shared birthday of ${userId}`);
@@ -78,6 +81,38 @@ test("/birthdays: the empty state says nobody's Birthday falls in the next 30 da
       "-# You're not sharing your Birthday. Turn it on with `/profile birth-date share:True`.",
     ].join("\n"));
   });
+
+test("/birthdays: the empty state names the next shared Birthday after the 30 days",
+  async () => {
+    const api = fakeApi({ upcoming: [], next: { month: 1, day: 9, on: "2027-01-09" } });
+    const view = await buildUpcomingBirthdaysView("42", { api, now: () => NOW });
+
+    assert.equal(textOf(view.components), [
+      "## Upcoming Birthdays",
+      "Nobody's Birthday falls in the next 30 days. The next shared one is on **9 January**.",
+      "-# You're not sharing your Birthday. Turn it on with `/profile birth-date share:True`.",
+    ].join("\n"));
+  });
+
+test("upcomingBirthdaysFrom: reads the entries and the next Birthday", () => {
+  const read = upcomingBirthdaysFrom({
+    data: [{
+      user_id: "1", display_name: "Lufia", month: 11, day: 18, on: "2026-11-18", today: true,
+    }],
+    next: { month: 1, day: 9, on: "2027-01-09" },
+  });
+  assert.deepEqual(read, {
+    birthdays: [{
+      userId: "1", displayName: "Lufia", month: 11, day: 18, on: "2026-11-18", today: true,
+    }],
+    next: { month: 1, day: 9, on: "2027-01-09" },
+  });
+});
+
+test("upcomingBirthdaysFrom: an API without `next` reads as no next Birthday", () => {
+  assert.deepEqual(upcomingBirthdaysFrom({ data: [] }), { birthdays: [], next: null });
+  assert.deepEqual(upcomingBirthdaysFrom({ data: [], next: null }), { birthdays: [], next: null });
+});
 
 test("/birthdays: a member who shares sees their own Birthday in the footer", async () => {
   const api = fakeApi({ upcoming: UPCOMING, own: "05-04" });

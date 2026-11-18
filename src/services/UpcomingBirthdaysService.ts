@@ -33,9 +33,25 @@ export interface IUpcomingBirthday {
   today: boolean;
 }
 
+/** The first shared Birthday after the 30 days, with no member. */
+export interface INextBirthday {
+  month: number;
+  day: number;
+  /** YYYY-MM-DD in club time. */
+  on: string;
+}
+
+/** The Upcoming Birthdays and, past them, when the next shared one falls. */
+export interface IUpcomingBirthdays {
+  /** Soonest first. */
+  birthdays: IUpcomingBirthday[];
+  /** Null when nobody else shares, or when the API predates it. */
+  next: INextBirthday | null;
+}
+
 export interface IBirthdaysApi {
-  /** GET /api/v1/birthdays/upcoming, soonest first. */
-  listUpcoming(): Promise<IUpcomingBirthday[]>;
+  /** GET /api/v1/birthdays/upcoming. */
+  listUpcoming(): Promise<IUpcomingBirthdays>;
   /** The member's own Birthday as "MM-DD" when they share it, else null. */
   getSharedBirthday(userId: string): Promise<string | null>;
 }
@@ -49,19 +65,35 @@ type UpcomingBirthdayPayload = {
   today: boolean;
 };
 
-export const BIRTHDAYS_API: IBirthdaysApi = {
-  async listUpcoming() {
-    const payload = await apiGetOrThrow<{ data: UpcomingBirthdayPayload[] }>(
-      "/api/v1/birthdays/upcoming",
-    );
-    return payload.data.map((item) => ({
+type UpcomingBirthdaysPayload = {
+  data: UpcomingBirthdayPayload[];
+  /** Added with the bot's empty state; an older API leaves it out. */
+  next?: INextBirthday | null;
+};
+
+/** The upcoming read as the bot uses it. */
+export function upcomingBirthdaysFrom(payload: UpcomingBirthdaysPayload): IUpcomingBirthdays {
+  const next = payload.next
+    ? { month: payload.next.month, day: payload.next.day, on: payload.next.on }
+    : null;
+  return {
+    birthdays: payload.data.map((item) => ({
       userId: item.user_id,
       displayName: item.display_name,
       month: item.month,
       day: item.day,
       on: item.on,
       today: item.today,
-    }));
+    })),
+    next,
+  };
+}
+
+export const BIRTHDAYS_API: IBirthdaysApi = {
+  async listUpcoming() {
+    return upcomingBirthdaysFrom(
+      await apiGetOrThrow<UpcomingBirthdaysPayload>("/api/v1/birthdays/upcoming"),
+    );
   },
   async getSharedBirthday(userId) {
     // The member reads their own Birth Date document, so the bot acts as them.
@@ -89,6 +121,14 @@ const GROUP_HEADINGS: Readonly<Record<GroupName, string>> = {
 
 const HEADING = "## Upcoming Birthdays";
 const EMPTY_STATE = "Nobody's Birthday falls in the next 30 days.";
+
+/** The empty state, naming the next shared Birthday when there is one. */
+function emptyState(next: INextBirthday | null): string {
+  if (!next) return EMPTY_STATE;
+  const date = DateTime.fromISO(next.on, { zone: BIRTHDAY_TIME_ZONE });
+  if (!date.isValid) return EMPTY_STATE;
+  return `${EMPTY_STATE} The next shared one is on **${date.setLocale("en-GB").toFormat("d LLLL")}**.`;
+}
 const SHARE_NUDGE =
   "You're not sharing your Birthday. Turn it on with `/profile birth-date share:True`.";
 
@@ -179,7 +219,7 @@ export async function buildUpcomingBirthdaysView(
 ): Promise<IUpcomingBirthdaysView> {
   const api = deps.api ?? BIRTHDAYS_API;
   const now = deps.now?.() ?? new Date();
-  const [birthdays, shared] = await Promise.all([
+  const [upcoming, shared] = await Promise.all([
     api.listUpcoming(),
     api.getSharedBirthday(actingUserId).then(
       (birthday): { birthday: string | null } => ({ birthday }),
@@ -191,10 +231,10 @@ export async function buildUpcomingBirthdaysView(
   ]);
 
   const footerText = shared ? `-# ${footer(shared.birthday)}` : null;
-  const lines = dateLines(birthdays, now);
+  const lines = dateLines(upcoming.birthdays, now);
   const body = lines.length
     ? fittedGroupTexts(lines, HEADING.length + (footerText?.length ?? 0))
-    : [EMPTY_STATE];
+    : [emptyState(upcoming.next)];
 
   const container = new ContainerBuilder();
   for (const text of [HEADING, ...body]) {
