@@ -277,3 +277,15 @@ test("with no title or company, the year label still reads the game's first rele
     ["2025-06-01T00:00:00.000Z", "2026-03-03T00:00:00.000Z", "2027-09-01T00:00:00.000Z"],
   );
 });
+
+test("a platform with no title goes to the Release Calendar without game ids", async () => {
+  const api = fakeApi({ upcoming: [[entry(1, "Chrono Cross 2", "2027-03-14", "day")]] });
+
+  await GameSearchService.searchUpcomingReleases(
+    "", { upcomingRelease: true, platformId: 3 }, api.deps,
+  );
+
+  assert.deepEqual(upcomingCalls(api).map((call) => call.params), [
+    { per_game: "next", per: 100, platform_id: "3", page: 1 },
+  ]);
+});
