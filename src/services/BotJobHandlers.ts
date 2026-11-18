@@ -14,7 +14,6 @@ import {
   ANNOUNCEMENT_CHANNEL_ID,
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
-  BIRTHDAY_CHANNEL_ID,
   CHALLENGES_CHANNEL_ID,
   FUN_FACT_CHANNEL_ID,
   GIVEAWAY_LOG_CHANNEL_ID,
@@ -1185,15 +1184,19 @@ export const handleDailyFunFact: BotJobHandler = async (payload, surface, contex
   return postDailyFunFact(job, channelId, surface.codex);
 };
 
-/**
- * Payload `{ club_date, user_ids }` (BirthdayPostJobPayload): the Birthday Post in the
- * Birthday channel (general chat), pinging every member. Birthdays are not a Feature, so no
- * flag routes it. A job whose club day has passed in New York is acked done unposted.
- */
-export const handleBirthdayPost: BotJobHandler = async (payload, surface) => {
+function birthdaysDeps(surface: IBotJobSurface): IBirthdayPostDeps {
   if (!surface.birthdays) throw new Error("This bot job surface cannot reach Birthdays.");
-  return postBirthdays(payload, BIRTHDAY_CHANNEL_ID, surface.birthdays);
-};
+  return surface.birthdays;
+}
+
+/**
+ * Payload `{ club_date, user_ids, channel_id }` (BirthdayPostJobPayload): the Birthday Post
+ * in the payload's channel (general chat), pinging every member still sharing. Birthdays are
+ * not a Feature, so no flag routes it. A job whose club day has passed in New York is acked
+ * done unposted.
+ */
+export const handleBirthdayPost: BotJobHandler = async (payload, surface) =>
+  postBirthdays(payload, birthdaysDeps(surface));
 
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {

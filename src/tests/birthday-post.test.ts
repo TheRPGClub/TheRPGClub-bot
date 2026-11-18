@@ -3,7 +3,6 @@ import test from "node:test";
 import { DiscordAPIError } from "discord.js";
 import sharp from "sharp";
 import type { IBotJob, IBotJobApi } from "../classes/BotJobs.js";
-import { BIRTHDAY_CHANNEL_ID } from "../config/channels.js";
 import { BOT_JOB_HANDLERS, type IBotJobSurface } from "../services/BotJobHandlers.js";
 import { processBotJobs } from "../services/BotJobService.js";
 import {
@@ -13,6 +12,7 @@ import {
 } from "../services/BirthdayBanner.js";
 import {
   closingLine,
+  postBirthdays,
   type IBirthdayMember,
   type IBirthdayPost,
   type IBirthdayPostDeps,
@@ -42,6 +42,8 @@ function fakeApi(): IBotJobApi & { acks: Ack[] } {
 }
 
 const TODAY = "2026-11-18";
+/** General chat, as the API names it in the payload. */
+const GENERAL = "191941851757019136";
 
 const NAMES: Record<string, string> = {
   "101": "Lufia",
@@ -53,6 +55,9 @@ const NAMES: Record<string, string> = {
 
 interface IFakeDeps extends IBirthdayPostDeps {
   posts: { channelId: string; post: IBirthdayPost }[];
+  /** The channels the redelivery guard read. */
+  scanned: string[];
+  warnings: string[];
 }
 
 async function avatarPng(): Promise<Buffer> {
@@ -61,9 +66,16 @@ async function avatarPng(): Promise<Buffer> {
   }).png().toBuffer();
 }
 
-function fakeDeps(options: { departed?: string[]; today?: string } = {}): IFakeDeps {
+function fakeDeps(options: {
+  departed?: string[];
+  /** Members who stopped sharing since the job was queued. */
+  notSharing?: string[];
+  today?: string;
+} = {}): IFakeDeps {
   const deps: IFakeDeps = {
     posts: [],
+    scanned: [],
+    warnings: [],
     clubToday: () => options.today ?? TODAY,
     fetchMember: async (userId): Promise<IBirthdayMember | null> => {
       if (options.departed?.includes(userId)) return null;
@@ -73,16 +85,31 @@ function fakeDeps(options: { departed?: string[]; today?: string } = {}): IFakeD
       deps.posts.push({ channelId, post });
     },
     // As Discord would answer: the bot's own posts in the channel carrying that day's banner.
-    greetedOn: async (channelId, clubDate) => new Set(deps.posts
-      .filter((p) => p.channelId === channelId && p.post.files[0]?.name.includes(clubDate))
-      .flatMap((p) => p.post.pingUserIds)),
+    greetedOn: async (channelId, clubDate) => {
+      deps.scanned.push(channelId);
+      return new Set(deps.posts
+        .filter((p) => p.channelId === channelId && p.post.files[0]?.name.includes(clubDate))
+        .flatMap((p) => p.post.pingUserIds));
+    },
+    // As the API's Upcoming Birthdays would answer now.
+    sharingOn: async () =>
+      new Set(Object.keys(NAMES).filter((id) => !options.notSharing?.includes(id))),
+    warnStaff: async (message) => {
+      deps.warnings.push(message);
+    },
   };
   return deps;
 }
 
 async function run(deps: IBirthdayPostDeps, payload: Record<string, unknown>): Promise<Ack[]> {
   const api = fakeApi();
-  const job: IBotJob = { id: 7, kind: "birthday_post", payload, attempts: 1, requestedByUserId: null };
+  const job: IBotJob = {
+    id: 7,
+    kind: "birthday_post",
+    payload: { channel_id: GENERAL, ...payload },
+    attempts: 1,
+    requestedByUserId: null,
+  };
   const surface = { birthdays: deps } as unknown as IBotJobSurface;
   await processBotJobs([job], BOT_JOB_HANDLERS, surface, api);
   return api.acks;
@@ -103,7 +130,7 @@ test("birthday_post: one member is greeted and pinged in the Birthday channel", 
   assert.equal(acks[0]?.status, "done");
   assert.equal(deps.posts.length, 1);
   const [{ channelId, post }] = deps.posts;
-  assert.equal(channelId, BIRTHDAY_CHANNEL_ID);
+  assert.equal(channelId, GENERAL);
   assert.equal(
     post.content,
     "## 🎂 Happy Birthday, <@101>!\nHave a great day, from everyone at the club.",
@@ -269,7 +296,7 @@ test("birthday_post: a same-day redelivery of a job that posted posts nothing mo
     }]);
   });
 
-test("birthday_post: a later job the same day greets only members not yet greeted",
+test("birthday_post: the guard is per member, so a job the same day greets only the rest",
   async () => {
     const deps = fakeDeps();
     await run(deps, { club_date: TODAY, user_ids: ["101"] });
@@ -293,15 +320,35 @@ test("birthday_post: a post for another day does not count as greeted", async ()
   assert.equal(deps.posts.length, 2);
 });
 
-test("birthday_post: when the channel's history can't be read the Birthday still goes out",
+test("birthday_post: when the channel's history can't be read the Birthday still goes out, " +
+  "and staff are warned", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  const deps = fakeDeps();
+  deps.greetedOn = async () => {
+    throw new Error("The bot lacks Read Message History in <#191941851757019136>.");
+  };
+  const acks = await run(deps, { club_date: TODAY, user_ids: ["101"] });
+
+  assert.equal(deps.posts.length, 1);
+  assert.equal(acks[0]?.status, "done");
+  assert.match(String(acks[0]?.status === "done" && acks[0].resultText),
+    /^Greeted 1 member for 2026-11-18\. Not checked for an earlier post that day: /);
+  assert.equal(deps.warnings.length, 1);
+  assert.match(deps.warnings[0]!, /Birthday Post for 2026-11-18/);
+  assert.match(deps.warnings[0]!, /lacks Read Message History/);
+  assert.match(deps.warnings[0]!, /greet members twice/);
+});
+
+test("birthday_post: a temporary failure reading the channel's history is left for the lease",
   async (t) => {
     t.mock.method(console, "error", () => undefined);
+    t.mock.method(console, "log", () => undefined);
     const deps = fakeDeps();
     deps.greetedOn = async () => {
       throw new DiscordAPIError(
-        { code: 50001, message: "Missing Access" },
-        50001,
-        403,
+        { code: 0, message: "Service Unavailable" },
+        0,
+        503,
         "GET",
         "https://discord.com/api/v10/channels/1/messages",
         { body: undefined, files: undefined },
@@ -309,8 +356,110 @@ test("birthday_post: when the channel's history can't be read the Birthday still
     };
     const acks = await run(deps, { club_date: TODAY, user_ids: ["101"] });
 
-    assert.equal(deps.posts.length, 1);
-    assert.equal(acks[0]?.status, "done");
+    assert.deepEqual(acks, []);
+    assert.deepEqual(deps.posts, []);
+    assert.deepEqual(deps.warnings, []);
+  });
+
+test("birthday_post: posts in the channel the payload names, and checks that channel",
+  async () => {
+    const deps = fakeDeps();
+    await run(deps, { club_date: TODAY, user_ids: ["101"], channel_id: "555" });
+
+    assert.equal(deps.posts[0]?.channelId, "555");
+    assert.deepEqual(deps.scanned, ["555"]);
+  });
+
+test("birthday_post: a test-guild bot posts in its own Birthday channel, never the payload's",
+  async () => {
+    const deps = fakeDeps();
+    const result = await postBirthdays(
+      { club_date: TODAY, user_ids: ["101"], channel_id: GENERAL },
+      deps,
+      "200000000000000396",
+    );
+
+    assert.match(result, /^Greeted 1 member/);
+    assert.equal(deps.posts[0]?.channelId, "200000000000000396");
+    assert.deepEqual(deps.scanned, ["200000000000000396"]);
+  });
+
+test("birthday_post: a test-guild bot without a Birthday channel posts nowhere", async () => {
+  const deps = fakeDeps();
+  await assert.rejects(
+    postBirthdays({ club_date: TODAY, user_ids: ["101"], channel_id: GENERAL }, deps, ""),
+    /test guild has no Birthday channel/,
+  );
+  assert.deepEqual(deps.posts, []);
+});
+
+for (const channelId of [undefined, "", "general", 191941851757019136]) {
+  test(`birthday_post: a payload with channel_id ${JSON.stringify(channelId)} fails, ` +
+    "naming the field", async (t) => {
+    t.mock.method(console, "error", () => undefined);
+    const deps = fakeDeps();
+    const acks = await run(deps, { club_date: TODAY, user_ids: ["101"], channel_id: channelId });
+
+    assert.deepEqual(deps.posts, []);
+    assert.equal(acks[0]?.status, "failed");
+    assert.match(acks[0]?.status === "failed" ? acks[0].error : "", /channel_id/);
+  });
+}
+
+for (const clubDate of ["2026-11-18T10:00:00Z", "2026-11-31", "18 November"]) {
+  test(`birthday_post: a club_date of ${clubDate} fails, naming the field`, async (t) => {
+    t.mock.method(console, "error", () => undefined);
+    const deps = fakeDeps();
+    const acks = await run(deps, { club_date: clubDate, user_ids: ["101"] });
+
+    assert.deepEqual(deps.posts, []);
+    assert.equal(acks[0]?.status, "failed");
+    assert.match(acks[0]?.status === "failed" ? acks[0].error : "", /club_date/);
+  });
+}
+
+test("birthday_post: a member who stopped sharing since it was queued is not pinged",
+  async () => {
+    const deps = fakeDeps({ notSharing: ["102"] });
+    const acks = await run(deps, { club_date: TODAY, user_ids: ["101", "102", "103"] });
+
+    const [{ post }] = deps.posts;
+    assert.deepEqual(post.pingUserIds, ["101", "103"]);
+    assert.ok(!post.content.includes("<@102>"), post.content);
+    assert.equal(post.files[0]?.description, "Happy Birthday banner for Lufia and Marle");
+    assert.deepEqual(acks, [{
+      id: 7,
+      status: "done",
+      resultText: "Greeted 2 members for 2026-11-18 (1 no longer sharing left out).",
+    }]);
+  });
+
+test("birthday_post: nothing is posted when nobody shares their Birthday any more",
+  async () => {
+    const deps = fakeDeps({ notSharing: ["101", "102"] });
+    const acks = await run(deps, { club_date: TODAY, user_ids: ["101", "102"] });
+
+    assert.deepEqual(deps.posts, []);
+    assert.deepEqual(acks, [{
+      id: 7,
+      status: "done",
+      resultText: "Not posted: none of the members share a Birthday on 2026-11-18 any " +
+        "more (they stopped sharing, or a Moderator stopped it, since the job was queued).",
+    }]);
+  });
+
+test("birthday_post: when the sharing check can't be read, the job is left for the lease",
+  async (t) => {
+    t.mock.method(console, "error", () => undefined);
+    t.mock.method(console, "log", () => undefined);
+    const deps = fakeDeps();
+    deps.sharingOn = async () => {
+      throw new Error("Request failed with status code 404");
+    };
+    const acks = await run(deps, { club_date: TODAY, user_ids: ["101"] });
+
+    assert.deepEqual(acks, []);
+    assert.deepEqual(deps.posts, []);
   });
 
 test("birthday_post: the banner's file name carries the club day", async () => {
