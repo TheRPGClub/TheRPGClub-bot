@@ -79,3 +79,7 @@ export const CHALLENGE_SANTA_PICK_PREFIX = "challenge-santa-pick-v1";
 export const CODEX_CUSTOM_ID_PREFIX = "codex-";
 /** /codex fun-fact delete: the question's Delete and Keep buttons, keyed by Fun Fact ID. */
 export const CODEX_FUN_FACT_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}fun-fact`;
+/** /codex lore read: Previous, Next and Post this page, keyed by Lore Entry, page and owner. */
+export const CODEX_LORE_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}lore`;
+/** /codex history: Newer and Older, keyed by page and owner. */
+export const CODEX_HISTORY_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}history`;

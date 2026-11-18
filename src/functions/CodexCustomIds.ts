@@ -1,4 +1,8 @@
-import { CODEX_FUN_FACT_PREFIX } from "../config/customIdPrefixes.js";
+import {
+  CODEX_FUN_FACT_PREFIX,
+  CODEX_HISTORY_PREFIX,
+  CODEX_LORE_PREFIX,
+} from "../config/customIdPrefixes.js";
 
 // Club Codex custom IDs (spec api#397). Each holds what it acts on, and the clicking member
 // is who acts, so every button still works after a bot restart.
@@ -34,4 +38,84 @@ export function parseCodexFunFactId(
 export function parseCodexEntryOption(raw: string | undefined): number | null {
   const id = Number((raw ?? "").trim());
   return (raw ?? "").trim() && Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/** Who a /codex lore read or /codex history reply shows to: the member alone, or the channel. */
+export type CodexReplyVisibility = "private" | "public";
+
+const VISIBILITIES: readonly string[] = ["private", "public"];
+
+function parsePositive(raw: string | undefined): number | null {
+  const value = Number(raw);
+  return raw && /^\d+$/.test(raw) && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+/**
+ * /codex lore read's buttons: `page` turns to a page in place, and `post` posts the page
+ * publicly. Each holds the Lore Entry, the page (from 1), the member who ran the command
+ * (the only one the buttons answer) and the reply's visibility, so they work after a
+ * restart. Each custom ID is `<prefix>:<action>:<entry ID>:<page>:<owner>:<visibility>`.
+ */
+export const CODEX_LORE_ACTIONS = ["page", "post"] as const;
+
+export type CodexLoreAction = (typeof CODEX_LORE_ACTIONS)[number];
+
+export interface ICodexLoreTarget {
+  action: CodexLoreAction;
+  entryId: number;
+  page: number;
+  ownerId: string;
+  visibility: CodexReplyVisibility;
+}
+
+export function buildCodexLoreId(target: ICodexLoreTarget): string {
+  const { action, entryId, page, ownerId, visibility } = target;
+  return `${CODEX_LORE_PREFIX}:${action}:${entryId}:${page}:${ownerId}:${visibility}`;
+}
+
+export function parseCodexLoreId(customId: string): ICodexLoreTarget | null {
+  const [prefix, action, rawEntry, rawPage, ownerId, visibility, ...rest] = customId.split(":");
+  const entryId = parsePositive(rawEntry);
+  const page = parsePositive(rawPage);
+  if (
+    prefix !== CODEX_LORE_PREFIX || rest.length || entryId === null || page === null ||
+    !/^\d+$/.test(ownerId ?? "") || !VISIBILITIES.includes(visibility ?? "") ||
+    !(CODEX_LORE_ACTIONS as readonly string[]).includes(action ?? "")
+  ) {
+    return null;
+  }
+  return {
+    action: action as CodexLoreAction,
+    entryId,
+    page,
+    ownerId,
+    visibility: visibility as CodexReplyVisibility,
+  };
+}
+
+/**
+ * /codex history's Newer and Older buttons: the page to show (from 1, newest first), the
+ * member who ran the command and the reply's visibility. Each custom ID is
+ * `<prefix>:page:<page>:<owner>:<visibility>`.
+ */
+export interface ICodexHistoryTarget {
+  page: number;
+  ownerId: string;
+  visibility: CodexReplyVisibility;
+}
+
+export function buildCodexHistoryId(target: ICodexHistoryTarget): string {
+  return `${CODEX_HISTORY_PREFIX}:page:${target.page}:${target.ownerId}:${target.visibility}`;
+}
+
+export function parseCodexHistoryId(customId: string): ICodexHistoryTarget | null {
+  const [prefix, action, rawPage, ownerId, visibility, ...rest] = customId.split(":");
+  const page = parsePositive(rawPage);
+  if (
+    prefix !== CODEX_HISTORY_PREFIX || action !== "page" || rest.length || page === null ||
+    !/^\d+$/.test(ownerId ?? "") || !VISIBILITIES.includes(visibility ?? "")
+  ) {
+    return null;
+  }
+  return { page, ownerId, visibility: visibility as CodexReplyVisibility };
 }

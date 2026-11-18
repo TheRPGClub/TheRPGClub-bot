@@ -13,3 +13,5 @@ import { Discord, SlashGroup } from "discordx";
 export class CodexCommand {}
 
 export { CodexFunFactCommand } from "./codex/codex-fun-fact.command.js";
+export { CodexLoreCommand } from "./codex/codex-lore.command.js";
+export { CodexHistoryCommand } from "./codex/codex-history.command.js";

@@ -1,4 +1,4 @@
-import type { ICodexMember } from "../services/CodexApi.js";
+import type { ICodexEntry, ICodexMember } from "../services/CodexApi.js";
 
 // Club Codex text helpers shared by every part's Discord views.
 
@@ -18,3 +18,31 @@ export function plainCodexText(
     return member ? `@${member.name}` : token;
   });
 }
+
+/**
+ * A Club Codex date at the precision the club knows it: "12 August 2020", "March 2018"
+ * or "2016". Null when there is no date. The date is a calendar date, read in UTC.
+ */
+export function formatCodexDate(
+  occurredOn: string | null,
+  precision: "day" | "month" | "year" | null,
+): string | null {
+  if (!occurredOn || !precision || !/^\d{4}-\d{2}-\d{2}$/.test(occurredOn)) return null;
+  const date = new Date(`${occurredOn}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts: Intl.DateTimeFormatOptions = precision === "year"
+    ? { year: "numeric" }
+    : precision === "month"
+      ? { month: "long", year: "numeric" }
+      : { day: "numeric", month: "long", year: "numeric" };
+  return date.toLocaleDateString("en-GB", { ...parts, timeZone: "UTC" });
+}
+
+/** Each History Event Kind as members read it. */
+export const HISTORY_KIND_LABELS: Readonly<Record<NonNullable<ICodexEntry["kind"]>, string>> = {
+  founding: "Founding",
+  staff: "Staff",
+  platform: "Platform",
+  rules: "Rules",
+  milestone: "Milestone",
+};
