@@ -87,6 +87,11 @@ function fakeApi(options: {
       fail();
       return facts.some((f) => f.id === id);
     },
+    draw: async (actingUserId) => {
+      api.calls.push(`draw ${actingUserId}`);
+      fail();
+      return facts[0] ?? null;
+    },
   };
   return api;
 }
