@@ -208,9 +208,9 @@ export async function birthDateStartReply(
   const birthDates = deps.birthDates ?? BIRTH_DATE_API;
   let saved: string | null;
   try {
-    const document = await birthDates.setBirthDate(
+    const document = await birthDates.updateBirthDate(
       input.actingUserId,
-      input.birthDate.trim(),
+      { birthDate: input.birthDate.trim() },
       input.actingUserId,
     );
     saved = document.birthDate;
