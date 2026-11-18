@@ -7,6 +7,7 @@ import type {
   IUpcomingReleaseResult,
 } from "../types/GameTypes.js";
 import type { HltbCacheEntry } from "../classes/HltbCache.js";
+import { logWarn } from "../utilities/LogUtils.js";
 
 export const IGDB_REGION_MAP: Record<number, { code: string; name: string }> = {
   1: { code: "EU", name: "Europe" },
@@ -185,14 +186,15 @@ export function mapReleaseRow(row: any): IRelease {
 }
 
 export function mapReleaseFromApi(data: ReleaseApiData): IRelease {
+  const releaseDate = parseCalendarDate(data.release_date);
   return {
     id: Number(data.release_id),
     gameId: Number(data.game_id),
     platformId: Number(data.platform_id),
     regionId: Number(data.region_id),
     format: data.format ? (data.format as "Physical" | "Digital") : null,
-    releaseDate: data.release_date ? new Date(data.release_date) : null,
-    datePrecision: mapDatePrecision(data.date_precision, Boolean(data.release_date)),
+    releaseDate,
+    datePrecision: mapDatePrecision(data.date_precision, Boolean(releaseDate)),
     notes: data.notes ?? null,
   };
 }
@@ -206,8 +208,10 @@ function mapDatePrecision(
   if (!hasDate) return "tba";
   if (value === undefined || value === null) return "day";
   const known = DATE_PRECISIONS.find((precision) => precision === value);
-  // An unknown precision is never shown as an exact day.
-  return known ?? "tba";
+  if (known) return known;
+  // An unknown precision is never shown as an exact day; the warning makes API drift visible.
+  logWarn("GameMappers.mapDatePrecision", `Unknown date_precision "${value}", shown as TBA.`);
+  return "tba";
 }
 
 export function mapPlatformFromApi(data: PlatformApiData): IPlatformDef {

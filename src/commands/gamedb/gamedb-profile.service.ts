@@ -25,7 +25,7 @@ import {
 } from "../../functions/ComponentsV2Utils.js";
 import { truncateWithEllipsis } from "../../utilities/ValidationUtils.js";
 import { formatPlatformDisplayName } from "../../functions/PlatformDisplay.js";
-import { formatReleaseDate } from "../../functions/DateFormatUtils.js";
+import { formatReleaseDate, releaseCalendarPlacement } from "../../functions/DateFormatUtils.js";
 import { renderUsernameWithEmoji } from "../../services/UserEmojiService.js";
 import { padCommandName } from "../help.command.js";
 import type { IGame, IRelease } from "../../types/GameTypes.js";
@@ -127,31 +127,10 @@ export function isGameReleased(game: IGame, releases: IRelease[]): boolean {
   return earliestReleaseTimestamp <= Date.now();
 }
 
-// Where a Release sits in the Releases table, following the Release Calendar's placement:
-// a month before day 1 of its month, a quarter after its last day, a year after its Q4,
-// and TBA last. Each key is [UTC timestamp, tie-break rank].
-function releaseSortKey(release: IRelease): [number, number] {
-  const date = release.releaseDate;
-  if (!date || Number.isNaN(date.getTime()) || release.datePrecision === "tba") {
-    return [Number.POSITIVE_INFINITY, 0];
-  }
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
-  switch (release.datePrecision) {
-    case "month":
-      return [Date.UTC(year, month, 1), 0];
-    case "quarter":
-      return [Date.UTC(year, Math.floor(month / 3) * 3 + 3, 1), -2];
-    case "year":
-      return [Date.UTC(year + 1, 0, 1), -1];
-    default:
-      return [date.getTime(), 1];
-  }
-}
-
 function compareReleasesByDate(a: IRelease, b: IRelease): number {
-  const [aTime, aRank] = releaseSortKey(a);
-  const [bTime, bRank] = releaseSortKey(b);
+  // Releases sit where the Release Calendar places them.
+  const [aTime, aRank] = releaseCalendarPlacement(a.releaseDate, a.datePrecision);
+  const [bTime, bRank] = releaseCalendarPlacement(b.releaseDate, b.datePrecision);
   if (aTime !== bTime) return aTime < bTime ? -1 : 1;
   return aRank - bRank;
 }
