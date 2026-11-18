@@ -3,14 +3,12 @@ import { DateTime } from "luxon";
 import { HOME_GUILD_ID } from "../config/guilds.js";
 import { fetchImageBuffer } from "./GameImageService.js";
 import { bannerDescription, composeBirthdayBanner } from "./BirthdayBanner.js";
+import { BIRTHDAY_TIME_ZONE } from "./UpcomingBirthdaysService.js";
 
 // The Birthday Post (spec api#396, bot#1559): one message a club day in the general chat
 // channel greeting every member whose shared Birthday it is. Design picks 1A + 1C: plain
 // message text that pings each member and closes with a line from the club, over a
 // generated "HAPPY BIRTHDAY" banner with their avatars.
-
-/** The club's day changes at midnight New York time, as the API's club days do. */
-export const CLUB_TIME_ZONE = "America/New_York";
 
 /** A member being greeted, as Discord has them now. */
 export interface IBirthdayMember {
@@ -64,7 +62,7 @@ export function birthdayPostContent(userIds: readonly string[]): string {
 
 /** "18 November", for the banner's top line. */
 export function clubDateLabel(clubDate: string): string {
-  return DateTime.fromISO(clubDate, { zone: CLUB_TIME_ZONE }).toFormat("d LLLL");
+  return DateTime.fromISO(clubDate, { zone: BIRTHDAY_TIME_ZONE }).toFormat("d LLLL");
 }
 
 function isUnknownMember(err: unknown): boolean {
@@ -74,7 +72,7 @@ function isUnknownMember(err: unknown): boolean {
 
 export function createBirthdayPostDeps(client: Client): IBirthdayPostDeps {
   return {
-    clubToday: () => DateTime.now().setZone(CLUB_TIME_ZONE).toISODate() ?? "",
+    clubToday: () => DateTime.now().setZone(BIRTHDAY_TIME_ZONE).toISODate() ?? "",
     fetchMember: async (userId) => {
       try {
         const guild = await client.guilds.fetch(HOME_GUILD_ID);
