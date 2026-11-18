@@ -49,7 +49,7 @@ export function getReleaseYear(
   const date = releaseDate instanceof Date ? releaseDate : new Date(releaseDate);
   if (Number.isNaN(date.getTime())) return null;
 
-  return date.getFullYear();
+  return date.getUTCFullYear();
 }
 
 export function formatGameTitleWithYear(

@@ -1,6 +1,11 @@
-import { apiGet } from "../services/RpgClubApiClient.js";
+import type { AxiosRequestConfig } from "axios";
+import { apiGet, apiGetOrThrow } from "../services/RpgClubApiClient.js";
 import GameSearchSynonym from "./GameSearchSynonym.js";
-import { mapGameFromApi } from "../functions/GameMappers.js";
+import {
+  mapGameFromApi,
+  mapUpcomingReleaseFromApi,
+  type UpcomingReleaseApiData,
+} from "../functions/GameMappers.js";
 import {
   findAccentedSpelling,
   foldAccents,
@@ -9,14 +14,52 @@ import { createTtlCache } from "../functions/TtlCache.js";
 import { AUTOCOMPLETE_CACHE_TTL_MS } from "../config/cacheDefaults.js";
 import type {
   IGame,
-  IGameSearchResult,
+  IGameWithPlatforms,
   IGameAutocompleteResult,
+  IUpcomingReleaseResult,
 } from "../types/GameTypes.js";
 import GamePlatformRegionService from "./GamePlatformRegionService.js";
 import GameProfileService from "./GameProfileService.js";
 import { logError } from "../utilities/LogUtils.js";
 
 type GamesListResponse = { data: unknown[]; meta: { next: number | null } };
+type UpcomingListResponse = {
+  data: UpcomingReleaseApiData[];
+  meta: { next: number | null };
+};
+
+const UPCOMING_RELEASES_PATH = "/api/v1/upcoming_releases";
+const UPCOMING_PAGE_SIZE = 100;
+// Past this many ids the query string nears Puma's limit, so the whole Release Calendar is
+// read and matched here instead. `per_game=next` is per game, so the entries are the same.
+const UPCOMING_GAME_ID_LIMIT = 500;
+
+/** The `/gamedb search` filters; the command's custom ids encode the same fields. */
+export interface ISearchFilters {
+  upcomingRelease?: boolean;
+  platformId?: number;
+  year?: number;
+  developerId?: number;
+  publisherId?: number;
+}
+
+/** The part of a game's relations the developer and publisher filters read. */
+export interface IGameCompanyRoles {
+  companies?: Array<{ company_id: number | string; role: string | null }>;
+}
+
+/** What a search reaches outside itself; tests pass fakes. */
+export interface IGameSearchDeps {
+  /** GET that answers null on 404. */
+  get: <T>(path: string, config?: AxiosRequestConfig) => Promise<T | null>;
+  /** GET that throws the AxiosError on any non-2xx, so callers can show it. */
+  getOrThrow: <T>(path: string, config?: AxiosRequestConfig) => Promise<T>;
+  synonymsFor: (term: string) => Promise<string[]>;
+  accentedSpellings: (foldedTerms: string[]) => Promise<string[]>;
+  relationsFor: (gameId: number) => Promise<IGameCompanyRoles | null>;
+  /** Every GameDB game with its first release date (the cached title list). */
+  listGames: () => Promise<IGameAutocompleteResult[]>;
+}
 
 const MAX_QUERY_VARIANTS = 8;
 
@@ -30,11 +73,12 @@ type IIndexedGameTitle = {
 export default class GameSearchService {
   private static async fetchGamesPages(
     params: Record<string, unknown>,
+    get: IGameSearchDeps["get"] = apiGet,
   ): Promise<IGame[]> {
     const results: IGame[] = [];
     let page = 1;
     for (;;) {
-      const result = await apiGet<GamesListResponse>("/api/v1/games", {
+      const result = await get<GamesListResponse>("/api/v1/games", {
         params: { ...params, page, per: 100 },
       });
       if (!result?.data?.length) break;
@@ -70,7 +114,10 @@ export default class GameSearchService {
     return Array.from(spellings).slice(0, MAX_QUERY_VARIANTS);
   }
 
-  private static async buildQueryVariants(baseQuery: string): Promise<string[]> {
+  private static async buildQueryVariants(
+    baseQuery: string,
+    synonymsFor: IGameSearchDeps["synonymsFor"],
+  ): Promise<string[]> {
     if (!baseQuery) return [];
 
     const queryVariants = new Set<string>();
@@ -85,7 +132,7 @@ export default class GameSearchService {
     for (const token of tokens) {
       const options = new Set<string>();
       options.add(token);
-      const tokenSynonyms = await GameSearchSynonym.getTermsForQuery(token);
+      const tokenSynonyms = await synonymsFor(token);
       tokenSynonyms.forEach((synonym) => {
         if (synonym.trim()) options.add(synonym.trim());
       });
@@ -201,136 +248,193 @@ export default class GameSearchService {
     return matched.slice(0, safeLimit).map((entry) => entry.game);
   }
 
+  private static readonly defaultDeps: IGameSearchDeps = {
+    get: apiGet,
+    getOrThrow: apiGetOrThrow,
+    synonymsFor: (term) => GameSearchSynonym.getTermsForQuery(term),
+    accentedSpellings: (terms) => GameSearchService.findAccentedSpellings(terms),
+    relationsFor: (gameId) => GameProfileService.getGameRelations(gameId),
+    listGames: async () =>
+      (await GameSearchService.gameTitleCache.get()).map((entry) => entry.game),
+  };
+
+  /**
+   * Games whose title matches the query (with its synonyms and accented spellings) and,
+   * when given, that involve one of the companies. With no query, every such game.
+   */
+  private static async fetchTitleMatches(
+    baseQuery: string,
+    companyIds: number[],
+    deps: IGameSearchDeps,
+  ): Promise<IGame[]> {
+    const queryTerms = await GameSearchService.buildQueryVariants(
+      baseQuery, deps.synonymsFor,
+    );
+    if (baseQuery && !queryTerms.length) return [];
+
+    const fetchParams: Record<string, unknown> = {};
+    if (companyIds.length) fetchParams.company_id = companyIds;
+    const gameMap = new Map<number, IGame>();
+    const terms = queryTerms.length
+      ? [...queryTerms, ...(await deps.accentedSpellings(queryTerms))]
+      : [null];
+    for (const term of terms) {
+      const params = term === null ? fetchParams : { ...fetchParams, q: term };
+      const rows = await GameSearchService.fetchGamesPages(params, deps.get);
+      rows.forEach((g) => gameMap.set(g.id, g));
+    }
+    return Array.from(gameMap.values());
+  }
+
+  /** Keeps the games first released in the year (read in UTC, as release dates are). */
+  private static firstReleasedIn<T extends Pick<IGame, "initialReleaseDate">>(
+    games: T[],
+    year: number,
+  ): T[] {
+    return games.filter((g) => g.initialReleaseDate?.getUTCFullYear() === year);
+  }
+
+  private static companyIdsOf(filters: ISearchFilters): number[] {
+    return [filters.developerId, filters.publisherId].filter(
+      (id): id is number => typeof id === "number" && Number.isFinite(id) && id > 0,
+    );
+  }
+
+  /** Keeps the items whose game has the developer and publisher the filters ask for. */
+  private static async filterByCompanyRoles<T extends { id: number }>(
+    items: T[],
+    filters: ISearchFilters,
+    relationsFor: IGameSearchDeps["relationsFor"],
+  ): Promise<T[]> {
+    if (!filters.developerId && !filters.publisherId) return items;
+    const checked = await Promise.all(
+      items.map(async (item) => {
+        const companies = (await relationsFor(item.id))?.companies ?? [];
+        const hasRole = (role: string, companyId: number | undefined): boolean =>
+          !companyId ||
+          companies.some((c) => c.role === role && Number(c.company_id) === companyId);
+        return hasRole("Developer", filters.developerId) &&
+          hasRole("Publisher", filters.publisherId)
+          ? item
+          : null;
+      }),
+    );
+    return checked.filter((item): item is Awaited<T> => item !== null);
+  }
+
+  /** Every page of the Release Calendar, one entry per game (its next one). */
+  private static async fetchNextUpcomingReleases(
+    gameIds: number[] | null,
+    platformId: number | undefined,
+    getOrThrow: IGameSearchDeps["getOrThrow"],
+  ): Promise<IUpcomingReleaseResult[]> {
+    const params: Record<string, unknown> = { per_game: "next", per: UPCOMING_PAGE_SIZE };
+    const sendIds = gameIds !== null && gameIds.length <= UPCOMING_GAME_ID_LIMIT;
+    // Comma-separated, because a plain repeated `game_id=` keeps only the last id in Rails.
+    if (sendIds) params.game_id = gameIds.join(",");
+    if (platformId) params.platform_id = String(platformId);
+
+    const rows: IUpcomingReleaseResult[] = [];
+    let page = 1;
+    for (;;) {
+      const result = await getOrThrow<UpcomingListResponse>(UPCOMING_RELEASES_PATH, {
+        params: { ...params, page },
+      });
+      rows.push(...(result?.data ?? []).map(mapUpcomingReleaseFromApi));
+      const next = result?.meta?.next;
+      if (!next || next <= page) break;
+      page = next;
+    }
+    if (gameIds && !sendIds) {
+      const wanted = new Set(gameIds);
+      return rows.filter((row) => wanted.has(row.id));
+    }
+    return rows;
+  }
+
+  /**
+   * `/gamedb search upcoming_release:true`: each matching game once, on its next Upcoming
+   * Release, in Release Calendar order. Title, year and company filters are resolved to
+   * game ids first; the platform filter goes to the Release Calendar as is.
+   * Throws the AxiosError when the Release Calendar answers with an error.
+   */
+  static async searchUpcomingReleases(
+    query: string,
+    filters: ISearchFilters = {},
+    deps: IGameSearchDeps = GameSearchService.defaultDeps,
+  ): Promise<IUpcomingReleaseResult[]> {
+    const baseQuery = query.trim();
+    const companyIds = GameSearchService.companyIdsOf(filters);
+
+    let candidates: Array<Pick<IGame, "id" | "initialReleaseDate">> | null = null;
+    if (baseQuery || companyIds.length) {
+      candidates = await GameSearchService.fetchTitleMatches(baseQuery, companyIds, deps);
+    } else if (filters.year) {
+      candidates = await deps.listGames();
+    }
+    if (candidates && filters.year) {
+      candidates = GameSearchService.firstReleasedIn(candidates, filters.year);
+    }
+    if (candidates && !candidates.length) return [];
+
+    const rows = await GameSearchService.fetchNextUpcomingReleases(
+      candidates?.map((g) => g.id) ?? null,
+      filters.platformId,
+      deps.getOrThrow,
+    );
+    // With no candidates, the game dates come from the cached title list, not from /games.
+    const games = candidates ?? (rows.length ? await deps.listGames() : []);
+    const labelled = GameSearchService.withGameReleaseDates(rows, games);
+    return GameSearchService.filterByCompanyRoles(labelled, filters, deps.relationsFor);
+  }
+
+  /**
+   * The "Title (Year)" label reads the game's own first release date, as a plain search
+   * and the year filter do; the Release Calendar's dates are only the fallback.
+   */
+  private static withGameReleaseDates(
+    rows: IUpcomingReleaseResult[],
+    games: Array<Pick<IGame, "id" | "initialReleaseDate">>,
+  ): IUpcomingReleaseResult[] {
+    const releaseDates = new Map(games.map((g) => [g.id, g.initialReleaseDate]));
+    return rows.map((row) => ({
+      ...row,
+      initialReleaseDate: releaseDates.get(row.id) ?? row.initialReleaseDate,
+    }));
+  }
+
+  /**
+   * Title and filter search over GameDB games, ordered by title. The upcoming Release
+   * filter is not handled here: `searchUpcomingReleases` answers it.
+   */
   static async searchGames(
     query: string,
-    filters: {
-      upcomingRelease?: boolean;
-      platformId?: number;
-      year?: number;
-      developerId?: number;
-      publisherId?: number;
-    } = {},
-  ): Promise<IGameSearchResult[]> {
+    filters: Omit<ISearchFilters, "upcomingRelease"> = {},
+  ): Promise<IGameWithPlatforms[]> {
+    const deps = GameSearchService.defaultDeps;
     const baseQuery = query.trim();
     const hasFilters =
-      filters.upcomingRelease ||
-      filters.platformId ||
-      filters.year ||
-      filters.developerId ||
-      filters.publisherId;
+      filters.platformId || filters.year || filters.developerId || filters.publisherId;
     if (!baseQuery && !hasFilters) {
       return [];
     }
 
-    const companyIds = [filters.developerId, filters.publisherId].filter(
-      (id): id is number => typeof id === "number" && Number.isFinite(id) && id > 0,
+    let games = await GameSearchService.fetchTitleMatches(
+      baseQuery, GameSearchService.companyIdsOf(filters), deps,
     );
 
-    const queryTerms = await GameSearchService.buildQueryVariants(baseQuery);
-    if (baseQuery && !queryTerms.length) {
-      return [];
-    }
-
-    const gameMap = new Map<number, IGame>();
-    const fetchParams: Record<string, unknown> = {};
-    if (companyIds.length) fetchParams.company_id = companyIds;
-
-    if (queryTerms.length) {
-      const accentedTerms = await GameSearchService.findAccentedSpellings(queryTerms);
-      for (const term of [...queryTerms, ...accentedTerms]) {
-        const rows = await GameSearchService.fetchGamesPages({
-          ...fetchParams,
-          q: term,
-        });
-        rows.forEach((g) => gameMap.set(g.id, g));
-      }
-    } else {
-      const rows = await GameSearchService.fetchGamesPages(fetchParams);
-      rows.forEach((g) => gameMap.set(g.id, g));
-    }
-
-    let games = Array.from(gameMap.values());
-
     if (filters.year) {
-      const targetYear = filters.year;
-      games = games.filter(
-        (g) => g.initialReleaseDate?.getUTCFullYear() === targetYear,
-      );
+      games = GameSearchService.firstReleasedIn(games, filters.year);
     }
 
-    if (filters.developerId || filters.publisherId) {
-      const checked = await Promise.all(
-        games.map(async (g) => {
-          const relations = await GameProfileService.getGameRelations(g.id);
-          const companies = relations?.companies ?? [];
-          const devOk =
-            !filters.developerId ||
-            companies.some(
-              (c) => c.role === "Developer" && Number(c.company_id) === filters.developerId,
-            );
-          const pubOk =
-            !filters.publisherId ||
-            companies.some(
-              (c) => c.role === "Publisher" && Number(c.company_id) === filters.publisherId,
-            );
-          return devOk && pubOk ? g : null;
-        }),
-      );
-      games = checked.filter((g): g is IGame => g !== null);
-    }
+    games = await GameSearchService.filterByCompanyRoles(games, filters, deps.relationsFor);
 
-    const upcomingDates = new Map<number, Date | null>();
-    const upcomingPlatforms = new Map<number, string[]>();
-    if (filters.upcomingRelease) {
-      const now = Date.now();
-      const withUpcoming = await Promise.all(
-        games.map(async (g) => {
-          const relations = await GameProfileService.getGameRelations(g.id);
-          const futureReleases = (relations?.releases ?? [])
-            .filter((r) => r.release_date && new Date(r.release_date).getTime() > now)
-            .sort(
-              (a, b) =>
-                new Date(a.release_date!).getTime() - new Date(b.release_date!).getTime(),
-            );
-          if (!futureReleases.length) return null;
-          const upcomingTime = new Date(futureReleases[0].release_date!).getTime();
-          const platformsAtDate = Array.from(
-            new Set(
-              futureReleases
-                .filter((r) => new Date(r.release_date!).getTime() === upcomingTime)
-                .map((r) => r.platform_name)
-                .filter((v): v is string => Boolean(v)),
-            ),
-          );
-          upcomingDates.set(g.id, new Date(upcomingTime));
-          upcomingPlatforms.set(g.id, platformsAtDate);
-          return g;
-        }),
-      );
-      games = withUpcoming.filter((g): g is IGame => g !== null);
-    }
-
-    const withPlatforms = await GamePlatformRegionService.attachPlatformsToGames(games);
-    let results: IGameSearchResult[] = withPlatforms.map((g) => ({
-      ...g,
-      upcomingReleaseDate: upcomingDates.get(g.id) ?? null,
-      upcomingReleasePlatforms: upcomingPlatforms.get(g.id) ?? [],
-    }));
-
+    let results = await GamePlatformRegionService.attachPlatformsToGames(games);
     if (filters.platformId) {
       const platformId = filters.platformId;
       results = results.filter((g) => g.platforms.some((p) => p.id === platformId));
     }
 
-    results.sort((a, b) => {
-      if (filters.upcomingRelease) {
-        const aTime = a.upcomingReleaseDate?.getTime() ?? Number.POSITIVE_INFINITY;
-        const bTime = b.upcomingReleaseDate?.getTime() ?? Number.POSITIVE_INFINITY;
-        if (aTime !== bTime) return aTime - bTime;
-      }
-      return a.title.localeCompare(b.title);
-    });
-
-    return results;
+    return results.sort((a, b) => a.title.localeCompare(b.title));
   }
 }

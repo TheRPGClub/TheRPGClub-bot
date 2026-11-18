@@ -35,9 +35,7 @@ import {
 } from "../../services/IGDB/IgdbSelectService.js";
 import { showGameProfile, trimTextDisplayContent } from "./gamedb-profile.service.js";
 import { isPositiveInt } from "../../utilities/ValidationUtils.js";
-import { logError, logWarn } from "../../utilities/LogUtils.js";
 import { apiGet, apiPost } from "../../services/RpgClubApiClient.js";
-import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { importReleaseDatesFromIgdb } from "../../functions/GameIgdbSync.js";
 import GameSearchService from "../../classes/GameSearchService.js";
 import {
@@ -81,63 +79,6 @@ function buildApiCandidateSelectOptions(candidates: IGdbApiCandidate[]): IgdbSel
       description: c.summary ? c.summary.substring(0, 100) : "No summary",
     };
   });
-}
-
-export async function processReleaseDates(
-  gameId: number,
-  releaseDates: any[],
-): Promise<void> {
-  if (!releaseDates || !Array.isArray(releaseDates)) {
-    return;
-  }
-
-  const platformIds: number[] = [];
-  for (const release of releaseDates) {
-    const platformId: number | null = typeof release.platform === "number"
-      ? release.platform
-      : (release.platform?.id ?? null);
-    if (platformId) {
-      platformIds.push(platformId);
-    }
-  }
-  const uniquePlatformIds: number[] = Array.from(new Set(platformIds));
-  const platformMap = await GamePlatformRegionService.getPlatformsByIgdbIds(uniquePlatformIds);
-  const missingPlatformIds = uniquePlatformIds.filter((id) => !platformMap.has(id));
-  if (missingPlatformIds.length) {
-    logWarn(
-      "GamedbAdd.addGame",
-      `Missing IGDB platform IDs in GAMEDB_PLATFORMS: ${missingPlatformIds.join(", ")}`,
-    );
-  }
-
-  for (const release of releaseDates) {
-    const platformId: number | null = typeof release.platform === "number"
-      ? release.platform
-      : (release.platform?.id ?? null);
-    if (!platformId || !release.region) {
-      continue;
-    }
-
-    const platform = platformMap.get(platformId);
-    const region = await GamePlatformRegionService.ensureRegion(release.region);
-
-    if (!platform || !region) {
-      continue;
-    }
-
-    try {
-      await Game.addReleaseInfo(
-        gameId,
-        platform.id,
-        region.id,
-        "Physical",
-        release.date ? new Date(release.date * 1000) : null,
-        null,
-      );
-    } catch (err) {
-      logError("GamedbAddCommand.addRelease", err);
-    }
-  }
 }
 
 export async function addGameToDatabase(

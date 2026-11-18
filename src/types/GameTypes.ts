@@ -18,6 +18,8 @@ export interface IGame {
   coverUrl: string | null;
 }
 
+export type DatePrecision = "day" | "month" | "quarter" | "year" | "tba";
+
 export interface IRelease {
   id: number;
   gameId: number;
@@ -25,6 +27,7 @@ export interface IRelease {
   regionId: number;
   format: "Physical" | "Digital" | null;
   releaseDate: Date | null;
+  datePrecision: DatePrecision;
   notes: string | null;
 }
 
@@ -45,9 +48,29 @@ export interface IGameWithPlatforms extends IGame {
   platforms: IPlatformDef[];
 }
 
-export interface IGameSearchResult extends IGameWithPlatforms {
-  upcomingReleaseDate: Date | null;
-  upcomingReleasePlatforms: string[];
+/** One Release inside an Upcoming Release, with the names a search row shows. */
+export interface IUpcomingReleaseItem {
+  platformId: number;
+  platformName: string;
+  platformAbbreviation: string | null;
+  regionCode: string;
+  regionName: string;
+}
+
+/** A game's next Upcoming Release, as `/gamedb search upcoming_release:true` lists it. */
+export interface IUpcomingReleaseResult {
+  /** Tells an upcoming search row apart from a plain search's game row. */
+  kind: "upcoming";
+  id: number;
+  title: string;
+  /**
+   * Year source for the "Title (Year)" label: the game's own first release date, else the
+   * Release Calendar's first dated Release, else this entry's date.
+   */
+  initialReleaseDate: Date | null;
+  date: Date | null;
+  datePrecision: DatePrecision;
+  releases: IUpcomingReleaseItem[];
 }
 
 export interface IGameAutocompleteResult {

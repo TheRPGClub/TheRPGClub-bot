@@ -14,7 +14,7 @@ export interface IReleaseAnnouncementCandidate {
   igdbUrl: string | null;
 }
 
-type ReleaseAnnouncementDueData = {
+export type ReleaseAnnouncementDueData = {
   id: number;
   release_id: number;
   game_id: number;
@@ -45,7 +45,7 @@ function clampBatchSize(limit: number): number {
   return Math.min(MAX_BATCH_SIZE, Math.max(1, Math.floor(asNumber)));
 }
 
-function mapDueData(d: ReleaseAnnouncementDueData): IReleaseAnnouncementCandidate {
+export function mapDueData(d: ReleaseAnnouncementDueData): IReleaseAnnouncementCandidate {
   return {
     announcementId: d.id,
     releaseId: d.release_id,

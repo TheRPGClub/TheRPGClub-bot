@@ -43,7 +43,6 @@ import {
   buildSearchRecoveryComponents,
   decodeISearchFilters,
   GAME_SEARCH_PAGE_SIZE,
-  type ISearchFilters,
 } from "./gamedb-utils.js";
 import {
   buildGameProfile,
@@ -57,20 +56,98 @@ import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { buildSelectRow } from "../../functions/uiComponents.js";
-import GameSearchService from "../../classes/GameSearchService.js";
+import GameSearchService, { type ISearchFilters } from "../../classes/GameSearchService.js";
+import { formatReleaseDate } from "../../functions/DateFormatUtils.js";
+import type {
+  IGameWithPlatforms,
+  IUpcomingReleaseItem,
+  IUpcomingReleaseResult,
+} from "../../types/GameTypes.js";
 import {
   formatGameTitleWithYear,
   parseTitleWithYear,
 } from "../../functions/GameTitleAutocompleteUtils.js";
 
-function formatUpcomingDate(date: Date | null | undefined): string {
-  if (!date) return "";
-  const d = date instanceof Date ? date : new Date(date);
-  if (Number.isNaN(d.getTime())) return "";
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  return `\`${mm}/${dd}/${yyyy}\``;
+type SearchRow = IGameWithPlatforms | IUpcomingReleaseResult;
+
+function isUpcomingRow(row: SearchRow): row is IUpcomingReleaseResult {
+  return "kind" in row && row.kind === "upcoming";
+}
+
+/** Runs the search the filters ask for: the Release Calendar when upcoming_release is set. */
+function searchFor(searchTerm: string, filters: ISearchFilters): Promise<SearchRow[]> {
+  return filters.upcomingRelease
+    ? GameSearchService.searchUpcomingReleases(searchTerm, filters)
+    : GameSearchService.searchGames(searchTerm, filters);
+}
+
+/** Each platform once, with its regions unless they are all Worldwide: "PS5 (NA, JP)". */
+function formatUpcomingPlatforms(releases: IUpcomingReleaseItem[]): string {
+  type PlatformRegions = { label: string; regions: Array<{ code: string; worldwide: boolean }> };
+  const byPlatform = new Map<number, PlatformRegions>();
+  for (const r of releases) {
+    const platform = byPlatform.get(r.platformId) ?? {
+      label: (r.platformAbbreviation?.trim() || r.platformName).trim(),
+      regions: [],
+    };
+    if (!platform.regions.some((region) => region.code === r.regionCode)) {
+      platform.regions.push({ code: r.regionCode, worldwide: r.regionName === "Worldwide" });
+    }
+    byPlatform.set(r.platformId, platform);
+  }
+  return Array.from(byPlatform.values(), ({ label, regions }) =>
+    regions.every((region) => region.worldwide)
+      ? label
+      : `${label} (${regions.map((region) => region.code).join(", ")})`,
+  ).join(", ");
+}
+
+function describeSearchRow(row: SearchRow): {
+  title: string;
+  date: string | null;
+  platforms: string;
+} {
+  const title = formatGameTitleWithYear({
+    title: String(row.title ?? ""),
+    initialReleaseDate: row.initialReleaseDate,
+  });
+  if (isUpcomingRow(row)) {
+    return {
+      title,
+      date: formatReleaseDate(row.date, row.datePrecision),
+      platforms: formatUpcomingPlatforms(row.releases),
+    };
+  }
+  const platforms = (row.platforms ?? []).map((p) => p.abbreviation ?? p.name);
+  return { title, date: null, platforms: platforms.join(", ") };
+}
+
+function formatSearchListLine(row: SearchRow): string {
+  const { title, date, platforms } = describeSearchRow(row);
+  if (date !== null) {
+    return `• \`${date}\` **${title}**${platforms ? ` - ${platforms}` : ""}`;
+  }
+  return `• **${title}**${platforms ? ` (${platforms})` : ""}`;
+}
+
+/**
+ * Runs the search, or shows its failure (with the request and response for an API error)
+ * as an ephemeral follow-up and answers null.
+ */
+async function searchOrReply(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+  searchTerm: string,
+  filters: ISearchFilters,
+): Promise<SearchRow[] | null> {
+  try {
+    return await searchFor(searchTerm, filters);
+  } catch (error) {
+    await safeReply(interaction, {
+      ...buildErrorReply(buildCaughtErrorMessage("Failed to search games", error), true),
+      __forceFollowUp: true,
+    });
+    return null;
+  }
 }
 
 async function buildFilterSummary(filters: ISearchFilters): Promise<string> {
@@ -99,7 +176,7 @@ export async function runSearchFlow(
   filters?: ISearchFilters,
 ): Promise<void> {
   const activeFilters = filters ?? {};
-  const results = await GameSearchService.searchGames(searchTerm, activeFilters);
+  const results = await searchFor(searchTerm, activeFilters);
 
   if (results.length === 0) {
     if (!searchTerm) {
@@ -127,7 +204,7 @@ export async function runSearchFlow(
 
 function buildSearchResponse(
   searchTerm: string,
-  results: any[],
+  results: SearchRow[],
   ownerId: string,
   page: number,
   includeList: boolean,
@@ -141,49 +218,19 @@ function buildSearchResponse(
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
   const start = safePage * GAME_SEARCH_PAGE_SIZE;
   const displayedResults = results.slice(start, start + GAME_SEARCH_PAGE_SIZE);
-  const showDates = filters?.upcomingRelease === true;
-  const resultList = displayedResults.map((game) => {
-    const titleWithYear = formatGameTitleWithYear({
-      title: String(game.title ?? ""),
-      initialReleaseDate: game.initialReleaseDate,
-    });
-    const dateStr = showDates ? formatUpcomingDate(game.upcomingReleaseDate) : "";
-    const platforms: string[] = game.upcomingReleasePlatforms?.length
-      ? game.upcomingReleasePlatforms
-      : (game.platforms ?? []).map((p: any) => p.abbreviation ?? p.name);
-    const platformStr = platforms.length ? ` (${platforms.join(", ")})` : "";
-    const datePart = dateStr ? `${dateStr} ` : "";
-    return `• ${datePart}**${titleWithYear}**${platformStr}`;
-  }).join("\n");
+  const resultList = displayedResults.map(formatSearchListLine).join("\n");
 
   const title = searchTerm
     ? `Search Results for "${searchTerm}" (Page ${safePage + 1}/${totalPages})`
     : `GameDB Search (Page ${safePage + 1}/${totalPages})`;
 
   const selectCustomId = buildSearchCustomId("select", ownerId, safePage, searchTerm, undefined, filters);
-  const options = displayedResults.map((game) => {
-    const gameTitle = String(game.title ?? "");
-    const label = formatGameTitleWithYear({
-      title: gameTitle,
-      initialReleaseDate: game.initialReleaseDate,
-    });
-    const upcomingDate = showDates ? (game.upcomingReleaseDate as Date | null | undefined) : null;
-    const dateLabel = upcomingDate
-      ? (() => {
-        const d = upcomingDate instanceof Date ? upcomingDate : new Date(upcomingDate);
-        const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-        const dd = String(d.getUTCDate()).padStart(2, "0");
-        const yyyy = d.getUTCFullYear();
-        return `${mm}/${dd}/${yyyy}`;
-      })()
-      : null;
-    const releasePlatforms: string[] = game.upcomingReleasePlatforms
-      ?? (game.platforms ?? []).map((p: any) => p.abbreviation ?? p.name);
-    const platformLabel = releasePlatforms.length ? ` (${releasePlatforms.join(", ")})` : "";
-    const description = dateLabel ? `${dateLabel}${platformLabel}` : undefined;
+  const options = displayedResults.map((row) => {
+    const { title: label, date, platforms } = describeSearchRow(row);
+    const description = date !== null ? `${date}${platforms ? ` - ${platforms}` : ""}` : null;
     return {
       label: label.substring(0, 100),
-      value: String(game.id),
+      value: String(row.id),
       ...(description ? { description: description.substring(0, 100) } : {}),
     };
   });
@@ -359,7 +406,8 @@ export class GameDbSearchCommand {
       return;
     }
 
-    const results = await GameSearchService.searchGames(searchTerm, filters);
+    const results = await searchOrReply(interaction, searchTerm, filters);
+    if (!results) return;
 
     const gameId = Number(interaction.values?.[0]);
     if (!Number.isFinite(gameId)) {
@@ -431,7 +479,8 @@ export class GameDbSearchCommand {
     // Defer before the search: the API call can outlast Discord's 3 second window.
     await safeDeferUpdate(interaction);
 
-    const results = await GameSearchService.searchGames(searchTerm, filters);
+    const results = await searchOrReply(interaction, searchTerm, filters);
+    if (!results) return;
     const totalPages = Math.max(
       1,
       Math.ceil(results.length / GAME_SEARCH_PAGE_SIZE),
@@ -477,7 +526,8 @@ export class GameDbSearchCommand {
     // Acknowledge before the API search so a slow search cannot outlast Discord's 3s window.
     if (!(await safeDeferUpdate(interaction))) return;
 
-    const results = await GameSearchService.searchGames(searchTerm, filters);
+    const results = await searchOrReply(interaction, searchTerm, filters);
+    if (!results) return;
     if (results.length === 0) {
       const msg = searchTerm
         ? `No results found for "${searchTerm}".`

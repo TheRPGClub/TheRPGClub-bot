@@ -7,6 +7,7 @@ import GameReleaseAnnouncement, {
 import { NEW_GAME_ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { buildGameProfileMessagePayload } from "../commands/gamedb.command.js";
 import { buildComponentsV2EditFlags } from "../functions/ComponentsV2Utils.js";
+import { formatReleaseDate, toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import { startTrackedInterval } from "../utilities/IntervalUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
@@ -18,7 +19,6 @@ import { logError, logWarn } from "../utilities/LogUtils.js";
 // can trigger it manually instead of relying on a tight poll.
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const BATCH_SIZE = 25;
-const RELEASE_SCHEDULING_ZONE = "UTC";
 
 let gameReleaseTimer: NodeJS.Timeout | null = null;
 let currentlyChecking = false;
@@ -31,10 +31,12 @@ function isSendableTextChannel(channel: TextBasedChannel | null): channel is Sen
   return Boolean(channel && typeof (channel as any).send === "function");
 }
 
-function buildAnnouncementPreface(candidate: IReleaseAnnouncementCandidate): string {
-  const releaseTime = DateTime.fromJSDate(candidate.releaseDate).setZone(RELEASE_SCHEDULING_ZONE);
-  const releaseUnix = Math.floor(releaseTime.toSeconds());
-  return `## Upcoming Game Release\n<t:${releaseUnix}:F> (<t:${releaseUnix}:R>)`;
+// The day is plain text read in UTC: a Discord date stamp renders in the viewer's zone, so a
+// 5 March Release would read as 4 March in the Americas. Only the relative hint is a stamp.
+export function buildAnnouncementPreface(candidate: IReleaseAnnouncementCandidate): string {
+  const releaseDay = formatReleaseDate(candidate.releaseDate, "day");
+  const releaseUnix = toUnixTimestamp(candidate.releaseDate);
+  return `## Upcoming Game Release\n${releaseDay} (<t:${releaseUnix}:R>)`;
 }
 
 async function fetchGameNewsChannel(client: Client): Promise<SendableTextChannel | null> {
