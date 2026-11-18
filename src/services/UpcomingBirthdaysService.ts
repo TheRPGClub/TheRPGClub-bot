@@ -19,6 +19,7 @@ import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import { VOTE_TIME_ZONE } from "../functions/VoteDateUtils.js";
 import { logWarn } from "../utilities/LogUtils.js";
 import { plural } from "../utilities/TextUtils.js";
+import { BIRTH_DATE_API, formatBirthDate } from "./BirthDateService.js";
 import { apiGetOrThrow } from "./RpgClubApiClient.js";
 
 /** The club's day decides which Birthdays are today, as the API's Birthdays::TIME_ZONE. */
@@ -35,17 +36,11 @@ export interface IUpcomingBirthday {
   today: boolean;
 }
 
-/** A shared Birthday's day and month. */
-export interface ISharedBirthday {
-  month: number;
-  day: number;
-}
-
 export interface IBirthdaysApi {
   /** GET /api/v1/birthdays/upcoming, soonest first. */
   listUpcoming(): Promise<IUpcomingBirthday[]>;
-  /** The member's own Birthday when they share it, else null (their Birth Date document). */
-  getSharedBirthday(userId: string): Promise<ISharedBirthday | null>;
+  /** The member's own Birthday as "MM-DD" when they share it, else null. */
+  getSharedBirthday(userId: string): Promise<string | null>;
 }
 
 type UpcomingBirthdayPayload = {
@@ -56,18 +51,6 @@ type UpcomingBirthdayPayload = {
   on: string;
   today: boolean;
 };
-
-type BirthDatePayload = {
-  birth_date: string | null;
-  birthday_shared?: boolean;
-};
-
-/** The day and month of "1990-05-04" or "05-04", or null for anything else. */
-function birthdayOf(birthDate: string | null): ISharedBirthday | null {
-  const match = birthDate?.match(/(\d{2})-(\d{2})$/);
-  if (!match) return null;
-  return { month: Number(match[1]), day: Number(match[2]) };
-}
 
 export const BIRTHDAYS_API: IBirthdaysApi = {
   async listUpcoming() {
@@ -85,11 +68,9 @@ export const BIRTHDAYS_API: IBirthdaysApi = {
   },
   async getSharedBirthday(userId) {
     // The member reads their own Birth Date document, so the bot acts as them.
-    const query = new URLSearchParams({ acting_user_id: userId });
-    const payload = await apiGetOrThrow<{ data: BirthDatePayload }>(
-      `/api/v1/users/${encodeURIComponent(userId)}/birth_date?${query.toString()}`,
-    );
-    return payload.data.birthday_shared ? birthdayOf(payload.data.birth_date) : null;
+    const document = await BIRTH_DATE_API.getBirthDate(userId, userId);
+    if (!document.birthdayShared || !document.birthDate) return null;
+    return document.birthDate.slice(-"MM-DD".length);
   },
 };
 
@@ -117,16 +98,6 @@ const HEADING = "## Upcoming Birthdays";
 const EMPTY_STATE = "Nobody's Birthday falls in the next 30 days.";
 const SHARE_NUDGE =
   "You're not sharing your Birthday. Turn it on with `/profile birth-date share:True`.";
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-/** "4 May" for a Birthday, the day and month in words. */
-export function birthdayInWords(birthday: ISharedBirthday): string {
-  return `${birthday.day} ${MONTHS[birthday.month - 1] ?? birthday.month}`;
-}
 
 /** "<@1>", "<@1> and <@2>", "<@1>, <@2> and <@3>". */
 function mentionList(userIds: string[]): string {
@@ -207,8 +178,8 @@ function fittedGroupTexts(lines: IDateLine[], aroundLength: number): string[] {
   return texts;
 }
 
-function footer(shared: ISharedBirthday | null): string {
-  return shared ? `You're sharing yours: ${birthdayInWords(shared)}.` : SHARE_NUDGE;
+function footer(shared: string | null): string {
+  return shared ? `You're sharing yours: ${formatBirthDate(shared)}.` : SHARE_NUDGE;
 }
 
 /**
@@ -225,7 +196,7 @@ export async function buildUpcomingBirthdaysView(
   const [birthdays, shared] = await Promise.all([
     api.listUpcoming(),
     api.getSharedBirthday(actingUserId).then(
-      (birthday): { birthday: ISharedBirthday | null } => ({ birthday }),
+      (birthday): { birthday: string | null } => ({ birthday }),
       (err: unknown) => {
         logWarn("UpcomingBirthdays.sharedBirthday", err);
         return null;

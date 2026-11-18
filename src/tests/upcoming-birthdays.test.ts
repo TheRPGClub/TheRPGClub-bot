@@ -22,7 +22,7 @@ interface IFakeBirthdaysApi extends IBirthdaysApi {
 
 function fakeApi(options: {
   upcoming?: IUpcomingBirthday[];
-  own?: { month: number; day: number } | null;
+  own?: string | null;
   upcomingError?: unknown;
   ownError?: unknown;
 } = {}): IFakeBirthdaysApi {
@@ -80,7 +80,7 @@ test("/birthdays: the empty state says nobody's Birthday falls in the next 30 da
   });
 
 test("/birthdays: a member who shares sees their own Birthday in the footer", async () => {
-  const api = fakeApi({ upcoming: UPCOMING, own: { month: 5, day: 4 } });
+  const api = fakeApi({ upcoming: UPCOMING, own: "05-04" });
   const view = await buildUpcomingBirthdaysView("42", { api, now: () => NOW });
 
   assert.deepEqual(api.calls.toSorted(), ["shared birthday of 42", "upcoming"]);
