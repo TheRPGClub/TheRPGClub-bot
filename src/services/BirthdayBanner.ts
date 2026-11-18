@@ -1,4 +1,5 @@
 import sharp, { type OverlayOptions } from "sharp";
+import { DISPLAY_FONT, DISPLAY_WEIGHT, LABEL_FONT } from "../config/imageFonts.js";
 import { composeCanvas, coverTile, escapeXml } from "./ChallengeImageTiles.js";
 
 // The Birthday Post's banner (spec api#396, design pick 1C): "HAPPY BIRTHDAY" in the club's
@@ -35,8 +36,8 @@ const HIGHLIGHTER = "#ffd400";
 const STICKER_INK = "#101012";
 const CARD = "#2a2932";
 const FRAME = "rgba(244,244,240,0.14)";
-const DISPLAY_FONT = "Anton, 'Bebas Neue', Impact, 'DejaVu Sans Condensed', sans-serif";
-const LABEL_FONT = "'Barlow Condensed', 'Roboto Condensed', 'DejaVu Sans Condensed', sans-serif";
+/** The SVG attributes that set text in the display face. */
+const DISPLAY_TYPE = `font-family="${DISPLAY_FONT}" font-weight="${DISPLAY_WEIGHT}"`;
 
 const PAD_X = 60;
 const RIGHT = BANNER_WIDTH - PAD_X;
@@ -135,7 +136,7 @@ async function fitSize(
 function headline(size: number, x = 0, top = 0): string {
   const first = top + Math.round(size * 0.8);
   const second = first + Math.round(size * 0.9);
-  return `<g font-family="${DISPLAY_FONT}" font-weight="700" font-size="${size}" ` +
+  return `<g ${DISPLAY_TYPE} font-size="${size}" ` +
     `fill="${PAPER}"><text x="${x}" y="${first}">HAPPY</text>` +
     `<text x="${x}" y="${second}">BIRTHDAY</text></g>`;
 }
@@ -151,10 +152,11 @@ function namesLine(
     .join("");
   const moreSize = Math.max(18, Math.round(size * 0.36));
   const moreSpan = more
-    ? `<tspan dx="${NAME_GAP}" font-family="${LABEL_FONT}" font-size="${moreSize}" ` +
+    ? `<tspan dx="${NAME_GAP}" font-family="${LABEL_FONT}" font-weight="700" ` +
+      `font-size="${moreSize}" ` +
       `letter-spacing="2" fill="${PAPER_MUTE}">+${more} MORE</tspan>`
     : "";
-  return `<text x="${at.x}" y="${at.y}" font-family="${DISPLAY_FONT}" font-weight="700" ` +
+  return `<text x="${at.x}" y="${at.y}" ${DISPLAY_TYPE} ` +
     `font-size="${size}" fill="${HIGHLIGHTER}">${spans}${moreSpan}</text>`;
 }
 
@@ -201,7 +203,7 @@ function initialCard(name: string, d: number): Buffer {
     `<svg width="${d}" height="${d}" xmlns="http://www.w3.org/2000/svg">` +
       `<circle cx="${d / 2}" cy="${d / 2}" r="${d / 2}" fill="${CARD}"/>` +
       `<text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" ` +
-      `font-family="${DISPLAY_FONT}" font-weight="700" font-size="${Math.round(d * 0.46)}" ` +
+      `${DISPLAY_TYPE} font-size="${Math.round(d * 0.46)}" ` +
       `fill="${PAPER}">${initial}</text></svg>`,
   );
 }
@@ -234,7 +236,7 @@ function sticker(more: number, spots: readonly { cx: number; cy: number; d: numb
   return `<g transform="rotate(-8 ${cx} ${cy})"><circle cx="${cx}" cy="${cy}" r="${r}" ` +
     `fill="${HIGHLIGHTER}" stroke="${BACKGROUND_HEX}" stroke-width="4"/>` +
     `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" ` +
-    `font-family="${DISPLAY_FONT}" font-weight="700" font-size="${size}" ` +
+    `${DISPLAY_TYPE} font-size="${size}" ` +
     `fill="${STICKER_INK}">${label}</text></g>`;
 }
 
