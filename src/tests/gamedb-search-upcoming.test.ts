@@ -241,3 +241,39 @@ test("a row keeps its Releases' platforms and regions", async () => {
   );
   assert.equal(row.initialReleaseDate?.toISOString(), "2025-10-10T00:00:00.000Z");
 });
+
+test("a row's year label reads the game's own first release, as a plain search does", async () => {
+  const api = fakeApi({
+    games: { mana: [apiGame(1, "Mana Quest", "2025-06-01")] },
+    upcoming: [[entry(1, "Mana Quest", "2027-07-01", "quarter", undefined, "2026-02-02")]],
+  });
+
+  const [row] = await GameSearchService.searchUpcomingReleases(
+    "mana", { upcomingRelease: true }, api.deps,
+  );
+
+  assert.equal(row.initialReleaseDate?.toISOString(), "2025-06-01T00:00:00.000Z");
+});
+
+test("with no title or company, the year label still reads the game's first release", async () => {
+  const api = fakeApi({
+    allGames: [
+      { id: 1, title: "Mana Quest", initialReleaseDate: new Date("2025-06-01") },
+      { id: 2, title: "Undated", initialReleaseDate: null },
+    ],
+    upcoming: [[
+      entry(1, "Mana Quest", "2027-07-01", "quarter", undefined, "2026-02-02"),
+      entry(2, "Undated", "2027-08-01", "month", undefined, "2026-03-03"),
+      entry(3, "Not Cached", "2027-09-01", "month"),
+    ]],
+  });
+
+  const rows = await GameSearchService.searchUpcomingReleases(
+    "", { upcomingRelease: true }, api.deps,
+  );
+
+  assert.deepEqual(
+    rows.map((row) => row.initialReleaseDate?.toISOString()),
+    ["2025-06-01T00:00:00.000Z", "2026-03-03T00:00:00.000Z", "2027-09-01T00:00:00.000Z"],
+  );
+});

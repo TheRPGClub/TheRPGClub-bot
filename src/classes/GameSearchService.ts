@@ -377,7 +377,25 @@ export default class GameSearchService {
       filters.platformId,
       deps.getOrThrow,
     );
-    return GameSearchService.filterByCompanyRoles(rows, filters, deps.relationsFor);
+    // With no candidates, the game dates come from the cached title list, not from /games.
+    const games = candidates ?? (rows.length ? await deps.listGames() : []);
+    const labelled = GameSearchService.withGameReleaseDates(rows, games);
+    return GameSearchService.filterByCompanyRoles(labelled, filters, deps.relationsFor);
+  }
+
+  /**
+   * The "Title (Year)" label reads the game's own first release date, as a plain search
+   * and the year filter do; the Release Calendar's dates are only the fallback.
+   */
+  private static withGameReleaseDates(
+    rows: IUpcomingReleaseResult[],
+    games: Array<Pick<IGame, "id" | "initialReleaseDate">>,
+  ): IUpcomingReleaseResult[] {
+    const releaseDates = new Map(games.map((g) => [g.id, g.initialReleaseDate]));
+    return rows.map((row) => ({
+      ...row,
+      initialReleaseDate: releaseDates.get(row.id) ?? row.initialReleaseDate,
+    }));
   }
 
   /**

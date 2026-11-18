@@ -62,7 +62,10 @@ export interface IUpcomingReleaseItem {
 export interface IUpcomingReleaseResult {
   id: number;
   title: string;
-  /** Year source for the "Title (Year)" label: the game's first Release, else this one. */
+  /**
+   * Year source for the "Title (Year)" label: the game's own first release date, else the
+   * Release Calendar's first dated Release, else this entry's date.
+   */
   initialReleaseDate: Date | null;
   date: Date | null;
   datePrecision: DatePrecision;
