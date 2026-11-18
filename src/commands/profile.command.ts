@@ -1,6 +1,8 @@
 import axios from "axios";
 import {
+  type ButtonInteraction,
   type CommandInteraction,
+  type ModalSubmitInteraction,
   ApplicationCommandOptionType,
   type User,
   PermissionsBitField,
@@ -8,7 +10,9 @@ import {
   StringSelectMenuInteraction,
 } from "discord.js";
 import {
+  ButtonComponent,
   Discord,
+  ModalComponent,
   SelectMenuComponent,
   Slash,
   SlashGroup,
@@ -27,7 +31,11 @@ import {
   ephemeralFlag,
   extractErrorMessage,
   withErrorReply,
+  safeDeferModalSubmit,
   safeDeferReply,
+  safeDeferUpdate,
+  safeEditReply,
+  safeFollowUpIfSettled,
   safeReply,
   sanitizeUserInput,
 } from "../functions/InteractionUtils.js";
@@ -49,12 +57,18 @@ import {
 } from "../functions/DateFormatUtils.js";
 import { truncateLabel } from "../config/textLimits.js";
 import { chunk } from "../utilities/ArrayUtils.js";
-import { formatApiError } from "../utilities/ApiErrorUtils.js";
+import { buildCaughtErrorMessage, formatApiError } from "../utilities/ApiErrorUtils.js";
 import {
-  BIRTH_DATE_FORMAT_HINT,
-  birthDateReply,
-  type BirthDateAction,
+  BIRTH_DATE_ENTRY_FIELD,
+  BIRTH_DATE_ENTRY_FORMS,
+  birthDateButtonReply,
+  birthDateCommandReply,
+  birthDateModalReply,
+  buildBirthDateEntryModal,
+  type IBirthDateView,
 } from "../services/BirthDateService.js";
+import { BIRTH_DATE_PREFIX } from "../config/customIdPrefixes.js";
+import { safeIgnore } from "../utilities/AsyncUtils.js";
 
 export { formatDiscordTimestamp, formatPlaytimeHours, formatTableDate };
 
@@ -95,6 +109,24 @@ type ApiUserListItem = {
   global_name: string | null;
   is_bot: boolean;
 };
+
+/**
+ * Edits the Birth Date panel in place with `reply`. An unexpected error is followed up
+ * privately, so the panel and its buttons stay.
+ */
+async function editBirthDatePanel(
+  interaction: ButtonInteraction | ModalSubmitInteraction,
+  reply: () => Promise<IBirthDateView>,
+): Promise<void> {
+  try {
+    await safeEditReply(interaction, await reply());
+  } catch (err: unknown) {
+    await safeFollowUpIfSettled(
+      interaction,
+      buildErrorReply(buildCaughtErrorMessage("Error with the Birth Date", err), true),
+    );
+  }
+}
 
 let socialPlatformCache: ApiSocialPlatform[] | null = null;
 
@@ -732,18 +764,28 @@ export class ProfileCommand {
     }, "Error updating profile");
   }
 
-  @Slash({ description: "See, set or remove your Birth Date (private)", name: "birth-date" })
+  @Slash({
+    description: "See or change your Birth Date and Birthday sharing (private)",
+    name: "birth-date",
+  })
   @SlashGroup("profile")
   async profileBirthDate(
     @SlashOption({
-      description: `Your Birth Date. ${BIRTH_DATE_FORMAT_HINT}`,
+      description: `Your Birth Date: ${BIRTH_DATE_ENTRY_FORMS}.`,
       name: "date",
       required: false,
       type: ApplicationCommandOptionType.String,
     })
     date: string | undefined,
     @SlashOption({
-      description: "Remove your Birth Date.",
+      description: "Share your Birthday (day and month, never the year) with members.",
+      name: "share",
+      required: false,
+      type: ApplicationCommandOptionType.Boolean,
+    })
+    share: boolean | undefined,
+    @SlashOption({
+      description: "Remove your Birth Date (stops sharing your Birthday).",
       name: "remove",
       required: false,
       type: ApplicationCommandOptionType.Boolean,
@@ -761,25 +803,46 @@ export class ProfileCommand {
     // Always private: only the member and staff may see the full date.
     await safeDeferReply(interaction, { flags: ephemeralFlag(true) });
     const typed = date ? sanitizeUserInput(date, { preserveNewlines: false }).trim() : "";
-    if (typed && remove) {
-      await safeReply(
-        interaction,
-        buildTextReply("Pick a date or remove, not both.", true),
-      );
-      return;
-    }
-    let action: BirthDateAction = { kind: "view" };
-    if (typed) action = { kind: "set", date: typed };
-    else if (remove) action = { kind: "remove" };
-
     await withErrorReply(interaction, async () => {
-      const text = await birthDateReply({
+      const view = await birthDateCommandReply({
         actingUserId: interaction.user.id,
         targetUserId: (member ?? interaction.user).id,
-        action,
+        date: typed || undefined,
+        remove,
+        share,
       });
-      await safeReply(interaction, buildTextReply(text, true));
+      await safeEditReply(interaction, view);
     }, "Error with the Birth Date");
+  }
+
+  // The Birth Date panel's buttons (design 3B, bot#1557). Each custom ID names the member
+  // and the clicking user acts, so they work after a restart.
+  @ButtonComponent({ id: new RegExp(`^${BIRTH_DATE_PREFIX}:`) })
+  async birthDateButton(interaction: ButtonInteraction): Promise<void> {
+    const modal = buildBirthDateEntryModal(interaction.customId, interaction.user.id);
+    if (modal) {
+      safeIgnore(interaction.showModal(modal));
+      return;
+    }
+    if (!(await safeDeferUpdate(interaction))) return;
+    await editBirthDatePanel(interaction, () => birthDateButtonReply({
+      customId: interaction.customId,
+      actingUserId: interaction.user.id,
+    }));
+  }
+
+  @ModalComponent({ id: new RegExp(`^${BIRTH_DATE_PREFIX}:date-modal:`) })
+  async birthDateModal(interaction: ModalSubmitInteraction): Promise<void> {
+    if (!(await safeDeferModalSubmit(interaction))) return;
+    const date = sanitizeUserInput(
+      interaction.fields.getTextInputValue(BIRTH_DATE_ENTRY_FIELD),
+      { preserveNewlines: false },
+    );
+    await editBirthDatePanel(interaction, () => birthDateModalReply({
+      customId: interaction.customId,
+      actingUserId: interaction.user.id,
+      date,
+    }));
   }
 
 }

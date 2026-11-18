@@ -1,4 +1,5 @@
 import type { OverlayOptions } from "sharp";
+import { LABEL_FONT } from "../config/imageFonts.js";
 import {
   composeCanvas,
   coverTile,
@@ -50,7 +51,6 @@ const GOLD = "#e8c35a";
 const TAG_INK = "#1a1400";
 const CARD = "#1b2a21";
 const BOX = "#1f4d36";
-const FONT = "'Barlow Condensed', 'Roboto Condensed', 'DejaVu Sans Condensed', sans-serif";
 /** About how wide a bold uppercase character of the tag font draws, per pixel of size. */
 const TAG_CHAR_WIDTH = 0.66;
 
@@ -61,7 +61,7 @@ function titleCard(lines: string[], size: number): Buffer {
   return textCard(SHAPE, {
     lines,
     fill: CARD,
-    font: { family: FONT, size, fill: PAPER },
+    font: { family: LABEL_FONT, size, fill: PAPER },
     lineHeight: Math.round(size * 1.25),
   });
 }
@@ -146,7 +146,7 @@ export async function composeGiftTags(
 
   const ruleTop = PADDING + HEADER_HEIGHT;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
-    `<g font-family="${FONT}">` +
+    `<g font-family="${LABEL_FONT}">` +
     `<text x="${PADDING}" y="${ruleTop - 10}" font-size="40" font-weight="800" ` +
     `fill="${PAPER}">${escapeXml(title.toUpperCase())}</text>` +
     `<text x="${width - PADDING}" y="${ruleTop - 12}" text-anchor="end" font-size="18" ` +

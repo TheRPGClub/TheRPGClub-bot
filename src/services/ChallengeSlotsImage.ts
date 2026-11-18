@@ -1,4 +1,5 @@
 import sharp, { type OverlayOptions } from "sharp";
+import { DISPLAY_FONT, DISPLAY_WEIGHT } from "../config/imageFonts.js";
 import { decadeLabel, decadeOf } from "../functions/ChallengeSlotsCopy.js";
 import type { IChallengeSlots } from "./ChallengeApi.js";
 import {
@@ -19,8 +20,9 @@ const INK = "#f4f4f0";
 const MUTED = "#8f8b84";
 const SLOT_LINE = "#4a4852";
 const CARD = "#2a2932";
-const DISPLAY_FONT = "Anton, 'Bebas Neue', Impact, 'DejaVu Sans Condensed', sans-serif";
 const BODY_FONT = "'DejaVu Sans Condensed', 'DejaVu Sans', sans-serif";
+/** The SVG attributes that set text in the display face. */
+const DISPLAY_TYPE = `font-family="${DISPLAY_FONT}" font-weight="${DISPLAY_WEIGHT}"`;
 
 /** Year strip: at most this many tiles; a longer range shows its ends around a gap. */
 const STRIP_TILES_MAX = 12;
@@ -83,7 +85,7 @@ function stripTileSvg(tile: IStripTile, x: number, y: number): string {
     : "";
   return frame +
     `<text x="${cx}" y="${labelY}" text-anchor="middle" font-size="${labelSize}" ` +
-    `font-family="${DISPLAY_FONT}" font-weight="700" fill="${tile.gap ? MUTED : INK}">` +
+    `${DISPLAY_TYPE} fill="${tile.gap ? MUTED : INK}">` +
     `${escapeXml(tile.label)}</text>${sub}`;
 }
 
@@ -154,11 +156,11 @@ function yearMark(year: IPosterYear, x: number, y: number): string {
     return `<rect x="${x + 1}" y="${y + 1}" width="${width - 2}" height="${height - 2}" ` +
       `rx="${POSTER_CORNER}" fill="none" stroke="${SLOT_LINE}" stroke-width="2" ` +
       `stroke-dasharray="6 5"/><text x="${x + 8}" y="${y + height - 10}" font-size="16" ` +
-      `font-family="${DISPLAY_FONT}" font-weight="700" fill="${MUTED}">${digits}</text>`;
+      `${DISPLAY_TYPE} fill="${MUTED}">${digits}</text>`;
   }
   return `<rect x="${x}" y="${y + height - 30}" width="${width}" height="30" ` +
     `fill="url(#shade)"/><text x="${x + 8}" y="${y + height - 10}" font-size="16" ` +
-    `font-family="${DISPLAY_FONT}" font-weight="700" fill="${INK}">${digits}</text>`;
+    `${DISPLAY_TYPE} fill="${INK}">${digits}</text>`;
 }
 
 /** The Caught Up year poster as a PNG. Throws when there are no years. */
@@ -187,8 +189,8 @@ export async function composeYearPoster(input: IPosterInput): Promise<Buffer> {
   const right = width - POSTER_PADDING;
   const labels = decades.map((decade, row) =>
     `<text x="${POSTER_PADDING}" y="${POSTER_HEADER + row * rowHeight + POSTER_TILE.height / 2}"` +
-      ` dominant-baseline="middle" font-size="18" font-family="${DISPLAY_FONT}" ` +
-      `font-weight="700" fill="${MUTED}">${decadeLabel(decade)}</text>`).join("");
+      ` dominant-baseline="middle" font-size="18" ${DISPLAY_TYPE} ` +
+      `fill="${MUTED}">${decadeLabel(decade)}</text>`).join("");
   const marks = input.years.map((year) => {
     const { x, y } = place(year.year);
     return yearMark(year, x, y);
@@ -199,13 +201,13 @@ export async function composeYearPoster(input: IPosterInput): Promise<Buffer> {
     "<defs><linearGradient id=\"shade\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">" +
     "<stop offset=\"0\" stop-color=\"#000\" stop-opacity=\"0\"/>" +
     "<stop offset=\"1\" stop-color=\"#000\" stop-opacity=\"0.75\"/></linearGradient></defs>" +
-    `<text x="${POSTER_PADDING}" y="84" font-size="56" font-family="${DISPLAY_FONT}" ` +
-    `font-weight="700" fill="${INK}">${escapeXml(input.name.toUpperCase())}</text>` +
+    `<text x="${POSTER_PADDING}" y="84" font-size="56" ${DISPLAY_TYPE} ` +
+    `fill="${INK}">${escapeXml(input.name.toUpperCase())}</text>` +
     `<text x="${POSTER_PADDING}" y="114" font-size="17" font-family="${BODY_FONT}" ` +
     `font-weight="700" letter-spacing="1" fill="${MUTED}">` +
     `${escapeXml(input.caption.toUpperCase())}</text>` +
-    `<text x="${right}" y="96" text-anchor="end" font-family="${DISPLAY_FONT}" ` +
-    `font-weight="700" fill="${INK}"><tspan font-size="76">${input.cleared}</tspan>` +
+    `<text x="${right}" y="96" text-anchor="end" ${DISPLAY_TYPE} ` +
+    `fill="${INK}"><tspan font-size="76">${input.cleared}</tspan>` +
     `<tspan font-size="34" fill="${MUTED}">/${input.target}</tspan></text>` +
     `<rect x="${POSTER_PADDING}" y="128" width="${width - POSTER_PADDING * 2}" height="3" ` +
     `fill="${INK}"/>${labels}${marks}` +

@@ -10,3 +10,9 @@ export function plural(
 ): string {
   return `${shown} ${count === 1 ? one : many}`;
 }
+
+/** "A", "A and B", "A, B and C". */
+export function joinWithAnd(items: readonly string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}

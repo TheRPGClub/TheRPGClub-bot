@@ -1,4 +1,4 @@
-import { resolveId } from "./testMode.js";
+import { IS_TEST_MODE, resolveId } from "./testMode.js";
 
 export const BOT_DEV_CHANNEL_ID = resolveId("BOT_DEV_CHANNEL_ID", "1466475139402170450");
 export const COMPLETION_REACTION_DEV_CHANNEL_ID = resolveId(
@@ -92,6 +92,13 @@ export const CHALLENGES_CHANNEL_ID = resolveId("CHALLENGES_CHANNEL_ID", "1000000
 // General chat (spec api#397): the Daily Fun Fact is posted here.
 // PLACEHOLDER api#397: the owner sets the general chat channel's ID at cutover.
 export const FUN_FACT_CHANNEL_ID = resolveId("FUN_FACT_CHANNEL_ID", "100000000000000397");
+// The Birthday channel (spec api#396). In production the API names it in each
+// birthday_post job (its general chat), so there is no production id here. A test-guild bot
+// posts in the test guild's own Birthday channel instead, never the job's, so it can never
+// ping the real general chat. Null outside test mode.
+export const BIRTHDAY_TEST_CHANNEL_ID: string | null = IS_TEST_MODE
+  ? resolveId("BIRTHDAY_CHANNEL_ID", "")
+  : null;
 /**
  * Destination for mirrored ephemeral replies. Only read in test mode, so the
  * production value is inert and simply points at the bot dev channel.

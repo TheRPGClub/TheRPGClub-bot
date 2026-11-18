@@ -110,3 +110,9 @@ test("buildHelpCategoryResponse gates staff menus and rejects unknown values", (
   assert.equal(buildHelpCategoryResponse("rss", mod), null);
   assert.equal(buildHelpCategoryResponse("superadmin", mod), null);
 });
+
+test("/help lists /birthdays for every member, under Members", () => {
+  const member = getHelpAccess(fakeInteraction(MEMBER_ID, []));
+  const category = buildHelpCategoryResponse("members", member);
+  assert.ok(category && responseText(category).includes("/birthdays"));
+});

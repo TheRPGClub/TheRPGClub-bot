@@ -41,6 +41,7 @@ export const OVERRIDABLE_ID_NAMES = [
   "NEW_GAME_ANNOUNCEMENT_CHANNEL_ID",
   "CHALLENGES_CHANNEL_ID",
   "FUN_FACT_CHANNEL_ID",
+  "BIRTHDAY_CHANNEL_ID",
   "TEST_LOG_CHANNEL_ID",
   // roles.ts
   "REGULARS_ROLE_ID",
@@ -97,6 +98,11 @@ export const TEST_GUILD_IDS: TestGuildIdMap = {
   CHALLENGES_CHANNEL_ID: "200000000000000376",
   // PLACEHOLDER api#397: set to the test guild's general chat channel at cutover.
   FUN_FACT_CHANNEL_ID: "200000000000000397",
+  // The test guild's Birthday channel: a test-guild bot posts the Birthday Post here
+  // instead of the job's channel_id (production general chat). PLACEHOLDER api#402: the
+  // owner supplies the test guild's general chat id; until then the post fails with
+  // Unknown Channel, and still never reaches production.
+  BIRTHDAY_CHANNEL_ID: "200000000000000396",
   // The dev logs channel, so mirrored ephemeral replies stay out of #dev.
   TEST_LOG_CHANNEL_ID: "1547802425295896617",
 

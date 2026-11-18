@@ -60,3 +60,18 @@ jobs:
         run: >-
           node --no-warnings=ExperimentalWarning --import tsx
           --test src/tests/*.test.ts
+
+  image-fonts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t therpgclub-bot:ci .
+
+      # The pictures' text must draw in the bundled fonts, not empty boxes.
+      - name: Check the image's fonts
+        run: >-
+          docker run --rm -i therpgclub-bot:ci
+          node --input-type=module - < scripts/check-image-fonts.mjs
