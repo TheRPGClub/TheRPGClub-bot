@@ -87,6 +87,7 @@ export function mapUpcomingReleaseFromApi(
 ): IUpcomingReleaseResult {
   const date = parseCalendarDate(data.date);
   return {
+    kind: "upcoming",
     id: Number(data.game.game_id),
     title: String(data.game.title),
     initialReleaseDate: parseCalendarDate(data.first_released_on) ?? date,

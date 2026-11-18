@@ -48,8 +48,6 @@ export interface IGameWithPlatforms extends IGame {
   platforms: IPlatformDef[];
 }
 
-export type IGameSearchResult = IGameWithPlatforms;
-
 /** One Release inside an Upcoming Release, with the names a search row shows. */
 export interface IUpcomingReleaseItem {
   platformId: number;
@@ -61,6 +59,8 @@ export interface IUpcomingReleaseItem {
 
 /** A game's next Upcoming Release, as `/gamedb search upcoming_release:true` lists it. */
 export interface IUpcomingReleaseResult {
+  /** Tells an upcoming search row apart from a plain search's game row. */
+  kind: "upcoming";
   id: number;
   title: string;
   /**

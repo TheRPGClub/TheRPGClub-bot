@@ -24,15 +24,7 @@ import { DISCORD_SELECT_OPTIONS_MAX, truncateLabel } from "../../config/textLimi
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
 import { GAMEDB_SEARCH_PREFIX } from "../../config/customIdPrefixes.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
-import GameSearchService from "../../classes/GameSearchService.js";
-
-export interface ISearchFilters {
-  upcomingRelease?: boolean;
-  platformId?: number;
-  year?: number;
-  developerId?: number;
-  publisherId?: number;
-}
+import GameSearchService, { type ISearchFilters } from "../../classes/GameSearchService.js";
 
 function compactFilters(filters: ISearchFilters): string {
   let result = "";

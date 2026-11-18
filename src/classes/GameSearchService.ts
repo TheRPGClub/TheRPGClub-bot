@@ -14,7 +14,7 @@ import { createTtlCache } from "../functions/TtlCache.js";
 import { AUTOCOMPLETE_CACHE_TTL_MS } from "../config/cacheDefaults.js";
 import type {
   IGame,
-  IGameSearchResult,
+  IGameWithPlatforms,
   IGameAutocompleteResult,
   IUpcomingReleaseResult,
 } from "../types/GameTypes.js";
@@ -34,7 +34,8 @@ const UPCOMING_PAGE_SIZE = 100;
 // read and matched here instead. `per_game=next` is per game, so the entries are the same.
 const UPCOMING_GAME_ID_LIMIT = 500;
 
-export interface ISearchGameFilters {
+/** The `/gamedb search` filters; the command's custom ids encode the same fields. */
+export interface ISearchFilters {
   upcomingRelease?: boolean;
   platformId?: number;
   year?: number;
@@ -248,9 +249,8 @@ export default class GameSearchService {
   }
 
   private static readonly defaultDeps: IGameSearchDeps = {
-    get: <T>(path: string, config?: AxiosRequestConfig) => apiGet<T>(path, config),
-    getOrThrow: <T>(path: string, config?: AxiosRequestConfig) =>
-      apiGetOrThrow<T>(path, config),
+    get: apiGet,
+    getOrThrow: apiGetOrThrow,
     synonymsFor: (term) => GameSearchSynonym.getTermsForQuery(term),
     accentedSpellings: (terms) => GameSearchService.findAccentedSpellings(terms),
     relationsFor: (gameId) => GameProfileService.getGameRelations(gameId),
@@ -286,7 +286,15 @@ export default class GameSearchService {
     return Array.from(gameMap.values());
   }
 
-  private static companyIdsOf(filters: ISearchGameFilters): number[] {
+  /** Keeps the games first released in the year (read in UTC, as release dates are). */
+  private static firstReleasedIn<T extends Pick<IGame, "initialReleaseDate">>(
+    games: T[],
+    year: number,
+  ): T[] {
+    return games.filter((g) => g.initialReleaseDate?.getUTCFullYear() === year);
+  }
+
+  private static companyIdsOf(filters: ISearchFilters): number[] {
     return [filters.developerId, filters.publisherId].filter(
       (id): id is number => typeof id === "number" && Number.isFinite(id) && id > 0,
     );
@@ -295,7 +303,7 @@ export default class GameSearchService {
   /** Keeps the items whose game has the developer and publisher the filters ask for. */
   private static async filterByCompanyRoles<T extends { id: number }>(
     items: T[],
-    filters: ISearchGameFilters,
+    filters: ISearchFilters,
     relationsFor: IGameSearchDeps["relationsFor"],
   ): Promise<T[]> {
     if (!filters.developerId && !filters.publisherId) return items;
@@ -352,7 +360,7 @@ export default class GameSearchService {
    */
   static async searchUpcomingReleases(
     query: string,
-    filters: ISearchGameFilters = {},
+    filters: ISearchFilters = {},
     deps: IGameSearchDeps = GameSearchService.defaultDeps,
   ): Promise<IUpcomingReleaseResult[]> {
     const baseQuery = query.trim();
@@ -365,10 +373,7 @@ export default class GameSearchService {
       candidates = await deps.listGames();
     }
     if (candidates && filters.year) {
-      const targetYear = filters.year;
-      candidates = candidates.filter(
-        (g) => g.initialReleaseDate?.getUTCFullYear() === targetYear,
-      );
+      candidates = GameSearchService.firstReleasedIn(candidates, filters.year);
     }
     if (candidates && !candidates.length) return [];
 
@@ -404,8 +409,8 @@ export default class GameSearchService {
    */
   static async searchGames(
     query: string,
-    filters: Omit<ISearchGameFilters, "upcomingRelease"> = {},
-  ): Promise<IGameSearchResult[]> {
+    filters: Omit<ISearchFilters, "upcomingRelease"> = {},
+  ): Promise<IGameWithPlatforms[]> {
     const deps = GameSearchService.defaultDeps;
     const baseQuery = query.trim();
     const hasFilters =
@@ -419,10 +424,7 @@ export default class GameSearchService {
     );
 
     if (filters.year) {
-      const targetYear = filters.year;
-      games = games.filter(
-        (g) => g.initialReleaseDate?.getUTCFullYear() === targetYear,
-      );
+      games = GameSearchService.firstReleasedIn(games, filters.year);
     }
 
     games = await GameSearchService.filterByCompanyRoles(games, filters, deps.relationsFor);

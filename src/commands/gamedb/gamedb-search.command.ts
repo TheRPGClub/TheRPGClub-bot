@@ -43,7 +43,6 @@ import {
   buildSearchRecoveryComponents,
   decodeISearchFilters,
   GAME_SEARCH_PAGE_SIZE,
-  type ISearchFilters,
 } from "./gamedb-utils.js";
 import {
   buildGameProfile,
@@ -57,10 +56,10 @@ import { MAX_CONTAINER_TEXT } from "../../config/textLimits.js";
 import { assertCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { buildSelectRow } from "../../functions/uiComponents.js";
-import GameSearchService from "../../classes/GameSearchService.js";
+import GameSearchService, { type ISearchFilters } from "../../classes/GameSearchService.js";
 import { formatReleaseDate } from "../../functions/DateFormatUtils.js";
 import type {
-  IGameSearchResult,
+  IGameWithPlatforms,
   IUpcomingReleaseItem,
   IUpcomingReleaseResult,
 } from "../../types/GameTypes.js";
@@ -69,10 +68,10 @@ import {
   parseTitleWithYear,
 } from "../../functions/GameTitleAutocompleteUtils.js";
 
-type SearchRow = IGameSearchResult | IUpcomingReleaseResult;
+type SearchRow = IGameWithPlatforms | IUpcomingReleaseResult;
 
 function isUpcomingRow(row: SearchRow): row is IUpcomingReleaseResult {
-  return "datePrecision" in row;
+  return "kind" in row && row.kind === "upcoming";
 }
 
 /** Runs the search the filters ask for: the Release Calendar when upcoming_release is set. */
@@ -131,15 +130,24 @@ function formatSearchListLine(row: SearchRow): string {
   return `• **${title}**${platforms ? ` (${platforms})` : ""}`;
 }
 
-/** Shows a search failure, with the request and response for an API error. */
-async function replySearchFailed(
+/**
+ * Runs the search, or shows its failure (with the request and response for an API error)
+ * as an ephemeral follow-up and answers null.
+ */
+async function searchOrReply(
   interaction: ButtonInteraction | StringSelectMenuInteraction,
-  error: unknown,
-): Promise<void> {
-  await safeReply(interaction, {
-    ...buildErrorReply(buildCaughtErrorMessage("Failed to search games", error), true),
-    __forceFollowUp: true,
-  });
+  searchTerm: string,
+  filters: ISearchFilters,
+): Promise<SearchRow[] | null> {
+  try {
+    return await searchFor(searchTerm, filters);
+  } catch (error) {
+    await safeReply(interaction, {
+      ...buildErrorReply(buildCaughtErrorMessage("Failed to search games", error), true),
+      __forceFollowUp: true,
+    });
+    return null;
+  }
 }
 
 async function buildFilterSummary(filters: ISearchFilters): Promise<string> {
@@ -398,13 +406,8 @@ export class GameDbSearchCommand {
       return;
     }
 
-    let results: SearchRow[];
-    try {
-      results = await searchFor(searchTerm, filters);
-    } catch (error) {
-      await replySearchFailed(interaction, error);
-      return;
-    }
+    const results = await searchOrReply(interaction, searchTerm, filters);
+    if (!results) return;
 
     const gameId = Number(interaction.values?.[0]);
     if (!Number.isFinite(gameId)) {
@@ -476,13 +479,8 @@ export class GameDbSearchCommand {
     // Defer before the search: the API call can outlast Discord's 3 second window.
     await safeDeferUpdate(interaction);
 
-    let results: SearchRow[];
-    try {
-      results = await searchFor(searchTerm, filters);
-    } catch (error) {
-      await replySearchFailed(interaction, error);
-      return;
-    }
+    const results = await searchOrReply(interaction, searchTerm, filters);
+    if (!results) return;
     const totalPages = Math.max(
       1,
       Math.ceil(results.length / GAME_SEARCH_PAGE_SIZE),
@@ -528,13 +526,8 @@ export class GameDbSearchCommand {
     // Acknowledge before the API search so a slow search cannot outlast Discord's 3s window.
     if (!(await safeDeferUpdate(interaction))) return;
 
-    let results: SearchRow[];
-    try {
-      results = await searchFor(searchTerm, filters);
-    } catch (error) {
-      await replySearchFailed(interaction, error);
-      return;
-    }
+    const results = await searchOrReply(interaction, searchTerm, filters);
+    if (!results) return;
     if (results.length === 0) {
       const msg = searchTerm
         ? `No results found for "${searchTerm}".`
