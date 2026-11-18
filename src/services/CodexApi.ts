@@ -102,6 +102,56 @@ export const FUN_FACT_API: IFunFactApi = {
   },
 };
 
+/** An entry as a "See also" link or a search result shows it. */
+export type ICodexLink = ICodexEntry["links"][number];
+
+/** Club Lore and Club History, read for /codex lore read and /codex history (bot#1563). */
+export interface ICodexReadApi {
+  /** Lore Entries matching `query` by title or text, title matches first; all, newest first. */
+  searchLore(query: string, per: number): Promise<ICodexLink[]>;
+  /** The Lore Entry, or null when there is no such Lore Entry. */
+  getLoreEntry(id: number, actingUserId: string): Promise<ICodexEntry | null>;
+  /** Every History Event, oldest first (Club History's date order). */
+  listHistory(actingUserId: string): Promise<ICodexEntry[]>;
+}
+
+/** History Events read per request: the API's most, so Club History is one request. */
+const HISTORY_READ_PER = 500;
+/** A stop for a paging bug: more History Events than this aren't read. */
+const HISTORY_READ_PAGES_MAX = 20;
+
+export const CODEX_READ_API: ICodexReadApi = {
+  async searchLore(query, per) {
+    const params: Record<string, string | number> = { part: "lore_entry", page: 1, per };
+    if (query.trim()) params.q = query.trim();
+    const payload = await apiGetOrThrow<{ data: ICodexLink[] }>(
+      withQuery(`${CODEX_PATH}/entries`, params),
+    );
+    return payload.data;
+  },
+  async getLoreEntry(id, actingUserId) {
+    const payload = await apiGet<{ data: ICodexEntry }>(
+      withQuery(`${CODEX_PATH}/lore_entries/${id}`, { acting_user_id: actingUserId }),
+    );
+    return payload?.data ?? null;
+  },
+  async listHistory(actingUserId) {
+    const events: ICodexEntry[] = [];
+    let page: number | null = 1;
+    for (let read = 0; page !== null && read < HISTORY_READ_PAGES_MAX; read += 1) {
+      const payload: { data: ICodexEntry[]; meta?: { next?: number | null } } =
+        await apiGetOrThrow(withQuery(`${CODEX_PATH}/history_events`, {
+          acting_user_id: actingUserId,
+          page,
+          per: HISTORY_READ_PER,
+        }));
+      events.push(...payload.data);
+      page = payload.meta?.next ?? null;
+    }
+    return events;
+  },
+};
+
 /**
  * A failed Club Codex call as the member reads it: the API's own `message` for a refusal
  * (403 `forbidden` or `feature_unavailable`, 422 `invalid_entry`), else the fallback, with

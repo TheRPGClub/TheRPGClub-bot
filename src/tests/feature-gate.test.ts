@@ -107,6 +107,8 @@ const COMPONENTS: Array<[string, string | null]> = [
   ["todo-review-suggestions", "suggestions"],
   ["news-category-pick-v1:510000000000000001:610000000000000001", "news_hub"],
   ["codex-fun-fact:delete:5", "club_codex"],
+  ["codex-lore:page:7:2:222:public", "club_codex"],
+  ["codex-history:page:2:222:public", "club_codex"],
   ["now-playing-help-select", null],
   ["help:gamedb:main", null],
   ["admin-vote-close:4:confirm", null],

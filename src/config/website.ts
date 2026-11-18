@@ -22,3 +22,18 @@ export function challengePageUrl(challengeId: number): string {
 export function memberProfileUrl(userId: string): string {
   return `${WEBSITE_BASE_URL}/members/${encodeURIComponent(userId)}`;
 }
+
+/** A Lore Entry's page in Club Lore (spec api#397). */
+export function codexLoreEntryUrl(entryId: number): string {
+  return `${WEBSITE_BASE_URL}/codex/lore/${entryId}`;
+}
+
+/** Club History, the whole record (public). */
+export function codexHistoryUrl(): string {
+  return `${WEBSITE_BASE_URL}/codex/history`;
+}
+
+/** Every Fun Fact. */
+export function codexFunFactsUrl(): string {
+  return `${WEBSITE_BASE_URL}/codex/fun-facts`;
+}
