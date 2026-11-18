@@ -48,9 +48,25 @@ export interface IGameWithPlatforms extends IGame {
   platforms: IPlatformDef[];
 }
 
-export interface IGameSearchResult extends IGameWithPlatforms {
-  upcomingReleaseDate: Date | null;
-  upcomingReleasePlatforms: string[];
+export type IGameSearchResult = IGameWithPlatforms;
+
+/** One Release inside an Upcoming Release, with the names a search row shows. */
+export interface IUpcomingReleaseItem {
+  platformName: string;
+  platformAbbreviation: string | null;
+  regionCode: string;
+  regionName: string;
+}
+
+/** A game's next Upcoming Release, as `/gamedb search upcoming_release:true` lists it. */
+export interface IUpcomingReleaseResult {
+  id: number;
+  title: string;
+  /** Year source for the "Title (Year)" label: the game's first Release, else this one. */
+  initialReleaseDate: Date | null;
+  date: Date | null;
+  datePrecision: DatePrecision;
+  releases: IUpcomingReleaseItem[];
 }
 
 export interface IGameAutocompleteResult {

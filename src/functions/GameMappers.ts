@@ -4,6 +4,7 @@ import type {
   IRelease,
   IPlatformDef,
   IRegionDef,
+  IUpcomingReleaseResult,
 } from "../types/GameTypes.js";
 import type { HltbCacheEntry } from "../classes/HltbCache.js";
 
@@ -52,6 +53,53 @@ export type RegionApiData = {
   region_name: string;
   igdb_region_id: number | null;
 };
+
+/** One entry of `GET /api/v1/upcoming_releases` (the Release Calendar). */
+export type UpcomingReleaseApiData = {
+  game: { game_id: number; title: string; cover_url?: string | null };
+  date: string | null;
+  date_precision: string;
+  section: string;
+  first_released_on: string | null;
+  first_released_precision: string | null;
+  releases: Array<{
+    release_id: number;
+    platform_id: number;
+    platform_name: string;
+    platform_abbreviation?: string | null;
+    region_id: number;
+    region_code: string;
+    region_name: string;
+    format?: string | null;
+    source: string;
+  }>;
+};
+
+function parseCalendarDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  // A plain "YYYY-MM-DD" parses to UTC midnight of that day.
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function mapUpcomingReleaseFromApi(
+  data: UpcomingReleaseApiData,
+): IUpcomingReleaseResult {
+  const date = parseCalendarDate(data.date);
+  return {
+    id: Number(data.game.game_id),
+    title: String(data.game.title),
+    initialReleaseDate: parseCalendarDate(data.first_released_on) ?? date,
+    date,
+    datePrecision: mapDatePrecision(data.date_precision, Boolean(date)),
+    releases: (data.releases ?? []).map((r) => ({
+      platformName: String(r.platform_name),
+      platformAbbreviation: r.platform_abbreviation ?? null,
+      regionCode: String(r.region_code),
+      regionName: String(r.region_name),
+    })),
+  };
+}
 
 export function mapGameFromApi(data: any): IGame {
   return {
