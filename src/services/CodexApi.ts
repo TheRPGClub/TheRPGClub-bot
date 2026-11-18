@@ -1,0 +1,191 @@
+import {
+  apiDelete,
+  apiGet,
+  apiGetOrThrow,
+  apiPatchOrThrow,
+  apiPostOrThrow,
+} from "./RpgClubApiClient.js";
+
+// The Club Codex endpoints the bot calls (spec api#397, ticket api#404), under
+// /api/v1/codex. The shapes are the API's own (snake_case), as its swagger serves them.
+// Every call names the member it acts for with acting_user_id: the API decides from that
+// member's stored roles and Feature Flag, and fills each entry's `viewer` for them.
+
+export type CodexPart = "history_event" | "lore_entry" | "fun_fact";
+
+/** A member as an entry shows them: the author, or a member `body` mentions. */
+export interface ICodexMember {
+  user_id: string;
+  /** The name they go by now (their last known one once they have left). */
+  name: string;
+  avatar_url: string;
+}
+
+/** One Club Codex entry, for every part. */
+export interface ICodexEntry {
+  id: number;
+  part: CodexPart;
+  title: string | null;
+  /** The website's rich text, as Plate nodes. */
+  rich_body: Array<Record<string, unknown>> | null;
+  /** The Discord text, members mentioned as `<@discord_id>` tokens. */
+  body: string | null;
+  occurred_on: string | null;
+  date_precision: "day" | "month" | "year" | null;
+  kind: "founding" | "staff" | "platform" | "rules" | "milestone" | null;
+  author: ICodexMember;
+  /** Each known member `body` mentions, keyed by Discord id. */
+  mentions: Record<string, ICodexMember>;
+  images: { id: number; url: string; position: number }[];
+  links: { id: number; part: CodexPart; title: string }[];
+  /** What the acting member may do with it (all false when no member was named). */
+  viewer: { can_edit: boolean; can_delete: boolean };
+  created_at: string;
+  updated_at: string;
+}
+
+/** Which Fun Facts to list, for the member the bot acts for. */
+export interface IFunFactListQuery {
+  actingUserId: string;
+  page: number;
+  per: number;
+  /** Only those the member may edit: their own, or every one for a Moderator and above. */
+  editable?: boolean;
+  /** Words to find in the Fun Fact text (its `<@id>` tokens, not the names they show). */
+  q?: string;
+}
+
+/** /api/v1/codex/fun_facts, for the member the bot acts for. */
+export interface IFunFactApi {
+  /** One page of Fun Facts, newest first. */
+  list(query: IFunFactListQuery): Promise<ICodexEntry[]>;
+  /**
+   * The Fun Fact, or null when there is no such Fun Fact. With no member named, it is read
+   * as the bot itself (the Daily Fun Fact), and `viewer` is all false.
+   */
+  get(id: number, actingUserId?: string): Promise<ICodexEntry | null>;
+  /** Adds a Fun Fact credited to the member. Throws the AxiosError on a refusal. */
+  create(body: string, actingUserId: string): Promise<ICodexEntry>;
+  /** Replaces a Fun Fact's text. Throws the AxiosError on a refusal. */
+  edit(id: number, body: string, actingUserId: string): Promise<ICodexEntry>;
+  /** Deletes a Fun Fact: false when it was already gone. Throws on a refusal. */
+  remove(id: number, actingUserId: string): Promise<boolean>;
+  /**
+   * Draws the next Fun Fact in the queue for the member (/funfact), which marks it shown;
+   * null when there are none. Throws the AxiosError on a refusal.
+   */
+  draw(actingUserId: string): Promise<ICodexEntry | null>;
+}
+
+const CODEX_PATH = "/api/v1/codex";
+const FUN_FACTS_PATH = `${CODEX_PATH}/fun_facts`;
+
+function withQuery(path: string, query: Record<string, string | number>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) params.set(key, String(value));
+  return `${path}?${params.toString()}`;
+}
+
+/** GET /codex/fun_facts for `query`; an empty `q` and a false `editable` are left out. */
+export function funFactListPath(query: IFunFactListQuery): string {
+  const params: Record<string, string | number> = {
+    acting_user_id: query.actingUserId,
+    page: query.page,
+    per: query.per,
+  };
+  if (query.editable) params.editable = "true";
+  if (query.q) params.q = query.q;
+  return withQuery(FUN_FACTS_PATH, params);
+}
+
+export const FUN_FACT_API: IFunFactApi = {
+  async list(query) {
+    const payload = await apiGetOrThrow<{ data: ICodexEntry[] }>(funFactListPath(query));
+    return payload.data;
+  },
+  async get(id, actingUserId) {
+    const path = `${FUN_FACTS_PATH}/${id}`;
+    const payload = await apiGet<{ data: ICodexEntry }>(
+      actingUserId === undefined ? path : withQuery(path, { acting_user_id: actingUserId }),
+    );
+    return payload?.data ?? null;
+  },
+  async create(body, actingUserId) {
+    const payload = await apiPostOrThrow<{ data: ICodexEntry }>(
+      FUN_FACTS_PATH,
+      { data: { body, acting_user_id: actingUserId } },
+    );
+    return payload.data;
+  },
+  async edit(id, body, actingUserId) {
+    const payload = await apiPatchOrThrow<{ data: ICodexEntry }>(
+      `${FUN_FACTS_PATH}/${id}`,
+      { data: { body, acting_user_id: actingUserId } },
+    );
+    return payload.data;
+  },
+  async remove(id, actingUserId) {
+    const payload = await apiDelete<{ data: { id: number; deleted: boolean } }>(
+      withQuery(`${FUN_FACTS_PATH}/${id}`, { acting_user_id: actingUserId }),
+    );
+    return payload !== null;
+  },
+  async draw(actingUserId) {
+    // The draw answers `{ fun_fact }`, not the `{ data }` of the other Fun Fact endpoints.
+    const payload = await apiPostOrThrow<{ fun_fact: ICodexEntry | null }>(
+      `${FUN_FACTS_PATH}/draw`,
+      { data: { acting_user_id: actingUserId } },
+    );
+    return payload.fun_fact ?? null;
+  },
+};
+
+/** An entry as a "See also" link or a search result shows it. */
+export type ICodexLink = ICodexEntry["links"][number];
+
+/** Club Lore and Club History, read for /codex lore read and /codex history (bot#1563). */
+export interface ICodexReadApi {
+  /** Lore Entries matching `query` by title or text, title matches first; all, newest first. */
+  searchLore(query: string, per: number): Promise<ICodexLink[]>;
+  /** The Lore Entry, or null when there is no such Lore Entry. */
+  getLoreEntry(id: number, actingUserId: string): Promise<ICodexEntry | null>;
+  /** Every History Event, oldest first (Club History's date order). */
+  listHistory(actingUserId: string): Promise<ICodexEntry[]>;
+}
+
+/** History Events read per request: the API's most, so Club History is one request. */
+const HISTORY_READ_PER = 500;
+/** A stop for a paging bug: more History Events than this aren't read. */
+const HISTORY_READ_PAGES_MAX = 20;
+
+export const CODEX_READ_API: ICodexReadApi = {
+  async searchLore(query, per) {
+    const params: Record<string, string | number> = { part: "lore_entry", page: 1, per };
+    if (query.trim()) params.q = query.trim();
+    const payload = await apiGetOrThrow<{ data: ICodexLink[] }>(
+      withQuery(`${CODEX_PATH}/entries`, params),
+    );
+    return payload.data;
+  },
+  async getLoreEntry(id, actingUserId) {
+    const payload = await apiGet<{ data: ICodexEntry }>(
+      withQuery(`${CODEX_PATH}/lore_entries/${id}`, { acting_user_id: actingUserId }),
+    );
+    return payload?.data ?? null;
+  },
+  async listHistory(actingUserId) {
+    const events: ICodexEntry[] = [];
+    let page: number | null = 1;
+    for (let read = 0; page !== null && read < HISTORY_READ_PAGES_MAX; read += 1) {
+      const payload: { data: ICodexEntry[]; meta?: { next?: number | null } } =
+        await apiGetOrThrow(withQuery(`${CODEX_PATH}/history_events`, {
+          acting_user_id: actingUserId,
+          page,
+          per: HISTORY_READ_PER,
+        }));
+      events.push(...payload.data);
+      page = payload.meta?.next ?? null;
+    }
+    return events;
+  },
+};

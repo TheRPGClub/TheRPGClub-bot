@@ -15,6 +15,7 @@ import {
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
   CHALLENGES_CHANNEL_ID,
+  FUN_FACT_CHANNEL_ID,
   GIVEAWAY_LOG_CHANNEL_ID,
   LIVE_EVENT_FORUM_ID,
 } from "../config/channels.js";
@@ -57,6 +58,7 @@ import {
 import { HOME_GUILD_ID } from "../config/guilds.js";
 import { BotJobStepError, isTemporaryJobError, stepFailed } from "./BotJobErrors.js";
 import { logError } from "../utilities/LogUtils.js";
+import { isIsoDate } from "../functions/ClubDate.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { updateBotPresence } from "../functions/SetPresence.js";
 import { sharedStateCommandRefusal } from "../functions/SharedStateCommandGuard.js";
@@ -120,6 +122,11 @@ import {
 } from "./ChallengeSignupPosts.js";
 import { announceEditionRevealed } from "./ChallengeReveal.js";
 import { pickReminderDm } from "./ChallengeSantaPick.js";
+import {
+  createCodexJobDeps,
+  postDailyFunFact,
+  type ICodexJobDeps,
+} from "./CodexFunFactPosts.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -264,6 +271,11 @@ export interface IBotJobSurface {
    * need not build it.
    */
   challenges?: IChallengeJobDeps;
+  /**
+   * What the Club Codex jobs read and post (spec api#397). Optional so fakes for other jobs
+   * need not build it.
+   */
+  codex?: ICodexJobDeps;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -338,6 +350,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     },
     newsHub: createNewsHubJobDeps(client),
     challenges: createChallengeJobDeps(client),
+    codex: createCodexJobDeps(client),
   };
 }
 
@@ -1129,6 +1142,38 @@ export const handleChallengeDm: BotJobHandler = dmOnly(async (payload, surface, 
   return `DMed member ${dm.userId} ${dm.about}.`;
 });
 
+/** A club date as the API sends it: `YYYY-MM-DD`. */
+function requireClubDate(payload: Record<string, unknown>, field: string): string {
+  const value = requireString(payload, field);
+  if (!isIsoDate(value)) {
+    throw new Error(`Invalid payload: ${field} must be a YYYY-MM-DD date, got ${
+      JSON.stringify(value)
+    }.`);
+  }
+  return value;
+}
+
+/**
+ * Payload `{ club_date, entry_id, feature_key: "club_codex" }` (DailyFunFactJobPayload):
+ * posts the day's Fun Fact in general chat, in the bot-dev channel while the Club Codex is
+ * in Preview, and nowhere while it is Off. A job for a club day that has passed, or for a
+ * Fun Fact deleted since, is acked done without a post.
+ */
+export const handleDailyFunFact: BotJobHandler = async (payload, surface, context) => {
+  const job = {
+    clubDate: requireClubDate(payload, "club_date"),
+    entryId: payloadPositiveInt(payload, "entry_id"),
+  };
+  const featureKey = POST_FEATURE_KEYS.clubCodex;
+  const channelId = routeFeaturePost(
+    await jobFeatureState(featureKey, surface, context),
+    FUN_FACT_CHANNEL_ID,
+  );
+  if (!channelId) return featureOffNotice(featureKey);
+  if (!surface.codex) throw new Error("This bot job surface cannot reach the Club Codex.");
+  return postDailyFunFact(job, channelId, surface.codex);
+};
+
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
   giveaway_claim_notice: handleGiveawayClaimNotice,
@@ -1150,4 +1195,5 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   news_catch_up: handleNewsCatchUp,
   challenge_announce: handleChallengeAnnounce,
   challenge_dm: handleChallengeDm,
+  daily_fun_fact: handleDailyFunFact,
 };

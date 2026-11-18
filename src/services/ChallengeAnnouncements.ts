@@ -11,8 +11,8 @@ import {
 } from "discord-api-types/v10";
 import type { Client, MessageCreateOptions } from "discord.js";
 import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { clubToday } from "../functions/ClubDate.js";
 import {
-  clubToday,
   describePool,
   describePoolTarget,
   describeSchedule,

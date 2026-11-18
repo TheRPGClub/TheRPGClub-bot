@@ -10,9 +10,12 @@ import {
   ButtonStyle,
   MessageFlags,
   SeparatorSpacingSize,
-  type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
-import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import {
+  buildTextContainer,
+  buildTextDisplay,
+  type IComponentsV2View,
+} from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_LABELS,
   describeOpen,
@@ -57,11 +60,7 @@ export interface IChallengeBrowseDeps {
 }
 
 /** A private reply or update: Components V2, and mentions never ping. */
-export interface IChallengeView {
-  components: APIMessageTopLevelComponent[];
-  flags: number;
-  allowedMentions: { parse: [] };
-}
+export type IChallengeView = IComponentsV2View;
 
 /** Games or Runs on one page of /challenge show, and Challenges on one of /challenge list. */
 export const CHALLENGE_PAGE_SIZE = 10;

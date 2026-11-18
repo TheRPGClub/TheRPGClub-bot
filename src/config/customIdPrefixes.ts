@@ -73,3 +73,13 @@ export const CHALLENGE_SLOTS_PREFIX = "challenge-slots-v1";
 export const CHALLENGE_SANTA_PREFIX = "challenge-santa-v1";
 /** A Santa's pick: open, page, search and choose, with the Edition ID, page and search. */
 export const CHALLENGE_SANTA_PICK_PREFIX = "challenge-santa-pick-v1";
+
+// Club Codex (spec api#397). Every Club Codex component's custom ID starts with this, so
+// the Feature gate maps them all to the club_codex Feature.
+export const CODEX_CUSTOM_ID_PREFIX = "codex-";
+/** /codex fun-fact delete: the question's Delete and Keep buttons, keyed by Fun Fact ID. */
+export const CODEX_FUN_FACT_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}fun-fact`;
+/** /codex lore read: Previous, Next and Post this page, keyed by Lore Entry, page and owner. */
+export const CODEX_LORE_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}lore`;
+/** /codex history: Newer and Older, keyed by page and owner. */
+export const CODEX_HISTORY_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}history`;

@@ -15,6 +15,7 @@ import {
   type IFeatureFlag,
   type IFeatureGateSource,
 } from "../functions/FeatureGate.js";
+import { isAutocompleteGated } from "../functions/InteractionUtils.js";
 import {
   createFeatureAccessCache,
   createFeatureFlagCache,
@@ -64,6 +65,8 @@ const COMMANDS: Array<[string, string | null]> = [
   ["gamegiveaway", "giveaways"],
   ["suggestion", "suggestions"],
   ["Change news category", "news_hub"],
+  ["codex", "club_codex"],
+  ["funfact", "club_codex"],
   ["help", null],
   ["timestamp", null],
   ["profile", null],
@@ -105,6 +108,9 @@ const COMPONENTS: Array<[string, string | null]> = [
   ["suggestion-approve:3", "suggestions"],
   ["todo-review-suggestions", "suggestions"],
   ["news-category-pick-v1:510000000000000001:610000000000000001", "news_hub"],
+  ["codex-fun-fact:delete:5", "club_codex"],
+  ["codex-lore:page:7:2:222:public", "club_codex"],
+  ["codex-history:page:2:222:public", "club_codex"],
   ["now-playing-help-select", null],
   ["help:gamedb:main", null],
   ["admin-vote-close:4:confirm", null],
@@ -422,13 +428,14 @@ test("addPreviewNote: an edit that keeps the message body is left alone", () => 
   assert.deepEqual(addPreviewNote(embedsOnly), embedsOnly);
 });
 
-test("feature gate map: every mapped Feature is one of the API registry's 13 keys", async () => {
+test("feature gate map: every mapped Feature is one of the API registry's 14 keys", async () => {
   const { FEATURE_COMMANDS, FEATURE_COMPONENT_PREFIXES } = await import(
     "../config/featureGate.js",
   );
   const registry = new Set([
     "game_index", "voting_gotm", "backlog", "collection", "now_playing", "game_completions",
     "reviews", "achievement_hub", "giveaways", "journals", "suggestions", "news_hub", "challenges",
+    "club_codex",
   ]);
   const mapped = [
     ...Object.values(FEATURE_COMMANDS),
@@ -436,3 +443,14 @@ test("feature gate map: every mapped Feature is one of the API registry's 13 key
   ];
   assert.deepEqual(mapped.filter((key) => !registry.has(key)), []);
 });
+
+test("isAutocompleteGated: hides a Preview command's autocomplete from non-staff only",
+  async () => {
+    const source = gateSource(fakeApi(() => ({ club_codex: "preview" }), ["900"]));
+    const typing = (userId: string) =>
+      ({ commandName: "codex", user: { id: userId } }) as unknown as Parameters<
+        typeof isAutocompleteGated
+      >[0];
+    assert.equal(await isAutocompleteGated(typing("100"), source), true);
+    assert.equal(await isAutocompleteGated(typing("900"), source), false);
+  });

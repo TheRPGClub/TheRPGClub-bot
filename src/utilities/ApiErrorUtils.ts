@@ -219,6 +219,22 @@ export function buildApiErrorMessage(
 }
 
 /**
+ * The reply for a failed call to an API that words its refusals for members (`{ error,
+ * message }`). A refusal (4xx) leads with that `message`, as given; anything else leads
+ * with `fallback` and pings the devs. Both carry the full request and response.
+ */
+export function buildApiRefusalMessage(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status ?? 0;
+    const message = (err.response?.data as { message?: unknown } | undefined)?.message;
+    if (status >= 400 && status < 500 && typeof message === "string" && message.trim()) {
+      return buildApiErrorMessage(message.trim(), err, { devPing: false });
+    }
+  }
+  return buildApiErrorMessage(fallback, err);
+}
+
+/**
  * Picks the formatter for an error of unknown origin: API errors (axios, or wrapped in a
  * cause) get buildApiErrorMessage, and everything else, including discord.js REST
  * failures, gets buildDiscordErrorMessage.

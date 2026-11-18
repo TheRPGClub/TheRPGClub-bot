@@ -6,6 +6,7 @@
 
 import {
   CHALLENGE_CUSTOM_ID_PREFIX,
+  CODEX_CUSTOM_ID_PREFIX,
   NEWS_CATEGORY_PICK_PREFIX,
 } from "./customIdPrefixes.js";
 import {
@@ -19,6 +20,13 @@ import {
  * DMs (`challenge_dm`) go out in Preview too; only the posts move to bot-dev.
  */
 export const CHALLENGES_FEATURE_KEY = "challenges";
+
+/**
+ * The Club Codex (spec api#397): `/codex`, `/funfact` and their components, and the Daily
+ * Fun Fact post. Every subcommand group of `/codex` (fun-fact, lore, history) shares the
+ * one entry below.
+ */
+export const CLUB_CODEX_FEATURE_KEY = "club_codex";
 
 /** Top-level slash command or context menu name -> Feature key. */
 export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
@@ -50,6 +58,8 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   // /news share: staff only in Preview, everyone when Live (spec api#367).
   [NEWS_COMMAND]: "news_hub",
   challenge: CHALLENGES_FEATURE_KEY,
+  codex: CLUB_CODEX_FEATURE_KEY,
+  funfact: CLUB_CODEX_FEATURE_KEY,
 };
 
 /**
@@ -106,6 +116,8 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
   [`${NEWS_CATEGORY_PICK_PREFIX}:`, "news_hub"],
 
   [CHALLENGE_CUSTOM_ID_PREFIX, CHALLENGES_FEATURE_KEY],
+
+  [CODEX_CUSTOM_ID_PREFIX, CLUB_CODEX_FEATURE_KEY],
 ];
 
 /**
@@ -126,4 +138,5 @@ export const POST_FEATURE_KEYS = {
   giveawayClaimLog: "giveaways",
   suggestions: "suggestions",
   challenges: CHALLENGES_FEATURE_KEY,
+  clubCodex: CLUB_CODEX_FEATURE_KEY,
 } as const;

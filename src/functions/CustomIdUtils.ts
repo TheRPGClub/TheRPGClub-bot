@@ -30,3 +30,13 @@ export function encodeWithMaxLength(
   }
   return fallback;
 }
+
+/**
+ * A positive whole-number ID written in a custom ID part or an autocompleted option (digits
+ * only, surrounding spaces ignored), or null when it is not one.
+ */
+export function parsePositiveId(raw: string | undefined): number | null {
+  const text = (raw ?? "").trim();
+  const value = Number(text);
+  return /^\d+$/.test(text) && Number.isSafeInteger(value) && value > 0 ? value : null;
+}

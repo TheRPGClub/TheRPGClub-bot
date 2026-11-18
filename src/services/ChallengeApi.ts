@@ -1,9 +1,8 @@
-import axios from "axios";
 import {
   CHALLENGE_RUNS_MAX_REQUESTS,
   CHALLENGE_RUNS_PER_REQUEST,
 } from "../config/challenges.js";
-import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
+import { buildApiRefusalMessage } from "../utilities/ApiErrorUtils.js";
 import {
   apiDelete,
   apiGet,
@@ -520,12 +519,5 @@ export function poolDefinitionOf(pool: IChallengePool): IPoolDefinition {
  * the devs. Both carry the full request and response (CLAUDE.md).
  */
 export function challengeRefusalText(err: unknown, fallback: string): string {
-  if (axios.isAxiosError(err)) {
-    const status = err.response?.status ?? 0;
-    const message = (err.response?.data as { message?: unknown } | undefined)?.message;
-    if (status >= 400 && status < 500 && typeof message === "string" && message.trim()) {
-      return buildApiErrorMessage(message.trim(), err, { devPing: false });
-    }
-  }
-  return buildApiErrorMessage(fallback, err);
+  return buildApiRefusalMessage(err, fallback);
 }
