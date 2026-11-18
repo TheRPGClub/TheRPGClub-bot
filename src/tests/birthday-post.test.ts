@@ -72,6 +72,10 @@ function fakeDeps(options: { departed?: string[]; today?: string } = {}): IFakeD
     postMessage: async (channelId, post) => {
       deps.posts.push({ channelId, post });
     },
+    // As Discord would answer: the bot's own posts in the channel carrying that day's banner.
+    greetedOn: async (channelId, clubDate) => new Set(deps.posts
+      .filter((p) => p.channelId === channelId && p.post.files[0]?.name.includes(clubDate))
+      .flatMap((p) => p.post.pingUserIds)),
   };
   return deps;
 }
@@ -247,4 +251,71 @@ test("composeBirthdayBanner: a very long name still fits", async () => {
   });
   const meta = await sharp(png).metadata();
   assert.deepEqual([meta.width, meta.height], [1200, 600]);
+});
+
+test("birthday_post: a same-day redelivery of a job that posted posts nothing more",
+  async () => {
+    const deps = fakeDeps();
+    const payload = { club_date: TODAY, user_ids: ["101", "102"] };
+    await run(deps, payload);
+    const acks = await run(deps, payload);
+
+    assert.equal(deps.posts.length, 1);
+    assert.deepEqual(acks, [{
+      id: 7,
+      status: "done",
+      resultText: "Not posted: every member was already greeted in the Birthday channel " +
+        "for 2026-11-18 (a repeat of a job that posted).",
+    }]);
+  });
+
+test("birthday_post: a later job the same day greets only members not yet greeted",
+  async () => {
+    const deps = fakeDeps();
+    await run(deps, { club_date: TODAY, user_ids: ["101"] });
+    await run(deps, { club_date: TODAY, user_ids: ["101", "103"] });
+
+    assert.equal(deps.posts.length, 2);
+    const later = deps.posts[1]!.post;
+    assert.deepEqual(later.pingUserIds, ["103"]);
+    assert.equal(
+      later.content,
+      "## 🎂 Happy Birthday, <@103>!\nHave a great day, from everyone at the club.",
+    );
+  });
+
+test("birthday_post: a post for another day does not count as greeted", async () => {
+  const deps = fakeDeps({ today: "2026-11-19" });
+  await run(deps, { club_date: "2026-11-19", user_ids: ["101"] });
+  deps.clubToday = () => "2026-11-20";
+  await run(deps, { club_date: "2026-11-20", user_ids: ["101"] });
+
+  assert.equal(deps.posts.length, 2);
+});
+
+test("birthday_post: when the channel's history can't be read the Birthday still goes out",
+  async (t) => {
+    t.mock.method(console, "error", () => undefined);
+    const deps = fakeDeps();
+    deps.greetedOn = async () => {
+      throw new DiscordAPIError(
+        { code: 50001, message: "Missing Access" },
+        50001,
+        403,
+        "GET",
+        "https://discord.com/api/v10/channels/1/messages",
+        { body: undefined, files: undefined },
+      );
+    };
+    const acks = await run(deps, { club_date: TODAY, user_ids: ["101"] });
+
+    assert.equal(deps.posts.length, 1);
+    assert.equal(acks[0]?.status, "done");
+  });
+
+test("birthday_post: the banner's file name carries the club day", async () => {
+  const deps = fakeDeps();
+  await run(deps, { club_date: TODAY, user_ids: ["101"] });
+
+  assert.equal(deps.posts[0]?.post.files[0]?.name, "happy-birthday-2026-11-18.png");
 });

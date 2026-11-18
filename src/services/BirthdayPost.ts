@@ -1,6 +1,8 @@
 import { DiscordAPIError, RESTJSONErrorCodes, userMention, type Client } from "discord.js";
 import { DateTime } from "luxon";
 import { HOME_GUILD_ID } from "../config/guilds.js";
+import { logError } from "../utilities/LogUtils.js";
+import { isTemporaryJobError } from "./BotJobErrors.js";
 import { fetchImageBuffer } from "./GameImageService.js";
 import { bannerDescription, composeBirthdayBanner } from "./BirthdayBanner.js";
 import { BIRTHDAY_TIME_ZONE } from "./UpcomingBirthdaysService.js";
@@ -35,6 +37,21 @@ export interface IBirthdayPostDeps {
   fetchMember(userId: string): Promise<IBirthdayMember | null>;
   /** Posts to a text channel. Throws the discord.js error, or when it can't hold posts. */
   postMessage(channelId: string, post: IBirthdayPost): Promise<void>;
+  /**
+   * The members the bot's own Birthday Posts for `clubDate` in the channel already greeted,
+   * read from Discord so it survives a restart. Throws the discord.js error.
+   */
+  greetedOn(channelId: string, clubDate: string): Promise<ReadonlySet<string>>;
+}
+
+/** Pages of 100 messages read back for the day's Birthday Posts, at most. */
+const GREETED_SCAN_PAGES = 5;
+const MESSAGES_PER_PAGE = 100;
+const MENTION_PATTERN = /<@!?(\d+)>/g;
+
+/** The banner's file name, carrying the club day so that day's posts can be found again. */
+export function bannerFileName(clubDate: string): string {
+  return `happy-birthday-${clubDate}.png`;
 }
 
 const NUMBER_WORDS = ["", "", "", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
@@ -103,7 +120,53 @@ export function createBirthdayPostDeps(client: Client): IBirthdayPostDeps {
         allowedMentions: { users: post.pingUserIds },
       });
     },
+    greetedOn: async (channelId, clubDate) => {
+      const greeted = new Set<string>();
+      const channel = await client.channels.fetch(channelId);
+      // A missing channel is postMessage's to report.
+      if (!channel || !channel.isTextBased()) return greeted;
+      const dayStart = DateTime.fromISO(clubDate, { zone: BIRTHDAY_TIME_ZONE }).toMillis();
+      const fileName = bannerFileName(clubDate);
+      let before: string | undefined;
+      for (let page = 0; page < GREETED_SCAN_PAGES; page++) {
+        const batch = await channel.messages.fetch({
+          limit: MESSAGES_PER_PAGE,
+          ...(before ? { before } : {}),
+        });
+        for (const message of batch.values()) {
+          const ours = message.author.id === client.user?.id &&
+            message.attachments.some((file) => file.name === fileName);
+          if (!ours) continue;
+          for (const match of message.content.matchAll(MENTION_PATTERN)) greeted.add(match[1]!);
+        }
+        const oldest = batch.last();
+        if (!oldest || batch.size < MESSAGES_PER_PAGE || oldest.createdTimestamp < dayStart) {
+          break;
+        }
+        before = oldest.id;
+      }
+      return greeted;
+    },
   };
+}
+
+/**
+ * Who the day's earlier Birthday Posts greeted. A scan that fails for good (the bot can't
+ * read the channel's history) is logged and counts as nobody, so the Birthday still goes
+ * out; a temporary failure is thrown for the lease to retry.
+ */
+async function alreadyGreeted(
+  channelId: string,
+  clubDate: string,
+  deps: IBirthdayPostDeps,
+): Promise<ReadonlySet<string>> {
+  try {
+    return await deps.greetedOn(channelId, clubDate);
+  } catch (err: unknown) {
+    if (isTemporaryJobError(err)) throw err;
+    logError("BirthdayPost.alreadyGreeted", err);
+    return new Set();
+  }
 }
 
 function payloadUserIds(payload: Record<string, unknown>): string[] {
@@ -131,7 +194,8 @@ function payloadClubDate(payload: Record<string, unknown>): string {
 /**
  * Payload `{ club_date, user_ids }` (BirthdayPostJobPayload): posts the Birthday Post in
  * `channelId`. A job whose club day has passed in New York is dropped, so nobody is
- * greeted on the wrong day; members who left the server since it was queued are left out.
+ * greeted on the wrong day; members who left the server since it was queued, or whom an
+ * earlier Birthday Post that day already greeted, are left out.
  * Returns the job's result text.
  */
 export async function postBirthdays(
@@ -146,9 +210,18 @@ export async function postBirthdays(
     return `Not posted: the Birthday Post was for ${clubDate}, and today is ${today} ` +
       "in New York.";
   }
-  const fetched = await Promise.all(userIds.map((id) => deps.fetchMember(id)));
+  // The job is delivered at least once: a repeat of one that posted (its ack lost) finds
+  // its members greeted and posts nothing, while a later job that day greets only the rest.
+  const greeted = await alreadyGreeted(channelId, clubDate, deps);
+  const due = userIds.filter((id) => !greeted.has(id));
+  if (!due.length) {
+    return "Not posted: every member was already greeted in the Birthday channel for " +
+      `${clubDate} (a repeat of a job that posted).`;
+  }
+  const fetched = await Promise.all(due.map((id) => deps.fetchMember(id)));
   const members = fetched.filter((m): m is IBirthdayMember => m !== null);
-  const departed = userIds.length - members.length;
+  const departed = due.length - members.length;
+  const repeated = userIds.length - due.length;
   if (!members.length) {
     return "Not posted: none of the members are in the server any more.";
   }
@@ -161,12 +234,16 @@ export async function postBirthdays(
     content: birthdayPostContent(ids),
     pingUserIds: ids,
     files: [{
-      name: "happy-birthday.png",
+      name: bannerFileName(clubDate),
       data: banner,
       description: bannerDescription(members.map((m) => m.name)),
     }],
   });
-  const greeted = members.length === 1 ? "1 member" : `${members.length} members`;
-  const left = departed ? ` (${departed} no longer in the server left out)` : "";
-  return `Greeted ${greeted} for ${clubDate}${left}.`;
+  const count = members.length === 1 ? "1 member" : `${members.length} members`;
+  const notes = [
+    ...(departed ? [`${departed} no longer in the server`] : []),
+    ...(repeated ? [`${repeated} already greeted today`] : []),
+  ];
+  const left = notes.length ? ` (${notes.join(", ")} left out)` : "";
+  return `Greeted ${count} for ${clubDate}${left}.`;
 }
