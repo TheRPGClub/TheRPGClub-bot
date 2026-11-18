@@ -6,12 +6,13 @@ import type {
   IChallengePool,
 } from "../services/ChallengeApi.js";
 import { plural } from "../utilities/TextUtils.js";
+import { CLUB_TIME_ZONE } from "./ClubDate.js";
 
 // The words every Challenge view and post shares (spec api#376), in the API glossary's
 // terms: Host, Pool, Season, Always Open, Seasonal, Cleared, Finish.
 
 /** The club's time zone, which decides which day it is for Seasons and end dates. */
-export const CHALLENGE_TIME_ZONE = "America/New_York";
+export const CHALLENGE_TIME_ZONE = CLUB_TIME_ZONE;
 
 export const CHALLENGE_FORMAT_LABELS: Readonly<Record<ChallengeFormat, string>> = {
   pool: "Pool",
@@ -114,11 +115,6 @@ export function describeScheduleShort(challenge: IChallenge): string {
 export function hostLabel(challenge: IChallenge): string {
   if (challenge.hosted_by_club || !challenge.host) return "the club";
   return `<@${challenge.host.user_id}>`;
-}
-
-/** The club's date today, as an ISO date. */
-export function clubToday(now: Date = new Date()): string {
-  return DateTime.fromJSDate(now).setZone(CHALLENGE_TIME_ZONE).toISODate() ?? "";
 }
 
 /**

@@ -4,12 +4,7 @@ import {
   ContainerBuilder,
   SeparatorBuilder,
 } from "@discordjs/builders";
-import {
-  ButtonStyle,
-  MessageFlags,
-  SeparatorSpacingSize,
-  type APIMessageTopLevelComponent,
-} from "discord-api-types/v10";
+import { ButtonStyle, SeparatorSpacingSize } from "discord-api-types/v10";
 import type { Client } from "discord.js";
 import {
   FUN_FACT_ANSWER_BY_MS,
@@ -17,11 +12,16 @@ import {
   FUN_FACT_INK,
 } from "../config/codex.js";
 import { loreEntryPageUrl } from "../config/website.js";
-import { clubToday } from "../functions/ChallengeCopy.js";
-import { buildErrorReply, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import { clubToday } from "../functions/ClubDate.js";
+import {
+  buildComponentsV2View,
+  buildErrorReply,
+  buildTextDisplay,
+  type IComponentsV2View,
+} from "../functions/ComponentsV2Utils.js";
+import { buildApiRefusalMessage } from "../utilities/ApiErrorUtils.js";
 import { commandMention } from "./CommandMentionService.js";
 import {
-  codexRefusalText,
   FUN_FACT_API,
   type ICodexEntry,
   type IFunFactApi,
@@ -31,13 +31,6 @@ import {
 // /funfact reply. Both are design 1B's pink card: the label, the Fun Fact as a heading, a
 // divider, "Added by @author", and Read the story when it links to a Lore Entry. Mentions
 // are `<@id>` tokens, so Discord shows names, and the post pings nobody.
-
-/** A Components V2 message (the public card or a private reply); it never pings. */
-export interface IFunFactPost {
-  components: APIMessageTopLevelComponent[];
-  flags: number;
-  allowedMentions: { parse: [] };
-}
 
 /** The card's label: the 15:00 post, or one a member asked for with /funfact. */
 export type FunFactCardLabel = "Daily Fun Fact" | "Fun Fact";
@@ -58,7 +51,10 @@ function linkedLoreEntryId(entry: ICodexEntry): number | null {
 }
 
 /** Design 1B: the Fun Fact as a card edged in the Fun Facts ink. */
-export function buildFunFactCard(entry: ICodexEntry, label: FunFactCardLabel): IFunFactPost {
+export function buildFunFactCard(
+  entry: ICodexEntry,
+  label: FunFactCardLabel,
+): IComponentsV2View {
   const container = new ContainerBuilder()
     .setAccentColor(FUN_FACT_INK)
     .addTextDisplayComponents(
@@ -80,11 +76,7 @@ export function buildFunFactCard(entry: ICodexEntry, label: FunFactCardLabel): I
       ),
     );
   }
-  return {
-    components: [container.toJSON()],
-    flags: MessageFlags.IsComponentsV2,
-    allowedMentions: { parse: [] },
-  };
+  return buildComponentsV2View([container.toJSON()]);
 }
 
 /** What the Daily Fun Fact job reads and posts. */
@@ -92,7 +84,7 @@ export interface ICodexJobDeps {
   /** GET /codex/fun_facts/:id with the service token; null when it was deleted (404). */
   fetchFunFact(id: number): Promise<ICodexEntry | null>;
   /** Posts to a text channel. Throws the discord.js error, or when it can't hold posts. */
-  postMessage(channelId: string, post: IFunFactPost): Promise<void>;
+  postMessage(channelId: string, post: IComponentsV2View): Promise<void>;
   /** The time now, for the club date. */
   now(): Date;
 }
@@ -134,15 +126,11 @@ export async function postDailyFunFact(
 }
 
 /** A private reply in the Fun Facts ink; mentions in it never ping. */
-function privateFunFactView(content: string): IFunFactPost {
+function privateFunFactView(content: string): IComponentsV2View {
   const container = new ContainerBuilder()
     .setAccentColor(FUN_FACT_INK)
     .addTextDisplayComponents(buildTextDisplay(content));
-  return {
-    components: [container.toJSON()],
-    flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
-    allowedMentions: { parse: [] },
-  };
+  return buildComponentsV2View([container.toJSON()], true);
 }
 
 /**
@@ -150,8 +138,8 @@ function privateFunFactView(content: string): IFunFactPost {
  * or a failed draw (the API's refusal with its request and response), shown privately.
  */
 export type FunFactDrawReply =
-  | { post: IFunFactPost }
-  | { empty: IFunFactPost }
+  | { post: IComponentsV2View }
+  | { empty: IComponentsV2View }
   | { error: string };
 
 /**
@@ -168,7 +156,7 @@ export async function drawFunFactReply(
   try {
     entry = await api.draw(input.actingUserId);
   } catch (err: unknown) {
-    return { error: codexRefusalText(err, "Could not draw a Fun Fact.") };
+    return { error: buildApiRefusalMessage(err, "Could not draw a Fun Fact.") };
   }
   if (!entry) {
     return {

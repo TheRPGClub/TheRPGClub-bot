@@ -10,7 +10,6 @@ import {
 } from "@discordjs/builders";
 import {
   ButtonStyle,
-  MessageFlags,
   SeparatorSpacingSize,
   type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
@@ -38,20 +37,22 @@ import {
 } from "../functions/CodexCustomIds.js";
 import { cutAtSentence, splitLorePages } from "../functions/CodexLorePages.js";
 import { formatCodexDate, HISTORY_KIND_LABELS } from "../functions/CodexText.js";
+import { codexView } from "../functions/CodexViews.js";
 import {
+  buildComponentsV2View,
   buildMaskedLink,
   buildTextDisplay,
+  type IComponentsV2View,
 } from "../functions/ComponentsV2Utils.js";
+import { buildApiRefusalMessage } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { plural } from "../utilities/TextUtils.js";
 import {
   CODEX_READ_API,
-  codexRefusalText,
   type ICodexEntry,
   type ICodexLink,
   type ICodexReadApi,
 } from "./CodexApi.js";
-import { codexView, type ICodexView } from "./CodexFunFacts.js";
 
 // /codex lore read and /codex history (spec api#397, bot#1563). Lore Entries and History
 // Events are written on the website; Discord only reads them. Design picks: a Lore Entry
@@ -67,14 +68,12 @@ export interface ICodexReadingDeps {
  * share), a `notice` only the member should see, or an error (the request and response).
  */
 export type CodexReadResult =
-  | { page: ICodexView }
-  | { notice: ICodexView }
+  | { page: IComponentsV2View }
+  | { notice: IComponentsV2View }
   | { error: string };
 
-function page(components: APIMessageTopLevelComponent[]): { page: ICodexView } {
-  return {
-    page: { components, flags: MessageFlags.IsComponentsV2, allowedMentions: { parse: [] } },
-  };
+function pageResult(components: APIMessageTopLevelComponent[]): { page: IComponentsV2View } {
+  return { page: buildComponentsV2View(components) };
 }
 
 function separator(): SeparatorBuilder {
@@ -106,7 +105,7 @@ function linkUrl(link: ICodexLink): string {
 export function pageTurnRefusal(
   target: { ownerId: string },
   clickerId: string,
-): ICodexView | null {
+): IComponentsV2View | null {
   if (target.ownerId === clickerId) return null;
   return codexView(
     `Only <@${target.ownerId}> can turn these pages. Run the command to read it yourself.`,
@@ -194,7 +193,7 @@ function loreButtons(
 function lorePage(
   entry: ICodexEntry,
   input: { page: number; ownerId: string; visibility: CodexReplyVisibility },
-): { page: ICodexView } {
+): { page: IComponentsV2View } {
   const pages = splitLorePages(entry.body, LORE_PAGE_TEXT_MAX);
   const at = Math.min(Math.max(input.page, 1), pages.length);
   const card = new ContainerBuilder().setAccentColor(CLUB_LORE_INK);
@@ -219,7 +218,7 @@ function lorePage(
     { entryId: entry.id, page: at, ownerId: input.ownerId, visibility: input.visibility },
     pages.length,
   );
-  return page([card.toJSON(), row.toJSON()]);
+  return pageResult([card.toJSON(), row.toJSON()]);
 }
 
 /**
@@ -242,7 +241,7 @@ export async function loreReadReply(
   try {
     entry = await api.getLoreEntry(input.entryId, input.ownerId);
   } catch (err: unknown) {
-    return { error: codexRefusalText(err, "Could not read that Lore Entry.") };
+    return { error: buildApiRefusalMessage(err, "Could not read that Lore Entry.") };
   }
   if (!entry) {
     return {
@@ -293,7 +292,7 @@ export async function historyReply(
   try {
     events = await api.listHistory(input.ownerId);
   } catch (err: unknown) {
-    return { error: codexRefusalText(err, "Could not read Club History.") };
+    return { error: buildApiRefusalMessage(err, "Could not read Club History.") };
   }
   if (!events.length) return { notice: codexView("Club History has no History Events yet.") };
 
@@ -314,7 +313,7 @@ export async function historyReply(
   if (at < pages) row.addComponents(idButton("Older", to(at + 1)));
   row.addComponents(linkButton("The full Club History", codexHistoryUrl()));
 
-  return page([
+  return pageResult([
     buildTextDisplay(`## Club History\n-# ${heading}`).toJSON(),
     ...shown.map((event) => historyCard(event).toJSON()),
     row.toJSON(),

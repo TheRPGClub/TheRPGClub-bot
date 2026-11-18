@@ -1,4 +1,8 @@
-import { MessageFlags, MessageFlagsBitField } from "discord.js";
+import {
+  MessageFlags,
+  MessageFlagsBitField,
+  type APIMessageTopLevelComponent,
+} from "discord.js";
 import {
   ContainerBuilder,
   FileBuilder,
@@ -30,6 +34,25 @@ export function buildComponentsV2Flags(isEphemeral: boolean): number {
 
 export function buildComponentsV2EditFlags(): number {
   return MessageFlags.IsComponentsV2;
+}
+
+/** A Components V2 reply, update or post whose mentions show as names and never ping. */
+export interface IComponentsV2View {
+  components: APIMessageTopLevelComponent[];
+  flags: number;
+  allowedMentions: { parse: [] };
+}
+
+/** `components` as a view that never pings: private when `isEphemeral`. */
+export function buildComponentsV2View(
+  components: APIMessageTopLevelComponent[],
+  isEphemeral = false,
+): IComponentsV2View {
+  return {
+    components,
+    flags: buildComponentsV2Flags(isEphemeral),
+    allowedMentions: { parse: [] },
+  };
 }
 
 /**

@@ -13,8 +13,8 @@ import {
   type FunFactDrawReply,
   type ICodexJobDeps,
   type IFunFactAnswerIo,
-  type IFunFactPost,
 } from "../services/CodexFunFactPosts.js";
+import type { IComponentsV2View } from "../functions/ComponentsV2Utils.js";
 import { apiError, buttonsOf, textOf } from "./challengeFixtures.js";
 
 // The Daily Fun Fact BotJob and /funfact (bot#1562): design 1B, the pink card. The API
@@ -71,7 +71,7 @@ function fakeJobApi(): IBotJobApi & { acks: Ack[] } {
 }
 
 interface IFakeCodexDeps extends ICodexJobDeps {
-  posts: { channelId: string; post: IFunFactPost }[];
+  posts: { channelId: string; post: IComponentsV2View }[];
   reads: number[];
 }
 

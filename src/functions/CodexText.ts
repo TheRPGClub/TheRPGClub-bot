@@ -1,4 +1,5 @@
 import type { ICodexEntry, ICodexMember } from "../services/CodexApi.js";
+import { isIsoDate } from "./ClubDate.js";
 
 // Club Codex text helpers shared by every part's Discord views.
 
@@ -25,9 +26,9 @@ export function plainCodexText(
  */
 export function formatCodexDate(
   occurredOn: string | null,
-  precision: "day" | "month" | "year" | null,
+  precision: ICodexEntry["date_precision"],
 ): string | null {
-  if (!occurredOn || !precision || !/^\d{4}-\d{2}-\d{2}$/.test(occurredOn)) return null;
+  if (!occurredOn || !precision || !isIsoDate(occurredOn)) return null;
   const date = new Date(`${occurredOn}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return null;
   const parts: Intl.DateTimeFormatOptions = precision === "year"

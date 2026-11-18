@@ -3,6 +3,7 @@ import {
   CODEX_HISTORY_PREFIX,
   CODEX_LORE_PREFIX,
 } from "../config/customIdPrefixes.js";
+import { parsePositiveId } from "./CustomIdUtils.js";
 
 // Club Codex custom IDs (spec api#397). Each holds what it acts on, and the clicking member
 // is who acts, so every button still works after a bot restart.
@@ -23,31 +24,27 @@ export function parseCodexFunFactId(
   customId: string,
 ): { action: CodexFunFactAction; factId: number } | null {
   const [prefix, action, raw, ...rest] = customId.split(":");
-  const factId = Number(raw);
-  if (
-    prefix !== CODEX_FUN_FACT_PREFIX || rest.length ||
-    !Number.isInteger(factId) || factId < 1
-  ) {
-    return null;
-  }
+  const factId = parsePositiveId(raw);
+  if (prefix !== CODEX_FUN_FACT_PREFIX || rest.length || factId === null) return null;
   const known = (CODEX_FUN_FACT_ACTIONS as readonly string[]).includes(action ?? "");
   return known ? { action: action as CodexFunFactAction, factId } : null;
 }
 
 /** The Club Codex entry ID an autocompleted option holds, or null when it is not one. */
-export function parseCodexEntryOption(raw: string | undefined): number | null {
-  const id = Number((raw ?? "").trim());
-  return (raw ?? "").trim() && Number.isInteger(id) && id > 0 ? id : null;
-}
+export const parseCodexEntryOption = parsePositiveId;
 
 /** Who a /codex lore read or /codex history reply shows to: the member alone, or the channel. */
 export type CodexReplyVisibility = "private" | "public";
 
 const VISIBILITIES: readonly string[] = ["private", "public"];
 
-function parsePositive(raw: string | undefined): number | null {
-  const value = Number(raw);
-  return raw && /^\d+$/.test(raw) && Number.isSafeInteger(value) && value > 0 ? value : null;
+/** A reading button's owner (a Discord ID) and visibility, or null when either is not one. */
+function parseOwnerAndVisibility(
+  ownerId: string | undefined,
+  visibility: string | undefined,
+): { ownerId: string; visibility: CodexReplyVisibility } | null {
+  if (!/^\d+$/.test(ownerId ?? "") || !VISIBILITIES.includes(visibility ?? "")) return null;
+  return { ownerId: ownerId as string, visibility: visibility as CodexReplyVisibility };
 }
 
 /**
@@ -75,22 +72,16 @@ export function buildCodexLoreId(target: ICodexLoreTarget): string {
 
 export function parseCodexLoreId(customId: string): ICodexLoreTarget | null {
   const [prefix, action, rawEntry, rawPage, ownerId, visibility, ...rest] = customId.split(":");
-  const entryId = parsePositive(rawEntry);
-  const page = parsePositive(rawPage);
+  const entryId = parsePositiveId(rawEntry);
+  const page = parsePositiveId(rawPage);
+  const reader = parseOwnerAndVisibility(ownerId, visibility);
   if (
     prefix !== CODEX_LORE_PREFIX || rest.length || entryId === null || page === null ||
-    !/^\d+$/.test(ownerId ?? "") || !VISIBILITIES.includes(visibility ?? "") ||
-    !(CODEX_LORE_ACTIONS as readonly string[]).includes(action ?? "")
+    reader === null || !(CODEX_LORE_ACTIONS as readonly string[]).includes(action ?? "")
   ) {
     return null;
   }
-  return {
-    action: action as CodexLoreAction,
-    entryId,
-    page,
-    ownerId,
-    visibility: visibility as CodexReplyVisibility,
-  };
+  return { action: action as CodexLoreAction, entryId, page, ...reader };
 }
 
 /**
@@ -110,12 +101,13 @@ export function buildCodexHistoryId(target: ICodexHistoryTarget): string {
 
 export function parseCodexHistoryId(customId: string): ICodexHistoryTarget | null {
   const [prefix, action, rawPage, ownerId, visibility, ...rest] = customId.split(":");
-  const page = parsePositive(rawPage);
+  const page = parsePositiveId(rawPage);
+  const reader = parseOwnerAndVisibility(ownerId, visibility);
   if (
     prefix !== CODEX_HISTORY_PREFIX || action !== "page" || rest.length || page === null ||
-    !/^\d+$/.test(ownerId ?? "") || !VISIBILITIES.includes(visibility ?? "")
+    reader === null
   ) {
     return null;
   }
-  return { page, ownerId, visibility: visibility as CodexReplyVisibility };
+  return { page, ...reader };
 }

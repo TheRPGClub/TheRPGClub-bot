@@ -10,12 +10,10 @@ import { parseCodexHistoryId } from "../../functions/CodexCustomIds.js";
 import {
   PRIVATE_OPTION_DESCRIPTION,
   safeDeferReply,
-  safeDeferUpdate,
 } from "../../functions/InteractionUtils.js";
-import { codexView } from "../../services/CodexFunFacts.js";
-import { historyReply, pageTurnRefusal } from "../../services/CodexReading.js";
+import { historyReply } from "../../services/CodexReading.js";
 import {
-  replyPrivately,
+  openPageButton,
   showButtonResult,
   showCommandResult,
 } from "./codex-read.utils.js";
@@ -50,17 +48,8 @@ export class CodexHistoryCommand {
 
   @ButtonComponent({ id: new RegExp(`^${CODEX_HISTORY_PREFIX}:`) })
   async pageButton(interaction: ButtonInteraction): Promise<void> {
-    const target = parseCodexHistoryId(interaction.customId);
-    if (!target) {
-      await replyPrivately(interaction, codexView("This button is out of date."));
-      return;
-    }
-    const refusal = pageTurnRefusal(target, interaction.user.id);
-    if (refusal) {
-      await replyPrivately(interaction, refusal);
-      return;
-    }
-    if (!(await safeDeferUpdate(interaction))) return;
+    const target = await openPageButton(interaction, parseCodexHistoryId(interaction.customId));
+    if (!target) return;
     await showButtonResult(interaction, await historyReply(target), false);
   }
 }

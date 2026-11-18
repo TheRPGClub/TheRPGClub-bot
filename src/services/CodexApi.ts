@@ -1,4 +1,3 @@
-import { buildApiRefusalMessage } from "../utilities/ApiErrorUtils.js";
 import {
   apiDelete,
   apiGet,
@@ -27,7 +26,8 @@ export interface ICodexEntry {
   id: number;
   part: CodexPart;
   title: string | null;
-  rich_body: Record<string, unknown> | null;
+  /** The website's rich text, as Plate nodes. */
+  rich_body: Array<Record<string, unknown>> | null;
   /** The Discord text, members mentioned as `<@discord_id>` tokens. */
   body: string | null;
   occurred_on: string | null;
@@ -189,12 +189,3 @@ export const CODEX_READ_API: ICodexReadApi = {
     return events;
   },
 };
-
-/**
- * A failed Club Codex call as the member reads it: the API's own `message` for a refusal
- * (403 `forbidden` or `feature_unavailable`, 422 `invalid_entry`), else the fallback, with
- * the request and the response.
- */
-export function codexRefusalText(err: unknown, fallback: string): string {
-  return buildApiRefusalMessage(err, fallback);
-}

@@ -10,6 +10,7 @@ import {
   type AnyRepliable,
 } from "../../functions/InteractionUtils.js";
 import { buildErrorReply } from "../../functions/ComponentsV2Utils.js";
+import { parsePositiveId } from "../../functions/CustomIdUtils.js";
 import GameSearchService from "../../classes/GameSearchService.js";
 import {
   DISCORD_AUTOCOMPLETE_CHOICES_MAX,
@@ -49,10 +50,7 @@ export async function autocompleteChallenge(interaction: AutocompleteInteraction
 }
 
 /** The Challenge ID an autocompleted option holds, or null when it is not one. */
-export function parseChallengeOption(raw: string): number | null {
-  const id = Number(raw.trim());
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
+export const parseChallengeOption: (raw: string) => number | null = parsePositiveId;
 
 /** Whether Discord shows the member as staff who may hide and hand over Challenges. */
 export function canModerate(interaction: AnyRepliable): boolean {
