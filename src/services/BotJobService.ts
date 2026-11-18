@@ -175,7 +175,7 @@ async function performJob(
   const feature = featureKey
     ? { key: featureKey, state: await surface.featureState(featureKey) }
     : null;
-  const posts = feature !== null && routesPosts(feature.key);
+  const posts = feature !== null && routesPosts(feature.key) && !handler.dmOnly;
   const destination = featurePostDestination(feature?.state ?? null);
   if (posts && destination === "suppressed") {
     logInfo("BotJobService", `Running ${label} with its posts held: ${feature.key} is Off.`);

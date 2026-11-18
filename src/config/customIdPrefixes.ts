@@ -53,3 +53,23 @@ export const ADMIN_VOTING_TITLES_MODAL_PREFIX = "admin-voting-titles-modal-v1";
 
 // News Channel "Change news category" picker (custom ID carries channel and message IDs)
 export const NEWS_CATEGORY_PICK_PREFIX = "news-category-pick-v1";
+
+// Challenges (spec api#376). Every Challenge component's custom ID starts with this, so
+// the Feature gate maps them all to the challenges Feature.
+export const CHALLENGE_CUSTOM_ID_PREFIX = "challenge-";
+/** /challenge create and edit: the steps of the wizard, keyed by the session ID. */
+export const CHALLENGE_WIZARD_PREFIX = "challenge-wiz-v1";
+/** /challenge show: the view (by game or by member) and page, with the Challenge ID. */
+export const CHALLENGE_SHOW_PREFIX = "challenge-show-v1";
+/** /challenge list: the page and the Open filter. */
+export const CHALLENGE_LIST_PREFIX = "challenge-list-v1";
+/** A member's Run: start one from a post, and confirm abandoning or deleting it. */
+export const CHALLENGE_RUN_PREFIX = "challenge-run-v1";
+/** /challenge edit: the edit panel's buttons and the Host picker, with the Challenge ID. */
+export const CHALLENGE_EDIT_PREFIX = "challenge-edit-v1";
+/** A Slots Run: its decade pages, and moving games or picking past play into its years. */
+export const CHALLENGE_SLOTS_PREFIX = "challenge-slots-v1";
+/** Secret Santa sign-up: join, leave, and confirm leaving after the draw, with the Edition ID. */
+export const CHALLENGE_SANTA_PREFIX = "challenge-santa-v1";
+/** A Santa's pick: open, page, search and choose, with the Edition ID, page and search. */
+export const CHALLENGE_SANTA_PICK_PREFIX = "challenge-santa-pick-v1";

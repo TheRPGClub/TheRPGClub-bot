@@ -14,6 +14,7 @@ import {
   ANNOUNCEMENT_CHANNEL_ID,
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
+  CHALLENGES_CHANNEL_ID,
   GIVEAWAY_LOG_CHANNEL_ID,
   LIVE_EVENT_FORUM_ID,
 } from "../config/channels.js";
@@ -98,6 +99,27 @@ import {
 import { featureOffNotice, getFeatureState } from "./FeaturePostRouting.js";
 import { refreshFeatureFlagCache } from "./FeatureAccessService.js";
 import { buildFeatureFlagChangedNotice, isFeatureState } from "./FeatureFlagService.js";
+import {
+  announceNewChallenge,
+  createChallengeJobDeps,
+  type IChallengeJobDeps,
+} from "./ChallengeAnnouncements.js";
+import { announceRunFinished } from "./ChallengeRunFinished.js";
+import { announceRunCaughtUp } from "./ChallengeCaughtUp.js";
+import {
+  announceSeasonOpened,
+  seasonEndingDm,
+  type IChallengeDm,
+} from "./ChallengeSeasons.js";
+import {
+  announceEditionCancelled,
+  announceSignupClosed,
+  announceSignupClosing,
+  announceSignupOpened,
+  leftOutOfDrawDm,
+} from "./ChallengeSignupPosts.js";
+import { announceEditionRevealed } from "./ChallengeReveal.js";
+import { pickReminderDm } from "./ChallengeSantaPick.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -237,6 +259,11 @@ export interface IBotJobSurface {
    * and the News Item endpoints. Optional so fakes for other jobs need not build it.
    */
   newsHub?: INewsHubJobDeps;
+  /**
+   * What the Challenge jobs post and read (spec api#376). Optional so fakes for other jobs
+   * need not build it.
+   */
+  challenges?: IChallengeJobDeps;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -310,6 +337,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
       await refreshGiveawayHubMessage(client, 0, { featureState: state });
     },
     newsHub: createNewsHubJobDeps(client),
+    challenges: createChallengeJobDeps(client),
   };
 }
 
@@ -335,11 +363,23 @@ async function sendSayMessage(client: Client, message: ISayMessage): Promise<voi
  * the thread or event) and the done ack carries it to the website's activity list; resolve
  * with nothing when there is nothing worth saying. Plain words: staff read it as is.
  */
-export type BotJobHandler = (
+export type BotJobHandler = ((
   payload: Record<string, unknown>,
   surface: IBotJobSurface,
   context?: IBotJobContext,
-) => Promise<string | void>;
+) => Promise<string | void>) & {
+  /**
+   * The handler only DMs a member, though its Feature routes public posts: its result
+   * carries no Preview note and its Off log speaks of no held posts (it decides what Off
+   * means itself). Set by dmOnly().
+   */
+  readonly dmOnly?: true;
+};
+
+/** Marks a handler that only DMs (see BotJobHandler.dmOnly). */
+function dmOnly(handler: BotJobHandler): BotJobHandler {
+  return Object.assign(handler, { dmOnly: true as const });
+}
 
 /** What the dispatcher read before running a job, so the handler need not read it again. */
 export interface IBotJobContext {
@@ -1006,6 +1046,89 @@ export const handleNewsCatchUp: BotJobHandler = async (_payload, surface) => {
 };
 
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
+function challengeDeps(surface: IBotJobSurface): IChallengeJobDeps {
+  if (!surface.challenges) throw new Error("This bot job surface cannot reach Challenges.");
+  return surface.challenges;
+}
+
+/** The #challenges posts, by the payload's `event`; later tickets add their events here. */
+const CHALLENGE_ANNOUNCERS: Readonly<Record<
+  string,
+  (payload: Record<string, unknown>, channelId: string, deps: IChallengeJobDeps) =>
+    Promise<string>
+>> = {
+  challenge_created: announceNewChallenge,
+  run_finished: announceRunFinished,
+  run_caught_up: announceRunCaughtUp,
+  season_opened: announceSeasonOpened,
+  signup_opened: announceSignupOpened,
+  signup_closing: announceSignupClosing,
+  signup_closed: announceSignupClosed,
+  edition_cancelled: announceEditionCancelled,
+  edition_revealed: announceEditionRevealed,
+};
+
+/**
+ * Payload `{ event, challenge, ..., feature_key }` (ChallengeAnnounceJobPayload): posts in
+ * #challenges, in the bot-dev channel while Challenges is in Preview, and nowhere while it
+ * is Off. An event this bot has no post for fails the job, naming it.
+ */
+export const handleChallengeAnnounce: BotJobHandler = async (payload, surface, context) => {
+  const event = requireString(payload, "event");
+  const announce = Object.hasOwn(CHALLENGE_ANNOUNCERS, event)
+    ? CHALLENGE_ANNOUNCERS[event]
+    : undefined;
+  if (!announce) {
+    throw new Error(`This bot has no post for the Challenge event "${event}".`);
+  }
+  const featureKey = POST_FEATURE_KEYS.challenges;
+  const channelId = routeFeaturePost(
+    await jobFeatureState(featureKey, surface, context),
+    CHALLENGES_CHANNEL_ID,
+  );
+  if (!channelId) return featureOffNotice(featureKey);
+  return announce(payload, channelId, challengeDeps(surface));
+};
+
+/** The Challenge DMs, by the payload's `event`; later tickets add their events here. */
+const CHALLENGE_DMS: Readonly<Record<
+  string,
+  (payload: Record<string, unknown>, deps: IChallengeJobDeps) => Promise<IChallengeDm>
+>> = {
+  season_ending: seasonEndingDm,
+  left_out_of_draw: leftOutOfDrawDm,
+  pick_reminder: pickReminderDm,
+};
+
+/**
+ * Payload `{ event, user_id, challenge, ..., feature_key }` (ChallengeDmJobPayload): DMs
+ * the member, in Preview too (only staff can have Runs then), but not while Challenges is
+ * Off. A member with DMs closed can never get it, so that is acked done with the reason
+ * rather than failed and retried. An event this bot has no DM for fails the job.
+ */
+export const handleChallengeDm: BotJobHandler = dmOnly(async (payload, surface, context) => {
+  const event = requireString(payload, "event");
+  const build = Object.hasOwn(CHALLENGE_DMS, event) ? CHALLENGE_DMS[event] : undefined;
+  if (!build) throw new Error(`This bot has no DM for the Challenge event "${event}".`);
+  const featureKey = POST_FEATURE_KEYS.challenges;
+  if (isSuppressed(await jobFeatureState(featureKey, surface, context))) {
+    return `Not sent: the ${featureKey} Feature is Off.`;
+  }
+  const deps = challengeDeps(surface);
+  const dm = await build(payload, deps);
+  try {
+    await deps.sendDm(dm.userId, dm.post);
+  } catch (err: unknown) {
+    if (isClosedDmError(err)) {
+      logError("BotJobHandlers.challenge_dm", err);
+      return `Not delivered: member ${dm.userId}'s DMs are closed, so ${dm.about} was not sent.`;
+    }
+    // Temporary (Discord 5xx, rate limited) stays temporary, so the lease retries the DM.
+    throw stepFailed(`DM to member ${dm.userId}`, err);
+  }
+  return `DMed member ${dm.userId} ${dm.about}.`;
+});
+
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
   giveaway_claim_notice: handleGiveawayClaimNotice,
@@ -1025,4 +1148,6 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   feature_flag_changed: handleFeatureFlagChanged,
   news_images_renew: handleNewsImagesRenew,
   news_catch_up: handleNewsCatchUp,
+  challenge_announce: handleChallengeAnnounce,
+  challenge_dm: handleChallengeDm,
 };

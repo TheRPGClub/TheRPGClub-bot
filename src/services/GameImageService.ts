@@ -42,3 +42,14 @@ export async function fetchGameCoverBuffer(
     return null;
   }
 }
+
+/** The image at `url` (a game's `cover_url`), or null when it can't be read (logged). */
+export async function fetchImageBuffer(url: string): Promise<Buffer | null> {
+  try {
+    const response = await axios.get<ArrayBuffer>(url, { responseType: "arraybuffer" });
+    return Buffer.from(response.data);
+  } catch (error) {
+    logError(`GameImageService.fetchImageBuffer(${url})`, error);
+    return null;
+  }
+}

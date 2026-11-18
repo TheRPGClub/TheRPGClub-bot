@@ -69,6 +69,7 @@ type HelpTopicId =
   | "avatar-history"
   | "publicreminder"
   | "giveaway"
+  | "challenge"
   | "thread"
   | "flag"
   | "news"
@@ -288,7 +289,11 @@ const HELP_TOPICS: HelpTopic[] = [
     summary:
       "View, edit, and search profiles; manage Now Playing; and log completed games (view/search are private by default).",
     syntax:
-      "Use /profile help for subcommands (view/edit/search/nowplaying-add/nowplaying-remove/completion-add/completion-list/completion-edit/completion-delete) and parameters.",
+      "Use /profile help for subcommands (view/edit/search/nowplaying-add/" +
+      "nowplaying-remove/completion-add/completion-list/completion-edit/completion-delete) " +
+      "and parameters. " +
+      "/profile birth-date [date:<YYYY-MM-DD>] [remove:true] [member:<user>] sees or " +
+      "sets your Birth Date privately (twice a month; staff can set any member's).",
   },
   {
     id: "gamedb",
@@ -333,6 +338,44 @@ const HELP_TOPICS: HelpTopic[] = [
       "claim/donate buttons; /giveaway hub links to it. Keys are sent by DM. " +
       "Only the donor or an admin can revoke a key. " +
       "/gamegiveaway still works for now and points to /giveaway hub.",
+  },
+  {
+    id: "challenge",
+    label: "/challenge",
+    summary: "Create, browse and take part in club Challenges.",
+    syntax:
+      "Syntax: /challenge create [club-hosted:<boolean>] | /challenge list [show:<filter>] | " +
+      "/challenge show challenge:<challenge> [view:<game|member>] | " +
+      "/challenge edit challenge:<challenge> | /challenge start challenge:<challenge> | " +
+      "/challenge my-runs [past:<boolean>] | /challenge abandon run:<run> | " +
+      "/challenge delete-run run:<run> | /challenge dms [set:<on|off>] | " +
+      "/challenge santa join [challenge:<challenge>] | " +
+      "/challenge santa leave [challenge:<challenge>] | " +
+      "/challenge santa pick [challenge:<challenge>] | " +
+      "/challenge slot-move run:<run> game:<game> year:<year> | " +
+      "/challenge past-pick run:<run> game:<game> year:<year>",
+    notes:
+      "Regulars and staff create Challenges in two short forms, then pick the franchises " +
+      "and collections for the Pool and check its covers before saving. New Challenges are " +
+      "announced in #challenges. A Challenge's rules lock once someone starts a Run; its " +
+      "name, description and end date can still change. Staff can hide a Challenge or hand " +
+      "it to another Host from /challenge edit. Start a Run from /challenge start or a " +
+      "post's Start a Run button: your Game Completions and Now Playing fill it in by " +
+      "themselves, and /challenge my-runs says what's next. Finished Runs are announced in " +
+      "#challenges. An abandoned Run stays on your profile until you delete it. Each " +
+      "Season's opening is posted in #challenges, and a week before a Season ends the bot " +
+      "DMs members whose Run is still going; /challenge dms set:off turns those DMs off. " +
+      "Secret Santa: sign up with /challenge santa join or the post's Sign up button (you " +
+      "need 5 games in your backlog); /challenge santa leave takes you off before the " +
+      "draw, or drops your pick after it, until the pick deadline. After the draw, " +
+      "/challenge santa pick privately shows the backlog of the member you're Santa for, " +
+      "with hints about what they like; pick one of their games before the pick deadline " +
+      "(you can change it until then), or a random one is picked for them. Every gift is " +
+      "revealed in #challenges on the reveal date, without naming the Santas. A Slots " +
+      "Challenge has one slot per release year: a birth-year one asks for your Birth Date " +
+      "and shows only the year. /challenge slot-move moves a Cleared game to another year " +
+      "it came out in, and /challenge past-pick picks an earlier Game Completion when the " +
+      "Challenge counts past play. Caught Up Runs are announced in #challenges.",
   },
   {
     id: "thread",
@@ -454,7 +497,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
   {
     id: "members",
     name: "Members",
-    topicIds: ["profile", "mp-info"],
+    topicIds: ["profile", "mp-info", "challenge"],
   },
   {
     id: "gamedb",
@@ -1001,6 +1044,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   news: "Share game news in the News Channel.",
   suggestion: "Submit a bot suggestion.",
   giveaway: "Claim or donate game keys.",
+  challenge: "Create, browse and take part in club Challenges.",
   "avatar-history": "View a member’s avatar history.",
   mod: "Moderator tools.",
   admin: "Admin tools.",
