@@ -127,7 +127,8 @@ function emptyState(next: INextBirthday | null): string {
   if (!next) return EMPTY_STATE;
   const date = DateTime.fromISO(next.on, { zone: BIRTHDAY_TIME_ZONE });
   if (!date.isValid) return EMPTY_STATE;
-  return `${EMPTY_STATE} The next shared one is on **${date.setLocale("en-GB").toFormat("d LLLL")}**.`;
+  const label = date.setLocale("en-GB").toFormat("d LLLL");
+  return `${EMPTY_STATE} The next shared one is on **${label}**.`;
 }
 const SHARE_NUDGE =
   "You're not sharing your Birthday. Turn it on with `/profile birth-date share:True`.";
