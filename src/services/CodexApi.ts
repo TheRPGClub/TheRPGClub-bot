@@ -48,14 +48,22 @@ export interface ICodexEntry {
 export interface IFunFactApi {
   /** One page of Fun Facts, newest first. */
   list(actingUserId: string, page: number, per: number): Promise<ICodexEntry[]>;
-  /** The Fun Fact, or null when there is no such Fun Fact. */
-  get(id: number, actingUserId: string): Promise<ICodexEntry | null>;
+  /**
+   * The Fun Fact, or null when there is no such Fun Fact. With no member named, it is read
+   * as the bot itself (the Daily Fun Fact), and `viewer` is all false.
+   */
+  get(id: number, actingUserId?: string): Promise<ICodexEntry | null>;
   /** Adds a Fun Fact credited to the member. Throws the AxiosError on a refusal. */
   create(body: string, actingUserId: string): Promise<ICodexEntry>;
   /** Replaces a Fun Fact's text. Throws the AxiosError on a refusal. */
   edit(id: number, body: string, actingUserId: string): Promise<ICodexEntry>;
   /** Deletes a Fun Fact: false when it was already gone. Throws on a refusal. */
   remove(id: number, actingUserId: string): Promise<boolean>;
+  /**
+   * Draws the next Fun Fact in the queue for the member (/funfact), which marks it shown;
+   * null when there are none. Throws the AxiosError on a refusal.
+   */
+  draw(actingUserId: string): Promise<ICodexEntry | null>;
 }
 
 const CODEX_PATH = "/api/v1/codex";
@@ -75,8 +83,9 @@ export const FUN_FACT_API: IFunFactApi = {
     return payload.data;
   },
   async get(id, actingUserId) {
+    const path = `${FUN_FACTS_PATH}/${id}`;
     const payload = await apiGet<{ data: ICodexEntry }>(
-      withQuery(`${FUN_FACTS_PATH}/${id}`, { acting_user_id: actingUserId }),
+      actingUserId === undefined ? path : withQuery(path, { acting_user_id: actingUserId }),
     );
     return payload?.data ?? null;
   },
@@ -99,6 +108,14 @@ export const FUN_FACT_API: IFunFactApi = {
       withQuery(`${FUN_FACTS_PATH}/${id}`, { acting_user_id: actingUserId }),
     );
     return payload !== null;
+  },
+  async draw(actingUserId) {
+    // The draw answers `{ fun_fact }`, not the `{ data }` of the other Fun Fact endpoints.
+    const payload = await apiPostOrThrow<{ fun_fact: ICodexEntry | null }>(
+      `${FUN_FACTS_PATH}/draw`,
+      { data: { acting_user_id: actingUserId } },
+    );
+    return payload.fun_fact ?? null;
   },
 };
 

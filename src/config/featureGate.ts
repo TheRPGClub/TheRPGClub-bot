@@ -22,8 +22,9 @@ import {
 export const CHALLENGES_FEATURE_KEY = "challenges";
 
 /**
- * The Club Codex (spec api#397): `/codex` and its components. Every subcommand group of
- * `/codex` (fun-fact, lore, history) shares the one entry below.
+ * The Club Codex (spec api#397): `/codex`, `/funfact` and their components, and the Daily
+ * Fun Fact post. Every subcommand group of `/codex` (fun-fact, lore, history) shares the
+ * one entry below.
  */
 export const CLUB_CODEX_FEATURE_KEY = "club_codex";
 
@@ -58,6 +59,7 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   [NEWS_COMMAND]: "news_hub",
   challenge: CHALLENGES_FEATURE_KEY,
   codex: CLUB_CODEX_FEATURE_KEY,
+  funfact: CLUB_CODEX_FEATURE_KEY,
 };
 
 /**
@@ -136,4 +138,5 @@ export const POST_FEATURE_KEYS = {
   giveawayClaimLog: "giveaways",
   suggestions: "suggestions",
   challenges: CHALLENGES_FEATURE_KEY,
+  clubCodex: CLUB_CODEX_FEATURE_KEY,
 } as const;

@@ -22,3 +22,8 @@ export function challengePageUrl(challengeId: number): string {
 export function memberProfileUrl(userId: string): string {
   return `${WEBSITE_BASE_URL}/members/${encodeURIComponent(userId)}`;
 }
+
+/** A Lore Entry's page on the website (the Club Codex, spec api#397). */
+export function loreEntryPageUrl(entryId: number): string {
+  return `${WEBSITE_BASE_URL}/codex/lore/${entryId}`;
+}
