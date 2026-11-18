@@ -1,11 +1,12 @@
 import { DiscordAPIError, RESTJSONErrorCodes, userMention, type Client } from "discord.js";
 import { DateTime } from "luxon";
+import { BIRTHDAY_TIME_ZONE } from "../config/birthdays.js";
 import { HOME_GUILD_ID } from "../config/guilds.js";
 import { logError } from "../utilities/LogUtils.js";
+import { joinWithAnd } from "../utilities/TextUtils.js";
 import { isTemporaryJobError } from "./BotJobErrors.js";
 import { fetchImageBuffer } from "./GameImageService.js";
 import { bannerDescription, composeBirthdayBanner } from "./BirthdayBanner.js";
-import { BIRTHDAY_TIME_ZONE } from "./UpcomingBirthdaysService.js";
 
 // The Birthday Post (spec api#396, bot#1559): one message a club day in the general chat
 // channel greeting every member whose shared Birthday it is. Design picks 1A + 1C: plain
@@ -66,15 +67,9 @@ export function closingLine(count: number): string {
   return `Have a great day, ${who}, from everyone at the club.`;
 }
 
-function joinMentions(userIds: readonly string[]): string {
-  const mentions = userIds.map((id) => userMention(id));
-  if (mentions.length <= 1) return mentions.join("");
-  return `${mentions.slice(0, -1).join(", ")} and ${mentions[mentions.length - 1]}`;
-}
-
 /** The message text: a heading that pings every member, then the closing line. */
 export function birthdayPostContent(userIds: readonly string[]): string {
-  return `## 🎂 Happy Birthday, ${joinMentions(userIds)}!\n${closingLine(userIds.length)}`;
+  return `## 🎂 Happy Birthday, ${joinWithAnd(userIds.map((id) => userMention(id)))}!\n${closingLine(userIds.length)}`;
 }
 
 /** "18 November", for the banner's top line. */

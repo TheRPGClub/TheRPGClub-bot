@@ -1,5 +1,6 @@
 import sharp, { type OverlayOptions } from "sharp";
 import { DISPLAY_FONT, DISPLAY_WEIGHT, LABEL_FONT } from "../config/imageFonts.js";
+import { joinWithAnd } from "../utilities/TextUtils.js";
 import { composeCanvas, coverTile, escapeXml } from "./ChallengeImageTiles.js";
 
 // The Birthday Post's banner (spec api#396, design pick 1C): "HAPPY BIRTHDAY" in the club's
@@ -76,15 +77,9 @@ export function bannerFaces<T>(members: readonly T[]): { shown: T[]; more: numbe
   };
 }
 
-/** "Lufia", "Kaiserkaze and Marle", "Kaiserkaze, Marle and tenpenny". */
-export function joinNames(names: readonly string[]): string {
-  if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
 /** The banner's alt text, naming every member. */
 export function bannerDescription(names: readonly string[]): string {
-  return `Happy Birthday banner for ${joinNames(names)}`;
+  return `Happy Birthday banner for ${joinWithAnd(names)}`;
 }
 
 function cut(name: string): string {

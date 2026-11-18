@@ -5,25 +5,22 @@
  * listed and when each Birthday falls (29 February, the year end); the bot only groups.
  */
 
-import { ContainerBuilder, SeparatorBuilder } from "@discordjs/builders";
-import {
-  MessageFlags,
-  SeparatorSpacingSize,
-  type APIMessageTopLevelComponent,
-} from "discord-api-types/v10";
+import { ContainerBuilder } from "@discordjs/builders";
+import { MessageFlags } from "discord-api-types/v10";
 import { userMention } from "discord.js";
 import { DateTime } from "luxon";
 
+import { BIRTHDAY_TIME_ZONE } from "../config/birthdays.js";
 import { DISCORD_V2_TEXT_MAX, MAX_CONTAINER_TEXT } from "../config/textLimits.js";
-import { buildTextDisplay } from "../functions/ComponentsV2Utils.js";
-import { VOTE_TIME_ZONE } from "../functions/VoteDateUtils.js";
+import {
+  buildDivider,
+  buildTextDisplay,
+  type ISilentV2View,
+} from "../functions/ComponentsV2Utils.js";
 import { logWarn } from "../utilities/LogUtils.js";
-import { plural } from "../utilities/TextUtils.js";
+import { joinWithAnd, plural } from "../utilities/TextUtils.js";
 import { BIRTH_DATE_API, formatBirthDate } from "./BirthDateService.js";
 import { apiGetOrThrow } from "./RpgClubApiClient.js";
-
-/** The club's day decides which Birthdays are today, as the API's Birthdays::TIME_ZONE. */
-export const BIRTHDAY_TIME_ZONE = VOTE_TIME_ZONE;
 
 /** One Upcoming Birthday: who, its day and month, and the club date it falls on. */
 export interface IUpcomingBirthday {
@@ -79,11 +76,7 @@ export interface IUpcomingBirthdaysDeps {
   now?: () => Date;
 }
 
-export interface IUpcomingBirthdaysView {
-  components: APIMessageTopLevelComponent[];
-  flags: number;
-  allowedMentions: { parse: [] };
-}
+export type IUpcomingBirthdaysView = ISilentV2View;
 
 type GroupName = "Today" | "This week" | "Next week" | "Later";
 
@@ -98,13 +91,6 @@ const HEADING = "## Upcoming Birthdays";
 const EMPTY_STATE = "Nobody's Birthday falls in the next 30 days.";
 const SHARE_NUDGE =
   "You're not sharing your Birthday. Turn it on with `/profile birth-date share:True`.";
-
-/** "<@1>", "<@1> and <@2>", "<@1>, <@2> and <@3>". */
-function mentionList(userIds: string[]): string {
-  const mentions = userIds.map((id) => userMention(id));
-  if (mentions.length <= 1) return mentions.join("");
-  return `${mentions.slice(0, -1).join(", ")} and ${mentions[mentions.length - 1]}`;
-}
 
 function countdown(days: number): string {
   return days === 1 ? "tomorrow" : `in ${plural(days, "day")}`;
@@ -136,7 +122,7 @@ function dateLines(birthdays: IUpcomingBirthday[], now: Date): IDateLine[] {
   return [...byDate].map(([on, members]) => {
     const date = DateTime.fromISO(on, { zone: BIRTHDAY_TIME_ZONE }).startOf("day");
     const group = members.some((member) => member.today) ? "Today" : groupOf(date, today);
-    const names = mentionList(members.map((member) => member.userId));
+    const names = joinWithAnd(members.map((member) => userMention(member.userId)));
     const days = Math.round(date.diff(today, "days").days);
     const text = group === "Today"
       ? names
@@ -217,7 +203,7 @@ export async function buildUpcomingBirthdaysView(
   if (footerText) {
     container
       .addSeparatorComponents(
-        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true),
+        buildDivider(),
       )
       .addTextDisplayComponents(buildTextDisplay(footerText));
   }

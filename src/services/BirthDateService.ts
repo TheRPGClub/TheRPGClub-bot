@@ -17,13 +17,11 @@ import {
   LabelBuilder,
   ModalBuilder,
   SectionBuilder,
-  SeparatorBuilder,
   TextInputBuilder,
 } from "@discordjs/builders";
 import {
   ButtonStyle,
   MessageFlags,
-  SeparatorSpacingSize,
   TextInputStyle,
   type APIMessageTopLevelComponent,
 } from "discord-api-types/v10";
@@ -31,7 +29,12 @@ import axios from "axios";
 import { userMention } from "discord.js";
 
 import { BIRTH_DATE_PREFIX } from "../config/customIdPrefixes.js";
-import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
+import {
+  buildDivider,
+  buildTextContainer,
+  buildTextDisplay,
+  type ISilentV2View,
+} from "../functions/ComponentsV2Utils.js";
 import { buildApiErrorMessage } from "../utilities/ApiErrorUtils.js";
 import { plural } from "../utilities/TextUtils.js";
 import { commandMention } from "./CommandMentionService.js";
@@ -116,9 +119,10 @@ export const BIRTH_DATE_API: IBirthDateApi = {
 
 /** For a Challenge's birth-year Run, which needs the year. */
 export const BIRTH_DATE_FORMAT_HINT = "Enter it as YYYY-MM-DD, for example 1990-05-04.";
+/** The forms /profile birth-date reads, where the year is optional. */
+export const BIRTH_DATE_ENTRY_FORMS = "YYYY-MM-DD, or leave out the year: MM-DD or 4 May";
 /** For /profile birth-date, where the year is optional. */
-export const BIRTH_DATE_ENTRY_HINT =
-  "Enter it as YYYY-MM-DD, or leave out the year: MM-DD or 4 May.";
+export const BIRTH_DATE_ENTRY_HINT = `Enter it as ${BIRTH_DATE_ENTRY_FORMS}.`;
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -242,11 +246,7 @@ export function parseBirthDateId(
 // The panel.
 
 /** What to show: a Components V2 view, edited in place by its buttons. */
-export interface IBirthDateView {
-  components: APIMessageTopLevelComponent[];
-  flags: number;
-  allowedMentions: { parse: [] };
-}
+export type IBirthDateView = ISilentV2View;
 
 /** Who acts (the clicking or typing member) and whose Birth Date it is. */
 export interface IBirthDateTarget {
@@ -268,10 +268,6 @@ function view(container: ContainerBuilder, buttons: ButtonBuilder[] = []): IBirt
 
 function textView(content: string): IBirthDateView {
   return view(buildTextContainer(content));
-}
-
-function separator(): SeparatorBuilder {
-  return new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true);
 }
 
 function button(
@@ -342,7 +338,7 @@ function panel(
   const container = new ContainerBuilder();
   if (notice) {
     container.addTextDisplayComponents(buildTextDisplay(notice));
-    container.addSeparatorComponents(separator());
+    container.addSeparatorComponents(buildDivider());
   }
 
   if (!document.birthDate) {
@@ -360,7 +356,7 @@ function panel(
       .addTextDisplayComponents(buildTextDisplay(own
         ? `${heading}\nNot entered yet. Sharing your Birthday needs one; the year is optional.`
         : `${heading}\nNot entered yet.`))
-      .addSeparatorComponents(separator())
+      .addSeparatorComponents(buildDivider())
       .addTextDisplayComponents(buildTextDisplay(lines.join("\n")));
     return view(container, [button("Enter Birth Date", ButtonStyle.Primary, "date", userId)]);
   }
@@ -372,12 +368,12 @@ function panel(
   container.addTextDisplayComponents(buildTextDisplay(
     `${heading}\n${date}\n-# Only ${own ? "you" : "they"} and staff see this.`,
   ));
-  container.addSeparatorComponents(separator());
+  container.addSeparatorComponents(buildDivider());
   const sharing = sharingBlock(document, dayMonth, target);
   if (sharing instanceof SectionBuilder) container.addSectionComponents(sharing);
   else container.addTextDisplayComponents(sharing);
   container
-    .addSeparatorComponents(separator())
+    .addSeparatorComponents(buildDivider())
     .addTextDisplayComponents(buildTextDisplay(footer(document, own)));
   return view(container, [
     button("Change date", ButtonStyle.Secondary, "date", userId),
@@ -554,7 +550,7 @@ export function buildBirthDateEntryModal(
     .setTitle(own ? "Your Birth Date" : "Their Birth Date")
     .addLabelComponents(new LabelBuilder()
       .setLabel("Birth Date")
-      .setDescription("YYYY-MM-DD, or leave out the year: MM-DD or 4 May.")
+      .setDescription(`${BIRTH_DATE_ENTRY_FORMS}.`)
       .setTextInputComponent(new TextInputBuilder()
         .setCustomId(BIRTH_DATE_ENTRY_FIELD)
         .setStyle(TextInputStyle.Short)

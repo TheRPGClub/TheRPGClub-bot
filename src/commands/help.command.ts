@@ -293,7 +293,7 @@ const HELP_TOPICS: HelpTopic[] = [
       "Use /profile help for subcommands (view/edit/search/nowplaying-add/" +
       "nowplaying-remove/completion-add/completion-list/completion-edit/completion-delete) " +
       "and parameters. " +
-      "/profile birth-date [date:<YYYY-MM-DD, MM-DD or 4 May>] [share:true|false] " +
+      "/profile birth-date [date:<YYYY-MM-DD, MM-DD or 4 May>] [share:True|False] " +
       "[remove:true] [member:<user>] sees or sets your Birth Date privately (the year is " +
       "optional; twice a month; staff can set any member's), and shares your Birthday, " +
       "the day and month only, with members. Its reply has buttons to share or stop " +

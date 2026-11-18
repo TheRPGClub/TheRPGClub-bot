@@ -60,6 +60,7 @@ import { chunk } from "../utilities/ArrayUtils.js";
 import { buildCaughtErrorMessage, formatApiError } from "../utilities/ApiErrorUtils.js";
 import {
   BIRTH_DATE_ENTRY_FIELD,
+  BIRTH_DATE_ENTRY_FORMS,
   birthDateButtonReply,
   birthDateCommandReply,
   birthDateModalReply,
@@ -770,7 +771,7 @@ export class ProfileCommand {
   @SlashGroup("profile")
   async profileBirthDate(
     @SlashOption({
-      description: "Your Birth Date: YYYY-MM-DD, or leave out the year: MM-DD or 4 May.",
+      description: `Your Birth Date: ${BIRTH_DATE_ENTRY_FORMS}.`,
       name: "date",
       required: false,
       type: ApplicationCommandOptionType.String,
