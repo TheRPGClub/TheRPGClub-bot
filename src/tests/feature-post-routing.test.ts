@@ -420,11 +420,12 @@ for (const [state, expected] of [
   });
 }
 
-test("post Features: every post kind belongs to one of the API registry's 12 keys", async () => {
+test("post Features: every post kind belongs to one of the API registry's 13 keys", async () => {
   const { POST_FEATURE_KEYS } = await import("../config/featureGate.js");
   const registry = new Set([
     "game_index", "voting_gotm", "backlog", "collection", "now_playing", "game_completions",
     "reviews", "achievement_hub", "giveaways", "journals", "suggestions", "challenges",
+    "club_codex",
   ]);
   assert.deepEqual(Object.values(POST_FEATURE_KEYS).filter((key) => !registry.has(key)), []);
 });

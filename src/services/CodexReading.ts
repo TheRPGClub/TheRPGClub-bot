@@ -28,7 +28,7 @@ import { truncateLabel } from "../config/textLimits.js";
 import {
   codexFunFactsUrl,
   codexHistoryUrl,
-  codexLoreEntryUrl,
+  loreEntryPageUrl,
 } from "../config/website.js";
 import {
   buildCodexHistoryId,
@@ -95,7 +95,7 @@ function idButton(label: string, customId: string, disabled = false): ButtonBuil
 
 /** Where a "See also" entry lives on the website. */
 function linkUrl(link: ICodexLink): string {
-  if (link.part === "lore_entry") return codexLoreEntryUrl(link.id);
+  if (link.part === "lore_entry") return loreEntryPageUrl(link.id);
   return link.part === "history_event" ? codexHistoryUrl() : codexFunFactsUrl();
 }
 
@@ -175,7 +175,7 @@ function loreButtons(
   if (target.visibility === "private") {
     row.addComponents(idButton("Post this page", buildCodexLoreId({ ...target, action: "post" })));
   }
-  return row.addComponents(linkButton("Website", codexLoreEntryUrl(entry.id)));
+  return row.addComponents(linkButton("Website", loreEntryPageUrl(entry.id)));
 }
 
 /** One page of a Lore Entry: the jade card, then its buttons. */

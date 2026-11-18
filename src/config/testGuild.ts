@@ -40,6 +40,7 @@ export const OVERRIDABLE_ID_NAMES = [
   "NR_GOTM_NOMINATION_CHANNEL_ID",
   "NEW_GAME_ANNOUNCEMENT_CHANNEL_ID",
   "CHALLENGES_CHANNEL_ID",
+  "FUN_FACT_CHANNEL_ID",
   "TEST_LOG_CHANNEL_ID",
   // roles.ts
   "REGULARS_ROLE_ID",
@@ -94,6 +95,8 @@ export const TEST_GUILD_IDS: TestGuildIdMap = {
   NEW_GAME_ANNOUNCEMENT_CHANNEL_ID: "1547802425514008587",
   // PLACEHOLDER api#386: the test guild has no #challenges channel yet.
   CHALLENGES_CHANNEL_ID: "200000000000000376",
+  // PLACEHOLDER api#397: set to the test guild's general chat channel at cutover.
+  FUN_FACT_CHANNEL_ID: "200000000000000397",
   // The dev logs channel, so mirrored ephemeral replies stay out of #dev.
   TEST_LOG_CHANNEL_ID: "1547802425295896617",
 

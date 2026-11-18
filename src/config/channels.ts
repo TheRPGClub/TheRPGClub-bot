@@ -89,6 +89,9 @@ export const NEW_GAME_ANNOUNCEMENT_CHANNEL_ID = resolveId(
 // #challenges (spec api#376): new Challenges and their Runs are announced here.
 // PLACEHOLDER api#386: staff create the channel at cutover and set its ID here.
 export const CHALLENGES_CHANNEL_ID = resolveId("CHALLENGES_CHANNEL_ID", "100000000000000376");
+// General chat (spec api#397): the Daily Fun Fact is posted here.
+// PLACEHOLDER api#397: the owner sets the general chat channel's ID at cutover.
+export const FUN_FACT_CHANNEL_ID = resolveId("FUN_FACT_CHANNEL_ID", "100000000000000397");
 /**
  * Destination for mirrored ephemeral replies. Only read in test mode, so the
  * production value is inert and simply points at the bot dev channel.

@@ -65,6 +65,7 @@ const COMMANDS: Array<[string, string | null]> = [
   ["suggestion", "suggestions"],
   ["Change news category", "news_hub"],
   ["codex", "club_codex"],
+  ["funfact", "club_codex"],
   ["help", null],
   ["timestamp", null],
   ["profile", null],
