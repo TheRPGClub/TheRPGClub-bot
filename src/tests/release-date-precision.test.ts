@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { formatReleaseDate } from "../functions/DateFormatUtils.js";
 import { mapReleaseFromApi } from "../functions/GameMappers.js";
+import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 
 const API_RELEASE = {
   release_id: 1,
@@ -43,6 +44,17 @@ test("the first day of a period reads as that period whatever the host time zone
     assert.equal(formatReleaseDate(new Date("2027-01-01"), "year"), "2027");
     assert.equal(formatReleaseDate(new Date("2027-03-01"), "month"), "Mar 2027");
     assert.equal(formatReleaseDate(new Date("2027-03-05"), "day"), "03/05/2027");
+  } finally {
+    process.env.TZ = original;
+  }
+});
+
+test("a game's year label reads its first day of the year in UTC, whatever the host zone", () => {
+  const original = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    const game = { title: "Chrono Cross", initialReleaseDate: new Date("2027-01-01") };
+    assert.equal(formatGameTitleWithYear(game), "Chrono Cross (2027)");
   } finally {
     process.env.TZ = original;
   }
