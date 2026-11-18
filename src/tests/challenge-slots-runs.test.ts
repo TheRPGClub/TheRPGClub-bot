@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { IChallengeRun, IStartedRun } from "../services/ChallengeApi.js";
-import type { IBirthDateApi } from "../services/BirthDateService.js";
+import type { IBirthDateApi, IBirthDateChange } from "../services/BirthDateService.js";
 import { buildMyRunsView } from "../services/ChallengeMyRuns.js";
 import {
   birthDateStartReply,
@@ -62,10 +62,21 @@ function fakeBirthDates(error?: unknown): IBirthDateApi & { calls: string[] } {
     getBirthDate: async () => {
       throw new Error("not used");
     },
-    setBirthDate: async (userId: string, birthDate: string | null, actingUserId: string) => {
+    updateBirthDate: async (
+      userId: string,
+      change: IBirthDateChange,
+      actingUserId: string,
+    ) => {
+      const birthDate = change.birthDate ?? null;
       api.calls.push(`set ${userId} to ${birthDate} as ${actingUserId}`);
       if (error) throw error;
-      return { userId, birthDate, changesLeftThisMonth: 1, nextChangeOn: null };
+      return {
+        userId,
+        birthDate,
+        birthdayShared: false,
+        changesLeftThisMonth: 1,
+        nextChangeOn: null,
+      };
     },
   };
   return api;
