@@ -43,10 +43,25 @@ export async function fetchGameCoverBuffer(
   }
 }
 
-/** The image at `url` (a game's `cover_url`), or null when it can't be read (logged). */
-export async function fetchImageBuffer(url: string): Promise<Buffer | null> {
+/**
+ * How long an image download may take. Bot jobs run one after another, so a download that
+ * never answers would hold up every later job.
+ */
+export const IMAGE_FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * The image at `url` (a game's `cover_url`, a member's avatar), or null when it can't be
+ * read in time (logged).
+ */
+export async function fetchImageBuffer(
+  url: string,
+  timeoutMs = IMAGE_FETCH_TIMEOUT_MS,
+): Promise<Buffer | null> {
   try {
-    const response = await axios.get<ArrayBuffer>(url, { responseType: "arraybuffer" });
+    const response = await axios.get<ArrayBuffer>(url, {
+      responseType: "arraybuffer",
+      timeout: timeoutMs,
+    });
     return Buffer.from(response.data);
   } catch (error) {
     logError(`GameImageService.fetchImageBuffer(${url})`, error);
