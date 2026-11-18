@@ -92,6 +92,9 @@ export const CHALLENGES_CHANNEL_ID = resolveId("CHALLENGES_CHANNEL_ID", "1000000
 // General chat (spec api#397): the Daily Fun Fact is posted here.
 // PLACEHOLDER api#397: the owner sets the general chat channel's ID at cutover.
 export const FUN_FACT_CHANNEL_ID = resolveId("FUN_FACT_CHANNEL_ID", "100000000000000397");
+// The Birthday channel (spec api#396): the general chat channel, where the bot posts the
+// Birthday Post. PLACEHOLDER api#402: the owner sets the general chat channel's ID at cutover.
+export const BIRTHDAY_CHANNEL_ID = resolveId("BIRTHDAY_CHANNEL_ID", "100000000000000396");
 /**
  * Destination for mirrored ephemeral replies. Only read in test mode, so the
  * production value is inert and simply points at the bot dev channel.
