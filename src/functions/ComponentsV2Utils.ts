@@ -11,10 +11,7 @@ import {
   TextDisplayBuilder,
   ThumbnailBuilder,
 } from "@discordjs/builders";
-import {
-  SeparatorSpacingSize,
-  type APIMessageTopLevelComponent,
-} from "discord-api-types/v10";
+import { SeparatorSpacingSize } from "discord-api-types/v10";
 import { DEV_ROLE_ID } from "../config/roles.js";
 import { MAX_CONTAINER_TEXT } from "../config/textLimits.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
@@ -28,7 +25,6 @@ export function safeV2TextContent(value: string, maxLength: number): string {
   return truncateWithEllipsis(normalized, maxLength);
 }
 
-/** A text display for a container, cut to the text a container may hold. */
 /** A Components V2 reply whose mentions never ping, as sent or edited in place. */
 export interface ISilentV2View {
   components: APIMessageTopLevelComponent[];
@@ -41,6 +37,7 @@ export function buildDivider(): SeparatorBuilder {
   return new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true);
 }
 
+/** A text display for a container, cut to the text a container may hold. */
 export function buildTextDisplay(content: string): TextDisplayBuilder {
   return new TextDisplayBuilder().setContent(safeV2TextContent(content, MAX_CONTAINER_TEXT));
 }
