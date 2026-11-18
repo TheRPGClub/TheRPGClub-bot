@@ -9,10 +9,11 @@ export const FUN_FACT_INK = 0xff8ad8;
 
 /**
  * A Lore Entry page's story text at most, in characters. Discord allows 4000 across a
- * message's text; the rest holds the title, byline and See also.
+ * message's text; the rest holds the title and byline (about 300 at most), and on the last
+ * page as many See also links as fit in what is left.
  */
 export const LORE_PAGE_TEXT_MAX = 2800;
-/** "See also" links a Lore Entry's last page lists before "and N more". */
+/** "See also" links a Lore Entry's last page lists at most before "and N more". */
 export const LORE_SEE_ALSO_MAX = 5;
 /** Lore Entries the `entry:` autocomplete offers (Discord's most). */
 export const LORE_AUTOCOMPLETE_READ = 25;

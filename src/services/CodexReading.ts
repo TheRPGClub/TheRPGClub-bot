@@ -24,7 +24,7 @@ import {
   LORE_PAGE_TEXT_MAX,
   LORE_SEE_ALSO_MAX,
 } from "../config/codex.js";
-import { truncateLabel } from "../config/textLimits.js";
+import { DISCORD_V2_TEXT_MAX, truncateLabel } from "../config/textLimits.js";
 import {
   codexFunFactsUrl,
   codexHistoryUrl,
@@ -141,10 +141,22 @@ function loreByline(entry: ICodexEntry, at: number, count: number): string {
   return `-# ${parts.join(" · ")}`;
 }
 
-function seeAlso(links: readonly ICodexLink[]): string {
-  const shown = links.slice(0, LORE_SEE_ALSO_MAX).map((l) => buildMaskedLink(l.title, linkUrl(l)));
-  const more = links.length - shown.length;
-  return `-# See also · ${shown.join(" · ")}${more > 0 ? ` · and ${more} more` : ""}`;
+/**
+ * A last page's "See also" in at most `room` characters: the first links that fit (up to
+ * `LORE_SEE_ALSO_MAX`), then "and N more". Null when not even one link fits, which the
+ * page budget rules out: a page's story, title and byline leave room for several.
+ */
+function seeAlso(links: readonly ICodexLink[], room: number): string | null {
+  const shown: string[] = [];
+  let best: string | null = null;
+  for (const link of links.slice(0, LORE_SEE_ALSO_MAX)) {
+    shown.push(buildMaskedLink(link.title, linkUrl(link)));
+    const more = links.length - shown.length;
+    const text = `-# See also · ${shown.join(" · ")}${more > 0 ? ` · and ${more} more` : ""}`;
+    if (text.length > room) break;
+    best = text;
+  }
+  return best;
 }
 
 function loreGallery(entry: ICodexEntry): MediaGalleryBuilder | null {
@@ -188,14 +200,19 @@ function lorePage(
   const card = new ContainerBuilder().setAccentColor(CLUB_LORE_INK);
   const gallery = at === 1 ? loreGallery(entry) : null;
   if (gallery) card.addMediaGalleryComponents(gallery);
-  card.addTextDisplayComponents(buildTextDisplay(
-    `## ${escapeMarkdown(entry.title ?? "Lore Entry")}\n${loreByline(entry, at, pages.length)}`,
-  ));
+  const heading =
+    `## ${escapeMarkdown(entry.title ?? "Lore Entry")}\n${loreByline(entry, at, pages.length)}`;
+  const story = pages[at - 1] || "-# No story yet.";
+  card.addTextDisplayComponents(buildTextDisplay(heading));
   card.addSeparatorComponents(separator());
-  card.addTextDisplayComponents(buildTextDisplay(pages[at - 1] || "-# No story yet."));
-  if (at === pages.length && entry.links.length) {
+  card.addTextDisplayComponents(buildTextDisplay(story));
+  // Discord counts every text display in a message together, so See also gets what's left.
+  const links = at === pages.length && entry.links.length
+    ? seeAlso(entry.links, DISCORD_V2_TEXT_MAX - heading.length - story.length)
+    : null;
+  if (links) {
     card.addSeparatorComponents(separator());
-    card.addTextDisplayComponents(buildTextDisplay(seeAlso(entry.links)));
+    card.addTextDisplayComponents(buildTextDisplay(links));
   }
   const row = loreButtons(
     entry,
