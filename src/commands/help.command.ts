@@ -63,6 +63,7 @@ type HelpTopicId =
   | "rss"
   | "mp-info"
   | "profile"
+  | "birthdays"
   | "game-completion"
   | "collection"
   | "gamedb"
@@ -300,6 +301,15 @@ const HELP_TOPICS: HelpTopic[] = [
       "Birthday but never turn it on.",
   },
   {
+    id: "birthdays",
+    label: "/birthdays",
+    summary: "See the Upcoming Birthdays, the shared Birthdays in the next 30 days (private).",
+    syntax: "Syntax: /birthdays",
+    notes:
+      "Grouped into Today, This week, Next week and Later. Mentions in it don't ping. " +
+      "Members appear only if they share their Birthday (day and month, never the year).",
+  },
+  {
     id: "gamedb",
     label: "/gamedb",
     summary:
@@ -501,7 +511,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
   {
     id: "members",
     name: "Members",
-    topicIds: ["profile", "mp-info", "challenge"],
+    topicIds: ["profile", "birthdays", "mp-info", "challenge"],
   },
   {
     id: "gamedb",
@@ -1039,6 +1049,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   round: "See the current round and winners.",
   "round-history": "Browse historical rounds with filters.",
   profile: "View and edit member profiles.",
+  birthdays: "See the shared Birthdays in the next 30 days.",
   "mp-info": "Find who has shared multiplayer info.",
   gamedb: "Search for games and view their details.",
   collection: "Track owned games by platform and ownership.",
