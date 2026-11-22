@@ -15,7 +15,7 @@ async function waitFor(condition: () => boolean): Promise<void> {
   }
 }
 
-test("an error batch pings inside its components, never as content", async () => {
+test("an error batch is logged without pinging anyone", async () => {
   const sent: { content?: unknown; flags?: unknown; allowedMentions?: unknown; json: string }[] =
     [];
   const channel = {
@@ -38,13 +38,12 @@ test("an error batch pings inside its components, never as content", async () =>
 
   // Until startup completes, the logger only forwards its startup lines.
   await logToDiscord(STARTUP_COMPLETE_LINE);
-  await logToDiscord(`boom ${"z".repeat(OVER_THRESHOLD)}`, "error");
+  await logToDiscord(`boom for <@123456789> ${"z".repeat(OVER_THRESHOLD)}`, "error");
   await waitFor(() => sent.length > 0);
 
   assert.equal(sent.length, 1);
   assert.equal(sent[0].content, undefined, "a Components V2 message cannot carry content");
-  const pinged = /<@(\d+)>/.exec(sent[0].json)?.[1];
-  assert.ok(pinged, "the dev ping is in the components");
-  assert.match(sent[0].json, /boom/);
-  assert.deepEqual(sent[0].allowedMentions, { users: [pinged] });
+  assert.match(sent[0].json, /\[ERROR\] boom/);
+  assert.doesNotMatch(sent[0].json, /"content":"<@\d+>"/, "no mention component");
+  assert.deepEqual(sent[0].allowedMentions, { parse: [] });
 });
