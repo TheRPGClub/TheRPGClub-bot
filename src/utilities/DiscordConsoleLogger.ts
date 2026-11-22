@@ -1,9 +1,8 @@
-import { type MessageCreateOptions, type TextBasedChannel, userMention } from "discord.js";
+import { type MessageCreateOptions, type TextBasedChannel } from "discord.js";
 import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
 import type { Client } from "discordx";
 
 import { DISCORD_CONSOLE_LOG_CHANNEL_ID } from "../config/channels.js";
-import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import { STARTUP_COMPLETE_LINE } from "../services/StartupSequence.js";
 import { buildComponentsV2EditFlags, safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
@@ -143,21 +142,17 @@ function buildLogContainer(level: BufferedLevel, description: string): Container
 }
 
 /**
- * Sends one batch. A Components V2 message cannot carry `content` (Discord refuses the
- * whole message), so an error batch's dev ping is a text component above the container.
+ * Sends one batch. Mentions are suppressed, so a user or role id inside a logged line
+ * renders as a name and notifies nobody, error batches included.
  */
 async function sendContainerToChannel(
   channel: ILoggerChannel,
   container: ContainerBuilder,
-  pingUserId?: string,
 ): Promise<void> {
-  const ping = pingUserId
-    ? [new TextDisplayBuilder().setContent(userMention(pingUserId))]
-    : [];
   await channel.send({
-    components: [...ping, container],
+    components: [container],
     flags: buildComponentsV2EditFlags(),
-    ...(pingUserId ? { allowedMentions: { users: [pingUserId] } } : {}),
+    allowedMentions: { parse: [] },
   });
 }
 
@@ -256,9 +251,8 @@ async function flushBufferedLevels(targetLevel?: BufferedLevel): Promise<void> {
         containers.push(buildLogContainer(level, currentDescription));
       }
 
-      const pingUserId = level === "error" ? BOT_DEV_PING_USER_ID : undefined;
-      for (let i = 0; i < containers.length; i++) {
-        await sendContainerToChannel(channel, containers[i], i === 0 ? pingUserId : undefined);
+      for (const container of containers) {
+        await sendContainerToChannel(channel, container);
       }
     }
   } catch {
