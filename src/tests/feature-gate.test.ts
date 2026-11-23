@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ContainerBuilder, MessageFlags, TextDisplayBuilder } from "discord.js";
+import { ContainerBuilder, TextDisplayBuilder } from "@discordjs/builders";
+import { MessageFlags } from "discord.js";
 
 import { safeV2TextContent } from "../functions/ComponentsV2Utils.js";
 import {
