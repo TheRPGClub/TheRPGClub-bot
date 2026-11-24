@@ -166,9 +166,45 @@ test("show by game: the buttons flip the view and page through the Pool", async 
       ["By member", "challenge-show-v1:7:m:1:u", false],
       ["Previous", "challenge-show-v1:7:g:1:u", false],
       ["Next", "challenge-show-v1:7:g:3:u", false],
+      // A Pool's own row (bot#1569): anyone may propose; Proposals only for deciders.
+      ["Propose a game", "challenge-proposal-v1:propose:7", false],
     ],
   );
 });
+
+test("show: whoever decides gets Proposals with the count, and the list notices",
+  async () => {
+    const challenge = poolChallenge({
+      pending_proposals: 3,
+      pool: {
+        ...poolChallenge().pool!,
+        game_list: { id: 12, name: "Soulslike, but make it history", visible: true,
+          can_add: true },
+      },
+      list_notices: [1, 2, 3, 4].map((id) => ({
+        id,
+        game: { game_id: 100 + id, title: `Souls ${id}`, cover_url: null },
+        created_at: "2026-11-20T10:00:00Z",
+      })),
+    });
+    const view = await show(fakeApi({ challenge, games }));
+    const text = textOf(view.components);
+
+    assert.ok(text.includes("**Souls 1** was removed from **Soulslike, but make it history**. " +
+      "It is still a Core Game here."), text);
+    assert.match(text, /^\*\*Souls 3\*\* was removed/m);
+    assert.doesNotMatch(text, /Souls 4/);
+    assert.match(text, /^-# 1 more list notice on the Challenge page\.$/m);
+    const ids = buttonsOf(view.components).map((b) => [b.label, b.customId]);
+    assert.deepEqual(ids.filter(([, id]) => id?.includes(":notice-")).slice(0, 2), [
+      ["Remove from the Challenge", "challenge-proposal-v1:notice-remove:7:1"],
+      ["Keep it", "challenge-proposal-v1:notice-keep:7:1"],
+    ]);
+    assert.deepEqual(ids.slice(-2), [
+      ["Propose a game", "challenge-proposal-v1:propose:7"],
+      ["Proposals (3)", "challenge-proposal-v1:view:7:1:u"],
+    ]);
+  });
 
 test("show by member: each Run with its status and progress", async () => {
   const view = await show(fakeApi({ games, runs }), "member");

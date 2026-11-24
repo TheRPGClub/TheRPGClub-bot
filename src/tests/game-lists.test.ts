@@ -8,6 +8,7 @@ import {
   buildGameListPage,
   GAME_LIST_PAGE_SIZE,
   gameListViewReply,
+  startListChoices,
   viewListChoices,
   type GameListResult,
   type IGameListPage,
@@ -361,4 +362,35 @@ test("game view: Add to a Game List sits on a row of its own under the full firs
     const [button] = buttonsOf(rows[1]);
     assert.equal(button!.label, "Add to a Game List");
     assert.equal(button!.customId, "gamedb-action:list:12");
+  });
+
+test("/challenge create from-list: own lists, or the club's editable ones when club-hosted",
+  async () => {
+    const api = fakeApi({
+      own: [
+        list({ id: 1, name: "Soulslike, but make it history" }),
+        list({ id: 4, name: "Cozy", visibility: "private" }),
+      ],
+      club: [
+        list({ id: 2, name: "Club Souls", club: true, owner: null }),
+        list({ id: 3, name: "Club Cozy", club: true, owner: null,
+          viewer: { can_edit: false, can_delete: false } }),
+      ],
+    });
+    assert.deepEqual(
+      await startListChoices({ query: "soul", actingUserId: MEMBER, clubHosted: false }, { api }),
+      [{ name: "Soulslike, but make it history · 2 games", value: "1" }],
+    );
+    assert.deepEqual(
+      await startListChoices({ query: "", actingUserId: MEMBER, clubHosted: true }, { api }),
+      [{ name: "Club Souls · 2 games", value: "2" }],
+    );
+    const failing = fakeApi();
+    failing.ownLists = async () => {
+      throw new Error("Feature hidden");
+    };
+    assert.deepEqual(await startListChoices(
+      { query: "", actingUserId: MEMBER, clubHosted: false },
+      { api: failing },
+    ), []);
   });

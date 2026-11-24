@@ -73,6 +73,8 @@ export const CHALLENGE_SLOTS_PREFIX = "challenge-slots-v1";
 export const CHALLENGE_SANTA_PREFIX = "challenge-santa-v1";
 /** A Santa's pick: open, page, search and choose, with the Edition ID, page and search. */
 export const CHALLENGE_SANTA_PICK_PREFIX = "challenge-santa-pick-v1";
+/** Pool Proposals: propose, step through and decide them, and the list notices. */
+export const CHALLENGE_PROPOSAL_PREFIX = "challenge-proposal-v1";
 
 // Club Codex (spec api#397). Every Club Codex component's custom ID starts with this, so
 // the Feature gate maps them all to the club_codex Feature.

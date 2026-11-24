@@ -12,6 +12,7 @@ import {
   apiPutOrThrow,
 } from "./RpgClubApiClient.js";
 import type { IChallengeEditionSummary } from "./ChallengeEditionApi.js";
+import type { IListNotice } from "./ChallengeProposalApi.js";
 
 // The Challenge endpoints the bot calls (spec api#376, tickets api#377 and api#378). The
 // shapes are the API's own (snake_case), as its swagger serves them. Every call that acts
@@ -99,6 +100,10 @@ export interface IChallenge {
   ended_at?: string | null;
   /** The Challenge's colours (`#rrggbb`), served on every Challenge. */
   tint?: { fill: string; hi: string } | null;
+  /** A Pool's show, for whoever decides its Pool Proposals: how many wait; else null. */
+  pending_proposals?: number | null;
+  /** A Pool's show, for whoever decides: Core Games that left the linked list; else null. */
+  list_notices?: IListNotice[] | null;
 }
 
 export interface IChallengeWarning {
@@ -244,7 +249,11 @@ export interface IChallengeWrite {
   schedule?: ChallengeSchedule;
   ends_on?: string | null;
   season?: { start: string; end: string } | null;
-  pool?: IPoolDefinition & { optional_target: number };
+  pool?: IPoolDefinition & {
+    optional_target: number;
+    /** Create only: starts the Pool from this Game List, its games as Core Games. */
+    game_list_id?: number;
+  };
   slots?: IChallengeSlots;
   assignment?: IChallengeAssignment;
   hosted_by_club?: boolean;

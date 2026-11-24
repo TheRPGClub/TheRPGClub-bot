@@ -16,7 +16,7 @@ import {
   DISCORD_AUTOCOMPLETE_CHOICES_MAX,
   truncateLabel,
 } from "../../config/textLimits.js";
-import { CHALLENGE_API } from "../../services/ChallengeApi.js";
+import { CHALLENGE_API, type ChallengeFormat } from "../../services/ChallengeApi.js";
 import type { IIncludeChoice } from "../../services/ChallengeWizard.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { CHALLENGE_AUTOCOMPLETE_READ } from "../../config/challenges.js";
@@ -28,6 +28,20 @@ import { CHALLENGE_AUTOCOMPLETE_READ } from "../../config/challenges.js";
  * holds what they typed, with the Challenge ID as the value.
  */
 export async function autocompleteChallenge(interaction: AutocompleteInteraction): Promise<void> {
+  await autocompleteChallengeOf(interaction);
+}
+
+/** Autocomplete for a `challenge:` option that takes only Pool Challenges. */
+export async function autocompletePoolChallenge(
+  interaction: AutocompleteInteraction,
+): Promise<void> {
+  await autocompleteChallengeOf(interaction, "pool");
+}
+
+async function autocompleteChallengeOf(
+  interaction: AutocompleteInteraction,
+  challengeFormat?: ChallengeFormat,
+): Promise<void> {
   const focused = interaction.options.getFocused(true);
   const query = sanitizeUserInput(String(focused?.value ?? ""), { preserveNewlines: false })
     .trim()
@@ -35,6 +49,7 @@ export async function autocompleteChallenge(interaction: AutocompleteInteraction
   try {
     const page = await CHALLENGE_API.listChallenges({
       actingUserId: interaction.user.id,
+      ...(challengeFormat ? { challengeFormat } : {}),
       page: 1,
       per: CHALLENGE_AUTOCOMPLETE_READ,
     });
