@@ -358,11 +358,14 @@ const HELP_TOPICS: HelpTopic[] = [
     label: "/challenge",
     summary: "Create, browse and take part in club Challenges.",
     syntax:
-      "Syntax: /challenge create [club-hosted:<boolean>] | /challenge list [show:<filter>] | " +
+      "Syntax: /challenge create [club-hosted:<boolean>] [from-list:<list>] | " +
+      "/challenge list [show:<filter>] | " +
       "/challenge show challenge:<challenge> [view:<game|member>] | " +
       "/challenge edit challenge:<challenge> | /challenge start challenge:<challenge> | " +
       "/challenge my-runs [past:<boolean>] | /challenge abandon run:<run> | " +
       "/challenge delete-run run:<run> | /challenge dms [set:<on|off>] | " +
+      "/challenge propose challenge:<challenge> game:<game> [note:<text>] | " +
+      "/challenge proposals challenge:<challenge> | " +
       "/challenge santa join [challenge:<challenge>] | " +
       "/challenge santa leave [challenge:<challenge>] | " +
       "/challenge santa pick [challenge:<challenge>] | " +
@@ -372,7 +375,11 @@ const HELP_TOPICS: HelpTopic[] = [
       "Any member can create a Slots or Pool Challenge (staff create Assignment ones) in two " +
       "short forms. A Pool has Core Games every Run Clears and Optional Games from " +
       "franchises, Series or by hand, with a target of how many Optional Games a Run also " +
-      "Clears. New Challenges are announced in #challenges. A Challenge's Format, schedule " +
+      "Clears. from-list starts a Pool from one of your Game Lists, its games as Core " +
+      "Games. Any member can propose a game for a Pool with /challenge propose or the " +
+      "Pool's Propose a game button; the Host (staff for a club Challenge) decides with " +
+      "/challenge proposals. New Challenges are announced in #challenges. A Challenge's " +
+      "Format, schedule " +
       "and Season lock once someone starts a Run; its Pool, name, description and end date " +
       "can still change. Staff can hide a Challenge or hand " +
       "it to another Host from /challenge edit. Start a Run from /challenge start or a " +

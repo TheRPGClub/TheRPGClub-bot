@@ -1,6 +1,7 @@
 import {
   ApplicationCommandOptionType,
   MessageFlags,
+  type AutocompleteInteraction,
   type ButtonInteraction,
   type CommandInteraction,
   type ModalSubmitInteraction,
@@ -17,11 +18,13 @@ import {
   SlashOption,
 } from "discordx";
 import {
+  isAutocompleteGated,
   safeDeferModalSubmit,
   safeDeferReply,
   safeDeferUpdate,
   safeEditReply,
   safeFollowUpIfSettled,
+  safeRespond,
   type AnyRepliable,
 } from "../../functions/InteractionUtils.js";
 import {
@@ -52,6 +55,8 @@ import {
   applyBasics,
   applyCorePick,
   applyExcludePick,
+  applyFranchiseMainline,
+  applyGameList,
   applyIncludePick,
   applyIncludeSearch,
   applyOptionalTarget,
@@ -73,6 +78,8 @@ import {
   wizardClosedView,
   type IChallengeDraft,
 } from "../../services/ChallengeWizard.js";
+import { startListChoices } from "../../services/GameLists.js";
+import { parsePositiveId } from "../../functions/CustomIdUtils.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
@@ -258,6 +265,23 @@ function editPanel(
   return buildEditPanel(challenge, { canModerate: canModerate(interaction), notice });
 }
 
+/**
+ * Autocomplete for `from-list:`: the member's own Game Lists, or the club's they may edit
+ * when `club-hosted` is set. Nothing while the game_lists Feature is hidden from them.
+ */
+async function autocompleteFromList(interaction: AutocompleteInteraction): Promise<void> {
+  if (await isAutocompleteGated(interaction)) {
+    await safeRespond(interaction, []);
+    return;
+  }
+  const focused = interaction.options.getFocused(true);
+  await safeRespond(interaction, await startListChoices({
+    query: String(focused?.value ?? ""),
+    actingUserId: interaction.user.id,
+    clubHosted: interaction.options.getBoolean("club-hosted") ?? false,
+  }));
+}
+
 function missingChallenge(challengeId: number): IChallengeView {
   return challengeTextView(
     `There is no Challenge ${challengeId}, or it is hidden from you.`,
@@ -277,9 +301,21 @@ export class ChallengeCreateCommand {
       required: false,
     })
     clubHosted: boolean | undefined,
+    @SlashOption({
+      name: "from-list",
+      description: "Start a Pool from one of your Game Lists: its games become Core Games",
+      type: ApplicationCommandOptionType.String,
+      required: false,
+      autocomplete: autocompleteFromList,
+    })
+    fromList: string | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const draft = newChallengeDraft(interaction.user.id, clubHosted ?? false);
+    const draft = newChallengeDraft(
+      interaction.user.id,
+      clubHosted ?? false,
+      fromList ? parsePositiveId(fromList) : null,
+    );
     const sessionId = startWizard(interaction, draft);
     safeIgnore(interaction.showModal(buildBasicsModal(sessionId, draft)));
   }
@@ -352,8 +388,12 @@ export class ChallengeCreateCommand {
         draft,
         readModalFields(interaction, WIZARD_RADIO_FIELDS, WIZARD_CHECKBOX_FIELDS),
       );
-      saveDraft(interaction, sessionId, result.draft);
-      await showStep(interaction, sessionId, result.draft, result.errors);
+      // A create started from a Game List reads the list once the Format is known.
+      const listed = result.errors.length
+        ? result
+        : await applyGameList(result.draft, interaction.user.id);
+      saveDraft(interaction, sessionId, listed.draft);
+      await showStep(interaction, sessionId, listed.draft, [...result.errors, ...listed.errors]);
     });
   }
 
@@ -392,7 +432,10 @@ export class ChallengeCreateCommand {
   @SelectMenuComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:sources:`) })
   async sourcesSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await withDraft(interaction, async (sessionId, draft) => {
-      const next = applySourcePick(draft, interaction.values);
+      const next = await applyFranchiseMainline(
+        draft,
+        applySourcePick(draft, interaction.values),
+      );
       saveDraft(interaction, sessionId, next);
       await showStep(interaction, sessionId, next);
     });

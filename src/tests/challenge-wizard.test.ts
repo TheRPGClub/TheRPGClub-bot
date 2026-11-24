@@ -4,6 +4,8 @@ import {
   applyBasics,
   applyCorePick,
   applyExcludePick,
+  applyFranchiseMainline,
+  applyGameList,
   applyIncludePick,
   applyIncludeSearch,
   applyOptionalTarget,
@@ -17,6 +19,7 @@ import {
   buildIncludeModal,
   buildSettingsModal,
   challengeWriteOf,
+  challengeDraftFromState,
   type IChallengeDraft,
   type IChallengeWizardApi,
   type IIncludeChoice,
@@ -28,6 +31,7 @@ import type {
   IPoolDefinition,
   IPoolSource,
 } from "../services/ChallengeApi.js";
+import type { IGameList } from "../services/GameListApi.js";
 import {
   apiError,
   buttonsOf,
@@ -602,4 +606,145 @@ test("assignment: a calendar in place of a Pool, always Always Open", async () =
     reveal: "12-25",
   });
   assert.equal(write?.pool, undefined);
+});
+
+// Starting a Pool from a Game List, and a Franchise's Mainline games as Core (bot#1569).
+
+function soulsList(): IGameList {
+  const titles = ["Lies of P", "Nioh", "Nioh 2"];
+  return {
+    id: 12,
+    name: "Soulslike, but make it history",
+    description: null,
+    visibility: "members",
+    sort: "ranked",
+    club: false,
+    owner: { user_id: "42", username: "grindlord", global_name: null },
+    entry_count: 3,
+    viewer: { can_edit: true, can_delete: true },
+    // Served in the sort's order; the Pool takes the ranked order.
+    entries: [3, 1, 2].map((position) => ({
+      game_id: 200 + position,
+      position,
+      note: null,
+      added_at: "2026-11-01T00:00:00Z",
+      game: { game_id: 200 + position, title: titles[position - 1]! },
+    })),
+    updated_at: "2026-11-01T00:00:00Z",
+  };
+}
+
+function listApi(list: IGameList | null) {
+  const reads: string[] = [];
+  return {
+    reads,
+    get: async (id: number, actingUserId: string) => {
+      reads.push(`get ${id} as ${actingUserId}`);
+      return list;
+    },
+  };
+}
+
+test("from-list: after basics the list's games come in as Core Games, and create links it",
+  async () => {
+    const lists = listApi(soulsList());
+    const started = withBasics(newChallengeDraft("42", false, 12));
+    const result = await applyGameList(started, "42", lists);
+
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(lists.reads, ["get 12 as 42"]);
+    assert.deepEqual(result.draft.pool.core.map((g) => g.title), ["Lies of P", "Nioh", "Nioh 2"]);
+    assert.deepEqual(result.draft.gameList, {
+      id: 12, name: "Soulslike, but make it history", gameCount: 3,
+    });
+    // Read once: a second basics submit leaves it be.
+    await applyGameList(result.draft, "42", lists);
+    assert.equal(lists.reads.length, 1);
+
+    const write = challengeWriteOf({ ...result.draft, step: "preview" });
+    assert.equal(write.pool?.game_list_id, 12);
+    assert.deepEqual(write.pool?.core_game_ids, [201, 202, 203]);
+
+    const view = await renderWizardStep(SID, { ...result.draft, step: "preview" }, fakeApi());
+    assert.ok(textOf(view.components).includes(
+      "-# Made from your Game List **Soulslike, but make it history**. Its 3 games came in " +
+        "as Core Games. Games you add to the list later arrive as Optional Games.",
+    ));
+  });
+
+test("from-list: another Format, or a list that can't be read, starts without it",
+  async () => {
+    const slots = applyBasics(newChallengeDraft("42", false, 12), basics({
+      [WIZARD_FIELDS.format]: "slots",
+      [WIZARD_FIELDS.schedule]: "always_open",
+    })).draft;
+    const dropped = await applyGameList(slots, "42", listApi(soulsList()));
+    assert.equal(dropped.draft.gameList, null);
+    assert.match(dropped.errors[0] ?? "", /only starts a Pool Challenge/);
+
+    const gone = await applyGameList(withBasics(newChallengeDraft("42", false, 12)), "42",
+      listApi(null));
+    assert.equal(gone.draft.gameList, null);
+    assert.deepEqual(gone.draft.pool.core, []);
+    assert.match(gone.errors[0] ?? "", /That Game List is gone/);
+    assert.equal(challengeWriteOf(gone.draft).pool?.game_list_id, undefined);
+  });
+
+test("from-list: an edit shows the linked list but never sends it", () => {
+  const draft = draftFromChallenge(poolChallenge({
+    pool: {
+      ...poolChallenge().pool!,
+      game_list: { id: 12, name: "Soulslike", visible: true, can_add: true },
+    },
+  }), "42");
+  assert.equal(draft.gameList?.name, "Soulslike");
+  assert.equal(challengeWriteOf(draft).pool?.game_list_id, undefined);
+});
+
+test("from-list: the draft survives a restart, and a bad saved list is dropped", () => {
+  const draft = newChallengeDraft("42", false, 12);
+  const saved = JSON.parse(JSON.stringify(draft)) as unknown;
+  assert.deepEqual(challengeDraftFromState(saved)?.gameList, {
+    id: 12, name: null, gameCount: 0,
+  });
+  const bad = { ...draft, gameList: { id: "x" } };
+  assert.equal(challengeDraftFromState(bad)?.gameList, null);
+});
+
+test("sources: a Franchise newly picked brings its Mainline games in as Core", async () => {
+  const api = fakeApi();
+  const settled = await applySettings(withBasics(), poolSettings(), api);
+  const left = applyExcludePick(settled.draft, shown(5), ["5"]);
+  const asked: number[] = [];
+  const mainlineOf = async (id: number) => {
+    asked.push(id);
+    return [
+      { game_id: 1, title: "Suikoden", mainline: true },
+      { game_id: 2, title: "Suikoden II", mainline: true },
+      { game_id: 5, title: "Suikoden III", mainline: true },
+    ];
+  };
+  const picked = applySourcePick(left, ["franchise:9", "collection:4"]);
+  const next = await applyFranchiseMainline(left, picked, mainlineOf);
+
+  assert.deepEqual(asked, [9]);
+  // Left out stays left out.
+  assert.deepEqual(next.pool.core.map((g) => g.id), [1, 2]);
+  assert.deepEqual(next.pool.excluded.map((g) => g.id), [5]);
+
+  // Picking again with the Franchise already in asks for nothing more.
+  const again = await applyFranchiseMainline(next, applySourcePick(next, ["franchise:9"]),
+    mainlineOf);
+  assert.deepEqual(asked, [9]);
+  assert.deepEqual(again.pool.core.map((g) => g.id), [1, 2]);
+});
+
+test("sources: a Franchise that can't be read adds its games as Optional only", async () => {
+  const settled = await applySettings(withBasics(), poolSettings(), fakeApi());
+  const picked = applySourcePick(settled.draft, ["franchise:9"]);
+  const next = await applyFranchiseMainline(settled.draft, picked, async () => {
+    throw new Error("API down");
+  });
+  assert.deepEqual(next.pool.core, []);
+  assert.deepEqual(next.pool.franchises.map((f) => f.id), [9]);
 });

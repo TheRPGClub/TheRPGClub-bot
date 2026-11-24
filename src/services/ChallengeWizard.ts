@@ -51,6 +51,10 @@ import {
   type IPoolDefinition,
   type IPoolSource,
 } from "./ChallengeApi.js";
+import { franchiseMainlineGames, type IFranchiseGame } from "./ChallengeProposalApi.js";
+import { GAME_LIST_API, type IGameListApi } from "./GameListApi.js";
+import { plural } from "../utilities/TextUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 
 // /challenge create and the rules part of /challenge edit (spec api#376), design 6C "Two
 // modals and a cover preview": a basics modal, the Format's settings modal, the pick of
@@ -83,6 +87,18 @@ export interface IWizardGame {
 
 export interface IIncludeChoice extends IWizardGame {
   year: number | null;
+}
+
+/**
+ * The Game List a Pool is made from (bot#1569): on create, the list `/challenge create
+ * from-list:` named, read after the basics modal (`name` null until then); on edit, the
+ * linked list, shown only.
+ */
+export interface IDraftGameList {
+  id: number;
+  name: string | null;
+  /** The games it brought in as Core Games (create). */
+  gameCount: number;
 }
 
 /** Where "Include a game" puts the game it finds. */
@@ -137,6 +153,8 @@ export interface IChallengeDraft {
   includeAs: IncludeAs;
   /** The page of the exclude pick in the preview. */
   previewPage: number;
+  /** The Game List the Pool is made from or linked to; null when none. */
+  gameList?: IDraftGameList | null;
 }
 
 export type IChallengeWizardApi = Pick<
@@ -203,7 +221,11 @@ const YEARS_ALIVE: IChallengeDraft["slots"] = {
   countsPastPlay: false,
 };
 
-export function newChallengeDraft(ownerId: string, clubHosted: boolean): IChallengeDraft {
+export function newChallengeDraft(
+  ownerId: string,
+  clubHosted: boolean,
+  gameListId: number | null = null,
+): IChallengeDraft {
   return {
     mode: "create",
     challengeId: null,
@@ -230,6 +252,7 @@ export function newChallengeDraft(ownerId: string, clubHosted: boolean): IChalle
     includeChoices: [],
     includeAs: "core",
     previewPage: 1,
+    gameList: gameListId ? { id: gameListId, name: null, gameCount: 0 } : null,
   };
 }
 
@@ -285,7 +308,17 @@ export function draftFromChallenge(challenge: IChallenge, ownerId: string): ICha
       }
       : draft.assignment,
     slots: challenge.slots ? draftSlots(challenge.slots) : draft.slots,
+    gameList: challenge.pool?.game_list
+      ? { id: challenge.pool.game_list.id, name: challenge.pool.game_list.name, gameCount: 0 }
+      : null,
   };
+}
+
+function isDraftGameList(value: unknown): value is IDraftGameList {
+  const list = value as Partial<IDraftGameList> | null | undefined;
+  return !!list && typeof list === "object" && Number.isInteger(list.id) &&
+    (list.name === null || typeof list.name === "string") &&
+    Number.isInteger(list.gameCount);
 }
 
 function isYear(value: unknown, keyword: string): boolean {
@@ -338,6 +371,7 @@ export function challengeDraftFromState(state: unknown): IChallengeDraft | null 
     includeAs: draft.includeAs === "optional" ? "optional" : "core",
     slots: slotsValid ? draft.slots : { ...YEARS_ALIVE },
     previewPage: Math.max(1, Number(draft.previewPage) || 1),
+    gameList: isDraftGameList(draft.gameList) ? draft.gameList : null,
   };
 }
 
@@ -375,6 +409,52 @@ export function applyBasics(
       // An Assignment Challenge runs in Editions: Always Open, with no end date.
       schedule: format === "assignment" ? "always_open" : schedule as ChallengeSchedule,
       slots: { ...draft.slots, countsPastPlay },
+    },
+    errors: [],
+  };
+}
+
+/**
+ * After the basics modal on a create started `from-list:` (bot#1569): reads the list once
+ * and brings its games in as Core Games, ranked order first. A Format other than Pool
+ * drops the list (only a Pool is fed by one), as does a list the member can't read.
+ */
+export async function applyGameList(
+  draft: IChallengeDraft,
+  actingUserId: string,
+  api: Pick<IGameListApi, "get"> = GAME_LIST_API,
+): Promise<{ draft: IChallengeDraft; errors: string[] }> {
+  const pending = draft.gameList;
+  if (draft.mode !== "create" || !pending || pending.name !== null) return { draft, errors: [] };
+  if (draft.format !== "pool") {
+    return {
+      draft: { ...draft, gameList: null },
+      errors: ["A Game List only starts a Pool Challenge, so this one starts without it."],
+    };
+  }
+  const list = await api.get(pending.id, actingUserId);
+  if (!list) {
+    return {
+      draft: { ...draft, gameList: null },
+      errors: ["That Game List is gone, or you can't see it, so the Pool starts empty."],
+    };
+  }
+  const games = [...(list.entries ?? [])]
+    .sort((a, b) => a.position - b.position)
+    .map((entry) => ({ id: entry.game.game_id, title: entry.game.title }));
+  let core = draft.pool.core;
+  for (const game of games) core = withGame(core, game);
+  const ids = new Set(games.map((game) => game.id));
+  return {
+    draft: {
+      ...draft,
+      pool: {
+        ...draft.pool,
+        core,
+        optional: without(draft.pool.optional, ids),
+        excluded: without(draft.pool.excluded, ids),
+      },
+      gameList: { id: list.id, name: list.name, gameCount: games.length },
     },
     errors: [],
   };
@@ -629,6 +709,42 @@ export function applySourcePick(
   return { ...draft, pool: { ...draft.pool, franchises, collections }, previewPage: 1 };
 }
 
+/**
+ * After the franchise and Series pick: each Franchise newly added brings its Mainline games
+ * in as Core Games (spec api#442; the owner confirmed it), unless the Host left them out or
+ * already made them Core. Add-ons are never Mainline (GET /franchises/:id). A Franchise that
+ * can't be read adds its games as Optional only, as before.
+ */
+export async function applyFranchiseMainline(
+  before: IChallengeDraft,
+  after: IChallengeDraft,
+  mainlineOf: (franchiseId: number) => Promise<IFranchiseGame[]> = franchiseMainlineGames,
+): Promise<IChallengeDraft> {
+  const had = new Set(before.pool.franchises.map((f) => f.id));
+  const added = after.pool.franchises.filter((f) => !had.has(f.id));
+  if (!added.length) return after;
+  const excluded = new Set(after.pool.excluded.map((g) => g.id));
+  let core = after.pool.core;
+  const ids = new Set<number>();
+  for (const franchise of added) {
+    let games: IFranchiseGame[] = [];
+    try {
+      games = await mainlineOf(franchise.id);
+    } catch (err: unknown) {
+      logError("ChallengeWizard.applyFranchiseMainline", err);
+    }
+    for (const game of games) {
+      if (excluded.has(game.game_id)) continue;
+      core = withGame(core, { id: game.game_id, title: game.title });
+      ids.add(game.game_id);
+    }
+  }
+  return {
+    ...after,
+    pool: { ...after.pool, core, optional: without(after.pool.optional, ids) },
+  };
+}
+
 function without(games: readonly IWizardGame[], ids: ReadonlySet<number>): IWizardGame[] {
   return games.filter((game) => !ids.has(game.id));
 }
@@ -743,7 +859,12 @@ function slotsOf(draft: IChallengeDraft): IChallengeSlots {
 
 /** The create or edit body for the draft. */
 export function challengeWriteOf(draft: IChallengeDraft): IChallengeWrite {
-  const pool = { ...poolDefinition(draft, true), optional_target: draft.pool.optionalTarget };
+  const pool: NonNullable<IChallengeWrite["pool"]> = {
+    ...poolDefinition(draft, true),
+    optional_target: draft.pool.optionalTarget,
+  };
+  // A Game List is linked only on create; the API copies its games in as Core Games too.
+  if (draft.mode === "create" && draft.gameList?.name) pool.game_list_id = draft.gameList.id;
   // With Runs, only the Pool may change: the rest is locked (spec api#442).
   if (draft.poolOnly) return { pool };
   const write: IChallengeWrite = {
@@ -843,8 +964,9 @@ function sourcesView(sessionId: string, draft: IChallengeDraft, notice: string[]
   const lines = [
     ...noticeLines(notice),
     `### ${stepTitle(draft)}${draft.poolOnly ? "" : " (2 of 2)"}: the Pool`,
-    "Pick the franchises and Series whose games join the Pool as Optional Games. " +
-      "In the preview you tick the Core Games, leave games out and add others by hand.",
+    "Pick the franchises and Series whose games join the Pool. A franchise's Mainline " +
+      "games come in as Core Games, the rest as Optional Games. In the preview you tick the " +
+      "Core Games, leave games out and add others by hand.",
     `Chosen: ${draftSources(draft) ?? "nothing yet"}`,
   ];
   const options = sourceOptions(draft);
@@ -986,6 +1108,21 @@ function optionalLine(draft: IChallengeDraft, optionalCount: number): string {
   return `${head} none yet`;
 }
 
+/** Where the Pool's linked Game List stands (design 1A): made from it, or linked to it. */
+function gameListLine(draft: IChallengeDraft): string | null {
+  const list = draft.gameList;
+  if (!list?.name) return null;
+  const name = `**${escapeChallengeText(list.name)}**`;
+  if (draft.mode === "create") {
+    return `-# Made from your Game List ${name}. ` +
+      (list.gameCount === 1
+        ? "Its one game came in as a Core Game. "
+        : `Its ${plural(list.gameCount, "game")} came in as Core Games. `) +
+      "Games you add to the list later arrive as Optional Games.";
+  }
+  return `-# Linked to the Game List ${name}. Games added to it arrive as Optional Games.`;
+}
+
 function selectRow(select: StringSelectMenuBuilder): Row {
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 }
@@ -1045,6 +1182,8 @@ async function poolPreview(
   if (draft.pool.excluded.length) {
     details.push(`-# Left out: ${namedTitles(draft.pool.excluded, CORE_NAMED_MAX)}`);
   }
+  const listLine = gameListLine(draft);
+  if (listLine) details.push(listLine);
   if (draft.pool.franchises.length + draft.pool.collections.length) {
     details.push("-# Add-ons never come in from a franchise or Series. " +
       "Add one by hand if you want it.");

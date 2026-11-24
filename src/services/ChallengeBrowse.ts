@@ -45,10 +45,12 @@ import {
   type RunStatus,
 } from "./ChallengeApi.js";
 import { plural } from "../utilities/TextUtils.js";
+import { addListNotices, poolProposalButtons } from "./ChallengeProposals.js";
 
 // /challenge list and /challenge show (spec api#376). Show is design 4D "Flip the view":
 // a Pool by game (who Cleared what, the API's pool_progress) or by member (each Run's
-// progress), one page at a time.
+// progress), one page at a time. A Pool's show also has Propose a game, the Pool Proposals
+// for whoever decides them, and their list notices (bot#1569).
 
 export type IChallengeBrowseApi = Pick<
   IChallengeApi,
@@ -295,9 +297,14 @@ export async function buildChallengeShowView(
       showButton(id, "Next", { view: shown, page: page + 1 }, { disabled: page >= body.pages }),
     );
   }
+  addListNotices(container, challenge);
   const rows: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] = buttons.length
     ? [new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons)]
     : [];
+  const proposalButtons = poolProposalButtons(challenge);
+  if (proposalButtons.length) {
+    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(...proposalButtons));
+  }
   const runSelect = challenge.challenge_format === "slots"
     ? slotsRunSelect(id, body.runs ?? [])
     : null;

@@ -1,6 +1,7 @@
 import {
   CHALLENGE_EDIT_PREFIX,
   CHALLENGE_LIST_PREFIX,
+  CHALLENGE_PROPOSAL_PREFIX,
   CHALLENGE_RUN_PREFIX,
   CHALLENGE_SANTA_PICK_PREFIX,
   CHALLENGE_SANTA_PREFIX,
@@ -283,4 +284,72 @@ export function parseSantaPickId(customId: string): ISantaPickTarget | null {
   return known
     ? { action: action as SantaPickAction, editionId, page, query: rest.join(":") }
     : null;
+}
+
+/**
+ * Pool Proposal actions (spec api#442, bot#1569), each `<prefix>:<action>:<IDs...>`; the
+ * clicking member is who acts. `position` is 1-based, the proposal shown among the pending:
+ * - `view` (Challenge ID, position, `n` new private reply or `u` update): one proposal;
+ * - `core`, `optional`, `decline` (Challenge ID, proposal ID, position): decide it;
+ * - `list-add` (Challenge ID, game ID, position) and `list-skip` (Challenge ID, position):
+ *   the answers to "also add it to the list?";
+ * - `propose` (Challenge ID): the button opening the game search, `search-modal` its
+ *   submit, `pick` the select of games found, and `note-modal` (Challenge ID, game ID) the
+ *   note that sends the proposal;
+ * - `notice-remove`, `notice-keep` (Challenge ID, list notice ID): clear a list notice.
+ */
+export const CHALLENGE_PROPOSAL_ACTIONS = [
+  "view", "core", "optional", "decline", "list-add", "list-skip", "propose", "search-modal",
+  "pick", "note-modal", "notice-remove", "notice-keep",
+] as const;
+
+export type ChallengeProposalAction = (typeof CHALLENGE_PROPOSAL_ACTIONS)[number];
+
+const PROPOSAL_ID_COUNTS: Readonly<Record<ChallengeProposalAction, number>> = {
+  "view": 2,
+  "core": 3,
+  "optional": 3,
+  "decline": 3,
+  "list-add": 3,
+  "list-skip": 2,
+  "propose": 1,
+  "search-modal": 1,
+  "pick": 1,
+  "note-modal": 2,
+  "notice-remove": 2,
+  "notice-keep": 2,
+};
+
+export interface IChallengeProposalTarget {
+  action: ChallengeProposalAction;
+  ids: number[];
+  /** `view` only: a new private reply (from a DM or a post) or an update of the view. */
+  reply?: "new" | "update";
+}
+
+export function buildChallengeProposalId(target: IChallengeProposalTarget): string {
+  const parts: (string | number)[] = [CHALLENGE_PROPOSAL_PREFIX, target.action, ...target.ids];
+  if (target.action === "view") parts.push(target.reply === "new" ? "n" : "u");
+  return parts.join(":");
+}
+
+export function parseChallengeProposalId(customId: string): IChallengeProposalTarget | null {
+  const [prefix, action, ...rest] = customId.split(":");
+  if (prefix !== CHALLENGE_PROPOSAL_PREFIX) return null;
+  if (!(CHALLENGE_PROPOSAL_ACTIONS as readonly string[]).includes(action ?? "")) return null;
+  const known = action as ChallengeProposalAction;
+  let reply: IChallengeProposalTarget["reply"];
+  if (known === "view") {
+    const flag = rest.pop();
+    if (flag !== "n" && flag !== "u") return null;
+    reply = flag === "n" ? "new" : "update";
+  }
+  const ids = rest.map(Number);
+  if (
+    ids.length !== PROPOSAL_ID_COUNTS[known] ||
+    ids.some((id) => !Number.isInteger(id) || id < 1)
+  ) {
+    return null;
+  }
+  return reply ? { action: known, ids, reply } : { action: known, ids };
 }
