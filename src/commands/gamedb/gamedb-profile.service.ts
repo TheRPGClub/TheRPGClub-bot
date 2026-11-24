@@ -453,7 +453,7 @@ export async function buildGameProfile(
       detailSections.push(`**Publisher:** ${publishers.join(", ")}`);
     }
     if (series) {
-      detailSections.push(`**Series / Collection:** ${series}`);
+      detailSections.push(`**Series:** ${series}`);
     }
 
     if (alternateVersions.length) {

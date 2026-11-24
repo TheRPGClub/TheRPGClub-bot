@@ -92,9 +92,20 @@ function countsPastPlay(run: IChallengeRun): boolean {
 /** The advice for a Pool Run: what is left, and what you're playing that counts. */
 function poolAdvice(run: IChallengeRun): string[] {
   const name = `**${runChallengeName(run)}**`;
-  const { cleared, target } = run.progress;
-  const left = Math.max(0, target - cleared);
+  const { cleared, target, core, optional } = run.progress;
+  let left = Math.max(0, target - cleared);
   let first = `${name} needs ${plural(left, "more Cleared game")}.`;
+  if (core || optional) {
+    // Every Core Game counts, and Optional Games only up to the target (ADR 0014).
+    const coreLeft = core ? Math.max(0, core.total - core.cleared) : 0;
+    const optionalLeft = optional ? Math.max(0, optional.target - optional.cleared) : 0;
+    left = coreLeft + optionalLeft;
+    const needs = [
+      coreLeft ? plural(coreLeft, "more Core Game") : null,
+      optionalLeft ? plural(optionalLeft, "more Optional Game") : null,
+    ].filter((part): part is string => part !== null);
+    first = `${name} needs ${listJoin(needs)} Cleared.`;
+  }
   if (target === 0) first = `${name} has no games in its Pool yet.`;
   else if (left === 0) first = `${name} has all the Cleared games it needs.`;
   const lines = [first];
