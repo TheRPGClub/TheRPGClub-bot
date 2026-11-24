@@ -38,6 +38,15 @@ import {
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
+import {
+  featureStateFor,
+  resolveFeatureGate,
+  settleWithin,
+  type IFeatureGateSource,
+} from "../../functions/FeatureGate.js";
+import { featureGateSource } from "../../services/FeatureAccessService.js";
+import { FEATURE_ACCESS_WAIT_MS } from "../../config/cacheDefaults.js";
+import { GAME_LISTS_FEATURE_KEY } from "../../config/featureGate.js";
 import { buildGameDbListActionId } from "../../functions/GameListCustomIds.js";
 
 export type GameProfileRenderContext = {
@@ -136,10 +145,30 @@ function compareReleasesByDate(a: IRelease, b: IRelease): number {
   return aRank - bRank;
 }
 
+/**
+ * Whether the game view offers "Add to a Game List" to `viewerId`, the member it is made
+ * for: only when the feature gate would let them use Game Lists (Live, or Preview for
+ * staff; a flag read that fails offers it, as the gate then lets the click run). A view
+ * with no member (a release announcement) offers it only while Game Lists is Live.
+ */
+export async function canOfferGameLists(
+  viewerId: string | null,
+  source: IFeatureGateSource = featureGateSource,
+): Promise<boolean> {
+  if (viewerId) {
+    const target = { type: "component" as const, customId: buildGameDbListActionId(0) };
+    return await resolveFeatureGate(target, viewerId, source) !== "not_available";
+  }
+  const flags = await settleWithin("Feature Flag lookup", source.flags(), FEATURE_ACCESS_WAIT_MS);
+  const state = featureStateFor(GAME_LISTS_FEATURE_KEY, flags);
+  return state === null || state === "live";
+}
+
 export function buildGameProfileActionRow(
   gameId: number,
   featuredVideoUrl: string | null,
   disableVideo = false,
+  offerGameLists = true,
 ): ActionRowBuilder<ButtonBuilder>[] {
    
   const addNowPlaying = buildActionButton({
@@ -169,12 +198,15 @@ export function buildGameProfileActionRow(
     style: ButtonStyle.Secondary,
   }));
   rows.push(buildButtonRow(...primaryButtons));
-  // Game Lists (bot#1568, design 3C): a row of its own, as the first row is full at five.
-  rows.push(buildButtonRow(buildActionButton({
-    customId: buildGameDbListActionId(gameId),
-    label: "Add to a Game List",
-    style: ButtonStyle.Secondary,
-  })));
+  // Game Lists (bot#1568, design 3C): a row of its own under the first row's four
+  // buttons, only for a member who can use Game Lists (canOfferGameLists).
+  if (offerGameLists) {
+    rows.push(buildButtonRow(buildActionButton({
+      customId: buildGameDbListActionId(gameId),
+      label: "Add to a Game List",
+      style: ButtonStyle.Secondary,
+    })));
+  }
   return rows;
 }
 
@@ -599,6 +631,8 @@ export async function showGameProfile(
       ...buildGameProfileActionRow(
         gameId,
         profile.featuredVideoUrl,
+        false,
+        await canOfferGameLists(interaction.user.id),
       ),
     );
   }
@@ -624,6 +658,8 @@ export async function showGameProfileFromNomination(
     ...buildGameProfileActionRow(
       gameId,
       profile.featuredVideoUrl,
+      false,
+      await canOfferGameLists(interaction.user.id),
     ),
   ];
   await safeReply(interaction, {
@@ -660,6 +696,8 @@ export async function buildGameProfileMessagePayload(
       ...buildGameProfileActionRow(
         gameId,
         profile.featuredVideoUrl,
+        false,
+        await canOfferGameLists(null),
       ),
     );
   }
@@ -680,6 +718,8 @@ export async function refreshGameProfileMessage(
   const actionRows = buildGameProfileActionRow(
     gameId,
     profile.featuredVideoUrl,
+    false,
+    await canOfferGameLists(interaction.user.id),
   );
   const existingComponents = interaction.message?.components ?? [];
   const searchRows = getSearchRowsFromComponents(existingComponents);
@@ -707,6 +747,8 @@ export async function updateGameProfileMessageById(
   const actionRows = buildGameProfileActionRow(
     gameId,
     profile.featuredVideoUrl,
+    false,
+    await canOfferGameLists(interaction.user.id),
   );
   const searchRows = getSearchRowsFromComponents(message.components ?? []);
   safeIgnore(message.edit({

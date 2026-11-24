@@ -88,7 +88,8 @@ function fake(options: {
       return deps.pending;
     },
     propose: async (challengeId, gameId, note, actingUserId) => {
-      deps.calls.push(`propose ${challengeId} ${gameId} ${JSON.stringify(note)} as ${actingUserId}`);
+      const noteJson = JSON.stringify(note);
+      deps.calls.push(`propose ${challengeId} ${gameId} ${noteJson} as ${actingUserId}`);
       if (options.refuse) throw options.refuse;
       return proposal(9, gameId, "Dissidia Final Fantasy NT");
     },

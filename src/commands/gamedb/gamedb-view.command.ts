@@ -40,6 +40,7 @@ import {
 import {
   buildGameProfile,
   buildGameProfileActionRow,
+  canOfferGameLists,
   refreshGameProfileMessage,
   showGameProfile,
 } from "./gamedb-profile.service.js";
@@ -168,6 +169,7 @@ export class GameDbViewCommand {
           gameId,
           profile.featuredVideoUrl,
           true,
+          await canOfferGameLists(interaction.user.id),
         );
         const existingComponents = interaction.message?.components ?? [];
         const searchRows = getSearchRowsFromComponents(existingComponents);
