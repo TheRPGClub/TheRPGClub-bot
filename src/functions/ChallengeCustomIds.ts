@@ -74,7 +74,7 @@ export const CHALLENGE_WIZARD_ACTIONS = [
   // Selects.
   "sources", "core", "exclude", "include-pick",
   // Buttons.
-  "preview", "page-prev", "page-next", "save", "cancel",
+  "preview", "page-prev", "page-next", "save", "cancel", "list-add", "list-skip",
 ] as const;
 
 export type ChallengeWizardAction = (typeof CHALLENGE_WIZARD_ACTIONS)[number];

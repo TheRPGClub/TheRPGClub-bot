@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyAddToList,
   applyBasics,
   applyCorePick,
   applyExcludePick,
@@ -13,6 +14,7 @@ import {
   applySourcePick,
   draftFromChallenge,
   newChallengeDraft,
+  newListGames,
   renderWizardStep,
   saveChallengeDraft,
   WIZARD_FIELDS,
@@ -32,6 +34,7 @@ import type {
   IPoolSource,
 } from "../services/ChallengeApi.js";
 import type { IGameList } from "../services/GameListApi.js";
+import { buildChallengeWizardId } from "../functions/ChallengeCustomIds.js";
 import {
   apiError,
   buttonsOf,
@@ -699,6 +702,77 @@ test("from-list: an edit shows the linked list but never sends it", () => {
   }), "42");
   assert.equal(draft.gameList?.name, "Soulslike");
   assert.equal(challengeWriteOf(draft).pool?.game_list_id, undefined);
+});
+
+function linkedEdit(canAdd: boolean, runs = 4): IChallengeDraft {
+  const draft = draftFromChallenge(poolChallenge({
+    run_count: runs,
+    pool: {
+      ...poolChallenge().pool!,
+      core_games: [{ game_id: 1, title: "Final Fantasy" }],
+      optional_games: [
+        { game_id: 2, title: "Final Fantasy Tactics", source: "hand", new: false },
+        { game_id: 3, title: "Final Fantasy II", source: "list", new: false },
+      ],
+      core_count: 1,
+      game_list: { id: 12, name: "Soulslike", visible: true, can_add: canAdd },
+    },
+  }), "42");
+  return { ...draft, step: "preview" };
+}
+
+function includeGame(draft: IChallengeDraft, id: number, title: string): IChallengeDraft {
+  return applyIncludePick({ ...draft, includeChoices: [{ id, title, year: null }] }, String(id));
+}
+
+test("story 30: an edit of a linked Pool asks to add a game put in by hand to the list",
+  async () => {
+    const before = linkedEdit(true);
+    assert.deepEqual(newListGames(before), []);
+    const quiet = await renderWizardStep(SID, before, fakeApi());
+    assert.doesNotMatch(textOf(quiet.components), /Also add/);
+
+    const draft = includeGame(before, 9, "Nioh");
+    assert.deepEqual(newListGames(draft), [{ id: 9, title: "Nioh" }]);
+    const asked = await renderWizardStep(SID, draft, fakeApi());
+    assert.match(textOf(asked.components), /Also add Nioh to \*\*Soulslike\*\*\?/);
+    const labels = buttonsOf(asked.components).map((b) => [b.label, b.customId]);
+    assert.deepEqual(labels.slice(-2), [
+      ["Add to Soulslike", buildChallengeWizardId("list-add", SID)],
+      ["Keep the list as it is", buildChallengeWizardId("list-skip", SID)],
+    ]);
+    // Unanswered, the list stays as it is.
+    assert.equal(challengeWriteOf(draft).add_to_list, undefined);
+
+    const yes = applyAddToList(draft, true);
+    assert.deepEqual(challengeWriteOf(yes),
+      { pool: challengeWriteOf(draft).pool, add_to_list: true });
+    assert.match(textOf((await renderWizardStep(SID, yes, fakeApi())).components),
+      /Saving also adds Nioh to \*\*Soulslike\*\*\./);
+    assert.equal(challengeWriteOf(applyAddToList(draft, false)).add_to_list, undefined);
+  });
+
+test("story 30: without Runs the edit sends add_to_list with the rest", () => {
+  const draft = applyAddToList(includeGame(linkedEdit(true, 0), 9, "Nioh"), true);
+  const write = challengeWriteOf(draft);
+  assert.equal(write.add_to_list, true);
+  assert.equal(write.name, "Fall of Final Fantasy");
+});
+
+test("story 30: no list question when the member may not add to the list", async () => {
+  const draft = includeGame(linkedEdit(false), 9, "Nioh");
+  assert.deepEqual(newListGames(draft), []);
+  const view = await renderWizardStep(SID, applyAddToList(draft, true), fakeApi());
+  assert.doesNotMatch(textOf(view.components), /Also add|Saving also adds/);
+  assert.equal(challengeWriteOf(applyAddToList(draft, true)).add_to_list, undefined);
+});
+
+test("story 30: the answer survives a restart", () => {
+  const draft = applyAddToList(includeGame(linkedEdit(true), 9, "Nioh"), true);
+  const restored = challengeDraftFromState(JSON.parse(JSON.stringify(draft)) as unknown);
+  assert.equal(restored?.addToList, true);
+  assert.deepEqual(restored?.handBefore, [1, 2]);
+  assert.equal(restored?.gameList?.canAdd, true);
 });
 
 test("from-list: the draft survives a restart, and a bad saved list is dropped", () => {
