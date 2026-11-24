@@ -24,6 +24,7 @@ import {
   escapeChallengeText,
   hostLabel,
   memberName,
+  poolProgressText,
 } from "../functions/ChallengeCopy.js";
 import { describeSlotsRange } from "../functions/ChallengeSlotsCopy.js";
 import {
@@ -143,6 +144,16 @@ function rangeLabel(page: number, shown: number, count: number): string {
   return shown ? `${from} to ${from + shown - 1} of ${count}` : `0 of ${count}`;
 }
 
+/** Each Pool game's place for the by-game list: "Core", "Optional" or "Optional · new". */
+function poolPlaces(challenge: IChallenge): Map<number, string> {
+  const places = new Map<number, string>();
+  for (const game of challenge.pool?.core_games ?? []) places.set(game.game_id, "Core");
+  for (const game of challenge.pool?.optional_games ?? []) {
+    places.set(game.game_id, game.new ? "Optional · new" : "Optional");
+  }
+  return places;
+}
+
 async function byGameText(
   challenge: IChallenge,
   page: number,
@@ -153,14 +164,17 @@ async function byGameText(
   // still counts play, for this Season (or the last while Closed).
   const games = await api.poolProgress(challenge.id, actingUserId, page, CHALLENGE_PAGE_SIZE);
   const lines = [`### By game · ${rangeLabel(page, games.items.length, games.count)}`];
+  const place = poolPlaces(challenge);
   for (const item of games.items) {
     const year = releaseYear(item.initial_release_date);
     const cleared = (item.cleared_by ?? []).map(memberName);
     const inProgress = (item.in_progress ?? []).map(memberName);
     const who = [`Cleared by ${cleared.length ? names(cleared) : "nobody yet"}`];
     if (inProgress.length) who.push(`In Progress: ${names(inProgress)}`);
+    const tag = place.get(item.game_id);
     lines.push(
-      `**${escapeChallengeText(item.title)}**${year ? ` \`${year}\`` : ""}`,
+      `**${escapeChallengeText(item.title)}**${year ? ` \`${year}\`` : ""}` +
+        (tag ? ` · ${tag}` : ""),
       `-# ${who.join(" · ")}`,
     );
   }
@@ -175,13 +189,13 @@ export const RUN_STATUS_LABELS: Readonly<Record<RunStatus, string>> = {
   abandoned: "Abandoned",
 };
 
-/** "**tenpenny** · Active · 1 of 3 Cleared · 1 In Progress" */
+/** "**tenpenny** · Active · 1 of 3 Cleared · 1 In Progress" (a Pool: "Core 2/3 · ...") */
 export function runLine(run: IChallengeRun): string {
   const { cleared, in_progress: inProgress, target } = run.progress;
   const parts = [
     `**${escapeChallengeText(memberName(run.user))}**`,
     RUN_STATUS_LABELS[run.status] ?? run.status,
-    `${cleared} of ${target} Cleared`,
+    poolProgressText(run.progress) ?? `${cleared} of ${target} Cleared`,
   ];
   if (inProgress) parts.push(`${inProgress} In Progress`);
   return parts.join(" · ");

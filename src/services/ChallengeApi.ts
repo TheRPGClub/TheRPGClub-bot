@@ -20,7 +20,6 @@ import type { IChallengeEditionSummary } from "./ChallengeEditionApi.js";
 
 export type ChallengeFormat = "pool" | "slots" | "assignment";
 export type ChallengeSchedule = "always_open" | "seasonal";
-export type PoolTarget = number | "all";
 
 export interface IChallengeMember {
   user_id: string;
@@ -28,14 +27,42 @@ export interface IChallengeMember {
   global_name?: string | null;
 }
 
+/** A game of a Pool as the Challenge serves it. */
+export interface IPoolGame {
+  game_id: number;
+  title: string;
+  cover_url?: string | null;
+}
+
+/** Where an Optional Game comes from: picked by hand, else its first live source. */
+export type PoolGameSource = "hand" | "list" | "franchise" | "series";
+
+export interface IPoolOptionalGame extends IPoolGame {
+  source: PoolGameSource;
+  /** Joined the Pool in the last 14 days, after the Challenge was created. */
+  new: boolean;
+}
+
+/**
+ * A Pool (ADR 0014): a Run Finishes by Clearing every Core Game plus `optional_target`
+ * Optional Games. `collections` are IGDB collections, shown to members as Series.
+ */
 export interface IChallengePool {
-  target: PoolTarget;
+  optional_target: number;
   franchises?: { franchise_id: number; name: string }[];
   collections?: { collection_id: number; name: string }[];
-  included_games?: { game_id: number; title: string }[];
+  /** Oldest release first. */
+  core_games?: IPoolGame[];
+  /** Oldest release first; on a show and in announcements only (null in lists). */
+  optional_games?: IPoolOptionalGame[] | null;
   excluded_games?: { game_id: number; title: string }[];
-  /** Games in the Pool now; on a show and in announcements only. */
+  core_count: number;
+  /** On a show and in announcements only. */
+  optional_count?: number | null;
+  /** Core and Optional Games now; on a show and in announcements only. */
   game_count?: number | null;
+  /** The Game List the Pool was started from; null when none. */
+  game_list?: { id: number; name: string; visible: boolean; can_add: boolean } | null;
 }
 
 export interface IChallengeSlots {
@@ -140,6 +167,18 @@ export interface IChallengeRunChallenge {
   slots?: IChallengeSlots | null;
 }
 
+export interface IChallengeRunProgress {
+  in_progress: number;
+  cleared: number;
+  /** Cleared games needed: for a Pool, its Core Games plus the Optional target. */
+  target: number;
+  /** Pool only: Core Games Cleared, of how many. */
+  core?: { cleared: number; total: number } | null;
+  /** Pool only: Optional Games Cleared, and how many are needed. */
+  optional?: { cleared: number; target: number } | null;
+  caught_up?: boolean;
+}
+
 export interface IChallengeRun {
   id: number;
   /** Always served by the API; optional so older fixtures need not carry it. */
@@ -151,7 +190,7 @@ export interface IChallengeRun {
   ended_at?: string | null;
   /** When play counts, as club dates (both included); ends_on null while it has no end. */
   window?: { starts_on: string; ends_on?: string | null };
-  progress: { in_progress: number; cleared: number; target: number; caught_up?: boolean };
+  progress: IChallengeRunProgress;
   /** The games counted on the Run, Cleared first. */
   entries?: IChallengeRunEntry[];
   /** Slots only. */
@@ -190,7 +229,10 @@ export interface IPastPlay {
 export interface IPoolDefinition {
   franchise_ids: number[];
   collection_ids: number[];
-  included_game_ids: number[];
+  /** Core Games: every Run must Clear them. Only a person makes a game Core. */
+  core_game_ids: number[];
+  /** Optional Games picked by hand, whatever their sources. */
+  optional_game_ids: number[];
   excluded_game_ids: number[];
 }
 
@@ -202,7 +244,7 @@ export interface IChallengeWrite {
   schedule?: ChallengeSchedule;
   ends_on?: string | null;
   season?: { start: string; end: string } | null;
-  pool?: IPoolDefinition & { target: PoolTarget };
+  pool?: IPoolDefinition & { optional_target: number };
   slots?: IChallengeSlots;
   assignment?: IChallengeAssignment;
   hosted_by_club?: boolean;
@@ -508,7 +550,10 @@ export function poolDefinitionOf(pool: IChallengePool): IPoolDefinition {
   return {
     franchise_ids: (pool.franchises ?? []).map((f) => f.franchise_id),
     collection_ids: (pool.collections ?? []).map((c) => c.collection_id),
-    included_game_ids: (pool.included_games ?? []).map((g) => g.game_id),
+    core_game_ids: (pool.core_games ?? []).map((g) => g.game_id),
+    optional_game_ids: (pool.optional_games ?? [])
+      .filter((g) => g.source === "hand")
+      .map((g) => g.game_id),
     excluded_game_ids: (pool.excluded_games ?? []).map((g) => g.game_id),
   };
 }

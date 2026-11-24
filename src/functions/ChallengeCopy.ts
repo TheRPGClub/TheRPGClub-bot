@@ -4,6 +4,7 @@ import type {
   IChallenge,
   IChallengeMember,
   IChallengePool,
+  IChallengeRunProgress,
 } from "../services/ChallengeApi.js";
 import { plural } from "../utilities/TextUtils.js";
 import { CLUB_TIME_ZONE } from "./ClubDate.js";
@@ -67,22 +68,68 @@ function namedGroup(names: readonly string[], one: string, many: string): string
   return `the ${listJoin(names.map(escapeChallengeText))} ${names.length === 1 ? one : many}`;
 }
 
-/** "38 games from the Final Fantasy franchise": where a Pool's games come from. */
-export function describePool(pool: IChallengePool): string {
-  const included = pool.included_games?.length ?? 0;
-  const sources = [
-    namedGroup((pool.franchises ?? []).map((f) => f.name), "franchise", "franchises"),
-    namedGroup((pool.collections ?? []).map((c) => c.name), "collection", "collections"),
-    included ? `${plural(included, "game")} added by hand` : null,
-  ].filter((part): part is string => part !== null);
-  const count = pool.game_count;
-  const games = typeof count === "number" ? `${plural(count, "game")}` : "Games";
-  return sources.length ? `${games} from ${listJoin(sources)}` : games;
+/** How many Core Games a Pool has. */
+export function poolCoreCount(pool: IChallengePool): number {
+  return pool.core_count ?? pool.core_games?.length ?? 0;
 }
 
-/** What it takes to Finish a Pool Run: "Clear 3", or every game. */
+/** "the Final Fantasy franchise and the Ivalice Alliance series": a Pool's live sources. */
+export function describePoolSources(pool: IChallengePool): string | null {
+  const sources = [
+    namedGroup((pool.franchises ?? []).map((f) => f.name), "franchise", "franchises"),
+    namedGroup((pool.collections ?? []).map((c) => c.name), "series", "series"),
+  ].filter((part): part is string => part !== null);
+  return sources.length ? listJoin(sources) : null;
+}
+
+/**
+ * "26 games: 14 Core Games, and 12 Optional Games from the Final Fantasy franchise": a
+ * Pool's games and where its Optional Games come from (ADR 0014).
+ */
+export function describePool(pool: IChallengePool): string {
+  const core = poolCoreCount(pool);
+  const count = pool.game_count;
+  const optional = pool.optional_count;
+  const byHand = (pool.optional_games ?? []).filter((g) => g.source === "hand").length;
+  const sources = describePoolSources(pool);
+  const head = typeof count === "number" ? `${plural(count, "game")}: ` : "";
+  const parts: string[] = [];
+  if (core) parts.push(plural(core, "Core Game"));
+  let optionalPart = typeof optional === "number"
+    ? (optional ? plural(optional, "Optional Game") : "")
+    : (sources || byHand ? "Optional Games" : "");
+  if (optionalPart) {
+    if (sources) optionalPart += ` from ${sources}`;
+    if (sources && byHand) optionalPart += `, plus ${byHand} picked by hand`;
+    else if (byHand) optionalPart += " picked by hand";
+    parts.push(optionalPart);
+  }
+  if (!parts.length) return typeof count === "number" ? plural(count, "game") : "No games yet";
+  // "38 games: 38 Optional Games from ..." says the count twice: one part stands alone.
+  return parts.length > 1 ? `${head}${parts.join(", and ")}` : parts[0]!;
+}
+
+/**
+ * What it takes to Finish a Pool Run: "Clear every Core Game (14) and 2 Optional Games",
+ * "Clear every Core Game (14)", or "Clear 5 Optional Games".
+ */
 export function describePoolTarget(pool: IChallengePool): string {
-  return pool.target === "all" ? "Clear every game in the Pool" : `Clear ${pool.target}`;
+  const core = poolCoreCount(pool);
+  const target = pool.optional_target ?? 0;
+  const optional = plural(target, "Optional Game");
+  if (!core) return `Clear ${optional}`;
+  const every = `Clear every Core Game (${core})`;
+  return target ? `${every} and ${optional}` : every;
+}
+
+/** "Core 9/14 · Optional 1/2": a Pool Run's progress; null for other Formats' Runs. */
+export function poolProgressText(progress: IChallengeRunProgress): string | null {
+  const { core, optional } = progress;
+  if (!core && !optional) return null;
+  const parts: string[] = [];
+  if (core && core.total) parts.push(`Core ${core.cleared}/${core.total}`);
+  if (optional && optional.target) parts.push(`Optional ${optional.cleared}/${optional.target}`);
+  return parts.length ? parts.join(" · ") : `${progress.cleared} Cleared`;
 }
 
 /** The schedule as a label and its value: Season dates, or Always Open with its end. */

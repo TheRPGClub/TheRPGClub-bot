@@ -113,8 +113,9 @@ function summer() {
     name: "Summer of Suikoden",
     season: { start: "06-21", end: "09-22", crosses_new_year: false },
     pool: {
-      target: 2,
+      optional_target: 2,
       franchises: [{ franchise_id: 9, name: "Suikoden" }],
+      core_count: 0,
       game_count: 9,
     },
   });
@@ -155,7 +156,10 @@ test("season_opened: posts the Pool strip and last Season's Finishers by name", 
       "m",
     ),
   );
-  assert.match(text, /^-# 21 June to 22 September · Clear 2 · 9 games in the Pool$/m);
+  assert.ok(
+    text.includes("\n-# 21 June to 22 September · Clear 2 Optional Games · 9 games in the Pool"),
+    text,
+  );
   // Named, never pinged.
   assert.doesNotMatch(text, /<@/);
   assert.deepEqual(post.allowedMentions, { parse: [] });
@@ -254,6 +258,26 @@ test("season_ending: DMs the member a link to their Run", async () => {
   assert.deepEqual(
     buttonsOf(post.components).map((b) => [b.label, b.url]),
     [["Your Run", "https://the-rpg-club-www.vercel.app/challenges/7"]],
+  );
+});
+
+test("season_ending: a Pool Run with Core Games shows Core and Optional", async () => {
+  const deps = fakeDeps();
+  await run(deps, "challenge_dm", ending({
+    run: poolRun({
+      progress: {
+        in_progress: 0,
+        cleared: 3,
+        target: 6,
+        core: { cleared: 2, total: 4 },
+        optional: { cleared: 1, target: 2 },
+      },
+    }),
+  }));
+
+  assert.match(
+    textOf(deps.dms[0]!.post.components),
+    /^Your Run: Core 2\/4 · Optional 1\/2\. The Season ends on 21 December\.$/m,
   );
 });
 

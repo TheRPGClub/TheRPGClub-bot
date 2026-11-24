@@ -17,6 +17,7 @@ import {
   escapeChallengeText,
   formatChallengeDate,
   listJoin,
+  poolProgressText,
 } from "../functions/ChallengeCopy.js";
 import { commandMention } from "./CommandMentionService.js";
 import {
@@ -243,10 +244,10 @@ export function runStatusLabel(status: RunStatus): string {
   return RUN_STATUS_LABELS[status] ?? status;
 }
 
-/** "2 of 3 Cleared · 1 In Progress" */
+/** "2 of 3 Cleared · 1 In Progress"; a Pool Run's "Core 9/14 · Optional 1/2 · ..." */
 export function runProgressText(run: IChallengeRun): string {
   const { cleared, target, in_progress: inProgress } = run.progress;
-  const parts = [`${cleared} of ${target} Cleared`];
+  const parts = [poolProgressText(run.progress) ?? `${cleared} of ${target} Cleared`];
   if (inProgress) parts.push(`${inProgress} In Progress`);
   return parts.join(" · ");
 }
@@ -391,7 +392,8 @@ export function runChoices(
       name: truncateLabel([
         run.challenge?.name ?? `Run ${run.id}`,
         runStatusLabel(run.status),
-        `${run.progress.cleared} of ${run.progress.target} Cleared`,
+        poolProgressText(run.progress) ??
+          `${run.progress.cleared} of ${run.progress.target} Cleared`,
         `started ${formatRunDate(run.started_at)}`,
       ].join(" · ")),
       value: String(run.id),

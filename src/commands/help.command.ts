@@ -369,10 +369,12 @@ const HELP_TOPICS: HelpTopic[] = [
       "/challenge slot-move run:<run> game:<game> year:<year> | " +
       "/challenge past-pick run:<run> game:<game> year:<year>",
     notes:
-      "Regulars and staff create Challenges in two short forms, then pick the franchises " +
-      "and collections for the Pool and check its covers before saving. New Challenges are " +
-      "announced in #challenges. A Challenge's rules lock once someone starts a Run; its " +
-      "name, description and end date can still change. Staff can hide a Challenge or hand " +
+      "Any member can create a Slots or Pool Challenge (staff create Assignment ones) in two " +
+      "short forms. A Pool has Core Games every Run Clears and Optional Games from " +
+      "franchises, Series or by hand, with a target of how many Optional Games a Run also " +
+      "Clears. New Challenges are announced in #challenges. A Challenge's Format, schedule " +
+      "and Season lock once someone starts a Run; its Pool, name, description and end date " +
+      "can still change. Staff can hide a Challenge or hand " +
       "it to another Host from /challenge edit. Start a Run from /challenge start or a " +
       "post's Start a Run button: your Game Completions and Now Playing fill it in by " +
       "themselves, and /challenge my-runs says what's next. Finished Runs are announced in " +

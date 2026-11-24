@@ -107,6 +107,7 @@ import {
   type IChallengeJobDeps,
 } from "./ChallengeAnnouncements.js";
 import { announceRunFinished } from "./ChallengeRunFinished.js";
+import { poolGoalChangedDm } from "./ChallengePoolDms.js";
 import { announceRunCaughtUp } from "./ChallengeCaughtUp.js";
 import {
   announceSeasonOpened,
@@ -1121,6 +1122,7 @@ const CHALLENGE_DMS: Readonly<Record<
   season_ending: seasonEndingDm,
   left_out_of_draw: leftOutOfDrawDm,
   pick_reminder: pickReminderDm,
+  pool_goal_changed: poolGoalChangedDm,
 };
 
 /**

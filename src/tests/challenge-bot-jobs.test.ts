@@ -131,8 +131,8 @@ test("challenge_created: a Live Feature posts the cover wall in #challenges", as
   assert.match(text, /^# Fall of Final Fantasy$/m);
   assert.match(text, /^-# New Challenge · hosted by <@111>$/m);
   assert.match(text, /Play Final Fantasy through the autumn\./);
-  assert.match(text, /^\*\*Pool\*\* 38 games from the Final Fantasy franchise$/m);
-  assert.match(text, /^\*\*To Finish\*\* Clear 3$/m);
+  assert.match(text, /^\*\*Pool\*\* 38 Optional Games from the Final Fantasy franchise$/m);
+  assert.match(text, /^\*\*To Finish\*\* Clear 3 Optional Games$/m);
   assert.match(text, /^\*\*Season\*\* 22 September to 21 December, every year$/m);
   assert.match(text, /^-# Showing 10 of 38 games in the Pool$/m);
   assert.deepEqual(galleryUrls(post.components), finalFantasies.map((g) => g.cover_url));
@@ -173,7 +173,8 @@ test("challenge_created: without pool_games the covers come from the Pool previe
     pool: {
       franchise_ids: [5],
       collection_ids: [],
-      included_game_ids: [],
+      core_game_ids: [],
+      optional_game_ids: [],
       excluded_game_ids: [],
     },
     page: 1,
@@ -194,7 +195,7 @@ test("challenge_created: a failed Pool preview still posts, without covers", asy
   assert.equal(acks[0]?.status, "done");
   const { post } = deps.posts[0]!;
   assert.deepEqual(galleryUrls(post.components), []);
-  assert.match(textOf(post.components), /^\*\*Pool\*\* 38 games from the Final Fantasy/m);
+  assert.match(textOf(post.components), /^\*\*Pool\*\* 38 Optional Games from the Final Fantasy/m);
   assert.doesNotMatch(textOf(post.components), /Showing/);
 });
 
@@ -217,11 +218,14 @@ test("challenge_created: a club-hosted Always Open Challenge with an end date", 
     season: null,
     ends_on: "2027-03-03",
     pool: {
-      target: "all",
+      optional_target: 0,
       franchises: [{ franchise_id: 9, name: "Suikoden" }],
       collections: [{ collection_id: 4, name: "Genso Suikogaiden" }],
-      included_games: [{ game_id: 30, title: "Tierkreis" }],
+      core_games: [{ game_id: 30, title: "Tierkreis" }],
+      optional_games: [],
       excluded_games: [],
+      core_count: 1,
+      optional_count: 9,
       game_count: 10,
     },
   });
@@ -230,10 +234,10 @@ test("challenge_created: a club-hosted Always Open Challenge with an end date", 
   const text = textOf(deps.posts[0]!.post.components);
   assert.match(text, /^-# New Challenge · hosted by the club$/m);
   assert.ok(text.includes(
-    "**Pool** 10 games from the Suikoden franchise, the Genso Suikogaiden collection " +
-      "and 1 game added by hand\n",
-  ));
-  assert.match(text, /^\*\*To Finish\*\* Clear every game in the Pool$/m);
+    "**Pool** 10 games: 1 Core Game, and 9 Optional Games from the Suikoden franchise " +
+      "and the Genso Suikogaiden series\n",
+  ), text);
+  assert.match(text, /^\*\*To Finish\*\* Clear every Core Game \(1\)$/m);
   assert.match(text, /^\*\*Always Open\*\* until 3 March 2027$/m);
 });
 

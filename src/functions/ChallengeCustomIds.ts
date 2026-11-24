@@ -67,11 +67,11 @@ export function parseChallengeListId(
 /** The wizard's actions; each custom ID is `<prefix>:<action>:<session ID>`. */
 export const CHALLENGE_WIZARD_ACTIONS = [
   // Buttons that open a modal.
-  "basics", "settings", "include",
+  "basics", "settings", "include", "target",
   // Modals.
-  "basics-modal", "settings-modal", "include-modal",
+  "basics-modal", "settings-modal", "include-modal", "target-modal",
   // Selects.
-  "sources", "exclude", "include-pick",
+  "sources", "core", "exclude", "include-pick",
   // Buttons.
   "preview", "page-prev", "page-next", "save", "cancel",
 ] as const;

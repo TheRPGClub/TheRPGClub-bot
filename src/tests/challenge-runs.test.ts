@@ -280,6 +280,39 @@ test("my-runs: each Active Run says what is left and what you play that counts",
   assert.deepEqual(thumbnails(view.components), ["https://img.example/10.jpg"]);
 });
 
+test("my-runs: a Pool Run with Core Games says how many Core and Optional are left",
+  async () => {
+    const run = poolRun({
+      progress: {
+        in_progress: 1,
+        cleared: 10,
+        target: 17,
+        core: { cleared: 9, total: 14 },
+        optional: { cleared: 1, target: 3 },
+      },
+    });
+    const { deps } = myRunsDeps([run]);
+    const text = textOf((await buildMyRunsView({ actingUserId: "222", past: false }, deps))
+      .components);
+
+    assert.ok(text.includes(
+      "**Fall of Final Fantasy** needs 5 more Core Games and 2 more Optional Games Cleared.",
+    ), text);
+
+    const coreOnly = poolRun({
+      progress: {
+        in_progress: 0,
+        cleared: 15,
+        target: 15,
+        core: { cleared: 13, total: 14 },
+        optional: { cleared: 2, target: 1 },
+      },
+    });
+    const one = textOf((await buildMyRunsView({ actingUserId: "222", past: false },
+      myRunsDeps([coreOnly]).deps)).components);
+    assert.match(one, /needs 1 more Core Game Cleared\.$/m);
+  });
+
 test("my-runs: a Run with nothing In Progress points at the Pool", async () => {
   const run = poolRun({
     progress: { in_progress: 0, cleared: 0, target: 3 },
