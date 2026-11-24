@@ -38,6 +38,7 @@ import {
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import { buildActionButton, buildButtonRow } from "../../functions/uiComponents.js";
+import { buildGameDbListActionId } from "../../functions/GameListCustomIds.js";
 
 export type GameProfileRenderContext = {
   guildId?: string;
@@ -168,6 +169,12 @@ export function buildGameProfileActionRow(
     style: ButtonStyle.Secondary,
   }));
   rows.push(buildButtonRow(...primaryButtons));
+  // Game Lists (bot#1568, design 3C): a row of its own, as the first row is full at five.
+  rows.push(buildButtonRow(buildActionButton({
+    customId: buildGameDbListActionId(gameId),
+    label: "Add to a Game List",
+    style: ButtonStyle.Secondary,
+  })));
   return rows;
 }
 
