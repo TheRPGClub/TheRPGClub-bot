@@ -30,7 +30,11 @@ import {
   buildChallengeWizardId,
   type ChallengeWizardAction,
 } from "../functions/ChallengeCustomIds.js";
-import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
+import {
+  DISCORD_BUTTON_LABEL_MAX,
+  DISCORD_SELECT_LABEL_MAX,
+  DISCORD_SELECT_OPTIONS_MAX,
+} from "../config/textLimits.js";
 import {
   buildCoverWall,
   challengeRuleLines,
@@ -99,6 +103,8 @@ export interface IDraftGameList {
   name: string | null;
   /** The games it brought in as Core Games (create). */
   gameCount: number;
+  /** Edit: the member may add games to the list from this Challenge (`can_add`). */
+  canAdd?: boolean;
 }
 
 /** Where "Include a game" puts the game it finds. */
@@ -155,6 +161,14 @@ export interface IChallengeDraft {
   previewPage: number;
   /** The Game List the Pool is made from or linked to; null when none. */
   gameList?: IDraftGameList | null;
+  /** Edit: the Core and hand-picked Optional Games the Pool had when the edit began. */
+  handBefore?: number[];
+  /**
+   * Edit of a linked Pool: whether the games this edit puts in the Pool by hand also go
+   * into the list (spec story 30); null or absent until the Host answers, which keeps
+   * the list as it is.
+   */
+  addToList?: boolean | null;
 }
 
 export type IChallengeWizardApi = Pick<
@@ -309,8 +323,19 @@ export function draftFromChallenge(challenge: IChallenge, ownerId: string): ICha
       : draft.assignment,
     slots: challenge.slots ? draftSlots(challenge.slots) : draft.slots,
     gameList: challenge.pool?.game_list
-      ? { id: challenge.pool.game_list.id, name: challenge.pool.game_list.name, gameCount: 0 }
+      ? {
+        id: challenge.pool.game_list.id,
+        name: challenge.pool.game_list.name,
+        gameCount: 0,
+        canAdd: challenge.pool.game_list.can_add,
+      }
       : null,
+    handBefore: challenge.pool
+      ? [...(challenge.pool.core_games ?? []).map((g) => g.game_id),
+        ...(challenge.pool.optional_games ?? []).filter((g) => g.source === "hand")
+          .map((g) => g.game_id)]
+      : [],
+    addToList: null,
   };
 }
 
@@ -372,6 +397,10 @@ export function challengeDraftFromState(state: unknown): IChallengeDraft | null 
     slots: slotsValid ? draft.slots : { ...YEARS_ALIVE },
     previewPage: Math.max(1, Number(draft.previewPage) || 1),
     gameList: isDraftGameList(draft.gameList) ? draft.gameList : null,
+    handBefore: Array.isArray(draft.handBefore)
+      ? draft.handBefore.filter((id) => Number.isInteger(id))
+      : [],
+    addToList: typeof draft.addToList === "boolean" ? draft.addToList : null,
   };
 }
 
@@ -838,6 +867,27 @@ export function applyIncludePick(draft: IChallengeDraft, value: string): IChalle
   };
 }
 
+/**
+ * The games an edit of a list-linked Pool puts in the Pool by hand (new Core Games or
+ * Optional Games picked by hand), when the member may add them to the list: what
+ * `add_to_list` would add (spec story 30). Empty otherwise.
+ */
+export function newListGames(draft: IChallengeDraft): IWizardGame[] {
+  if (draft.mode !== "edit" || !draft.gameList?.canAdd) return [];
+  const before = new Set(draft.handBefore ?? []);
+  const seen = new Set<number>();
+  return [...draft.pool.core, ...draft.pool.optional].filter((game) => {
+    if (before.has(game.id) || seen.has(game.id)) return false;
+    seen.add(game.id);
+    return true;
+  });
+}
+
+/** The Host's answer to "Also add to <list>?" on an edit of a list-linked Pool. */
+export function applyAddToList(draft: IChallengeDraft, add: boolean): IChallengeDraft {
+  return { ...draft, addToList: add };
+}
+
 function poolDefinition(draft: IChallengeDraft, withExcluded: boolean): IPoolDefinition {
   return {
     franchise_ids: draft.pool.franchises.map((f) => f.id),
@@ -865,8 +915,9 @@ export function challengeWriteOf(draft: IChallengeDraft): IChallengeWrite {
   };
   // A Game List is linked only on create; the API copies its games in as Core Games too.
   if (draft.mode === "create" && draft.gameList?.name) pool.game_list_id = draft.gameList.id;
+  const addToList = draft.addToList === true && newListGames(draft).length > 0;
   // With Runs, only the Pool may change: the rest is locked (spec api#442).
-  if (draft.poolOnly) return { pool };
+  if (draft.poolOnly) return addToList ? { pool, add_to_list: true } : { pool };
   const write: IChallengeWrite = {
     name: draft.name,
     description: draft.description,
@@ -887,6 +938,7 @@ export function challengeWriteOf(draft: IChallengeDraft): IChallengeWrite {
     };
   }
   if (draft.mode === "create" && draft.clubHosted) write.hosted_by_club = true;
+  if (addToList && draft.format === "pool") write.add_to_list = true;
   return write;
 }
 
@@ -1184,6 +1236,8 @@ async function poolPreview(
   }
   const listLine = gameListLine(draft);
   if (listLine) details.push(listLine);
+  const listAsk = listQuestion(draft);
+  if (listAsk) details.push(listAsk.line);
   if (draft.pool.franchises.length + draft.pool.collections.length) {
     details.push("-# Add-ons never come in from a franchise or Series. " +
       "Add one by hand if you want it.");
@@ -1236,15 +1290,55 @@ async function poolPreview(
       : button(sessionId, "basics", "Back"),
     button(sessionId, "cancel", "Cancel"),
   ));
+  const extra: ButtonBuilder[] = [];
   if (pages > 1) {
-    rows.push(buttonRow(
+    extra.push(
       button(sessionId, "page-prev", "Previous games", ButtonStyle.Secondary,
         draft.previewPage <= 1),
       button(sessionId, "page-next", "More games", ButtonStyle.Secondary,
         draft.previewPage >= pages),
-    ));
+    );
   }
+  if (listAsk) extra.push(...listAsk.buttons(sessionId));
+  if (extra.length) rows.push(buttonRow(...extra));
   return wizardView(container, rows);
+}
+
+/**
+ * "Also add to <list>?" (spec story 30), once an edit of a list-linked Pool puts games in
+ * it by hand and the member may add to the list. The answer covers every game the edit
+ * adds by hand, as `add_to_list` does; until the Host answers, the list stays as it is.
+ */
+function listQuestion(draft: IChallengeDraft): {
+  line: string;
+  buttons: (sessionId: string) => ButtonBuilder[];
+} | null {
+  const games = newListGames(draft);
+  const list = draft.gameList;
+  if (!games.length || !list?.name) return null;
+  const name = `**${escapeChallengeText(list.name)}**`;
+  const titles = namedTitles(games, CORE_NAMED_MAX);
+  const addLabel = `Add to ${list.name}`.slice(0, DISCORD_BUTTON_LABEL_MAX);
+  if (draft.addToList === true) {
+    return {
+      line: `-# Saving also adds ${titles} to ${name}.`,
+      buttons: (sessionId) => [button(sessionId, "list-skip", "Keep the list as it is")],
+    };
+  }
+  if (draft.addToList === false) {
+    return {
+      line: `-# ${name} stays as it is.`,
+      buttons: (sessionId) => [button(sessionId, "list-add", addLabel)],
+    };
+  }
+  return {
+    line: `**Also add ${titles} to ${name}?**\n` +
+      "-# It feeds this Challenge. Members who can see the list will see them there.",
+    buttons: (sessionId) => [
+      button(sessionId, "list-add", addLabel, ButtonStyle.Primary),
+      button(sessionId, "list-skip", "Keep the list as it is"),
+    ],
+  };
 }
 
 /**

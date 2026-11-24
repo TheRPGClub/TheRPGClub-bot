@@ -257,6 +257,11 @@ export interface IChallengeWrite {
   slots?: IChallengeSlots;
   assignment?: IChallengeAssignment;
   hosted_by_club?: boolean;
+  /**
+   * Edit only: the games the edit puts in the Pool by hand (new Core or Optional Games)
+   * also go into the linked Game List, all or none (spec story 30).
+   */
+  add_to_list?: boolean;
 }
 
 export interface IPage<T> {

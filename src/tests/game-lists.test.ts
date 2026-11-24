@@ -21,7 +21,11 @@ import {
   parseGameListAddId,
   parseGameListPageId,
 } from "../functions/GameListCustomIds.js";
-import { buildGameProfileActionRow } from "../commands/gamedb/gamedb-profile.service.js";
+import {
+  buildGameProfileActionRow,
+  canOfferGameLists,
+} from "../commands/gamedb/gamedb-profile.service.js";
+import type { FeatureState, IFeatureGateSource } from "../functions/FeatureGate.js";
 import { apiError, buttonsOf, galleryUrls, selectsOf, textOf } from "./challengeFixtures.js";
 
 // Game Lists in Discord (bot#1568, design 3B shelf + 3C text), with a fake API client and
@@ -354,7 +358,7 @@ test("Add to a Game List: with no list yet, a link to start one", async () => {
   assert.match(buttonsOf(result.notice.components)[0]!.url ?? "", /\/lists\/new$/);
 });
 
-test("game view: Add to a Game List sits on a row of its own under the full first row",
+test("game view: Add to a Game List sits on a row of its own under the first row's four",
   () => {
     const rows = buildGameProfileActionRow(12, "https://youtu.be/x").map((r) => r.toJSON());
     assert.equal(rows.length, 2);
@@ -362,6 +366,34 @@ test("game view: Add to a Game List sits on a row of its own under the full firs
     const [button] = buttonsOf(rows[1]);
     assert.equal(button!.label, "Add to a Game List");
     assert.equal(button!.customId, "gamedb-action:list:12");
+  });
+
+test("game view: no Add to a Game List row for a member who can't use Game Lists", () => {
+  const rows = buildGameProfileActionRow(12, null, false, false).map((r) => r.toJSON());
+  assert.equal(rows.length, 1);
+  assert.ok(!JSON.stringify(rows).includes("gamedb-action:list:"));
+});
+
+function gateSource(state: FeatureState, staff: boolean): IFeatureGateSource {
+  return {
+    flags: async () => [{ key: "game_lists", name: "Game Lists", state }],
+    isStaff: async () => staff,
+  };
+}
+
+test("game view: Add to a Game List is offered as the feature gate decides for the viewer",
+  async () => {
+    assert.equal(await canOfferGameLists(MEMBER, gateSource("live", false)), true);
+    assert.equal(await canOfferGameLists(MEMBER, gateSource("off", true)), false);
+    assert.equal(await canOfferGameLists(MEMBER, gateSource("preview", false)), false);
+    assert.equal(await canOfferGameLists(MEMBER, gateSource("preview", true)), true);
+  });
+
+test("game view: with no viewer, Add to a Game List is offered only while Game Lists is Live",
+  async () => {
+    assert.equal(await canOfferGameLists(null, gateSource("live", false)), true);
+    assert.equal(await canOfferGameLists(null, gateSource("preview", true)), false);
+    assert.equal(await canOfferGameLists(null, gateSource("off", false)), false);
   });
 
 test("/challenge create from-list: own lists, or the club's editable ones when club-hosted",

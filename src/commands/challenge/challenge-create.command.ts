@@ -58,6 +58,7 @@ import {
   applyFranchiseMainline,
   applyGameList,
   applyIncludePick,
+  applyAddToList,
   applyIncludeSearch,
   applyOptionalTarget,
   applySettings,
@@ -482,6 +483,16 @@ export class ChallengeCreateCommand {
     const step = interaction.customId.includes(":page-next:") ? 1 : -1;
     await withDraft(interaction, async (sessionId, draft) => {
       const next = { ...draft, previewPage: Math.max(1, draft.previewPage + step) };
+      saveDraft(interaction, sessionId, next);
+      await showStep(interaction, sessionId, next);
+    });
+  }
+
+  @ButtonComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:list-(add|skip):`) })
+  async listButton(interaction: ButtonInteraction): Promise<void> {
+    const add = interaction.customId.includes(":list-add:");
+    await withDraft(interaction, async (sessionId, draft) => {
+      const next = applyAddToList(draft, add);
       saveDraft(interaction, sessionId, next);
       await showStep(interaction, sessionId, next);
     });
