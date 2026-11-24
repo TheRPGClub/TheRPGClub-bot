@@ -64,6 +64,7 @@ import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { linkCommandMentions } from "../../services/CommandMentionService.js";
+import { showAddToListPrompt } from "../list.command.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -94,7 +95,7 @@ export class GameDbViewCommand {
   }
 
   @ButtonComponent({
-    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog|collection|igdb-import):\d+$/,
+    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog|collection|igdb-import|list):\d+$/,
   })
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 2);
@@ -144,6 +145,11 @@ export class GameDbViewCommand {
         ...buildTextReply(`No game found with ID ${gameId}.`, true),
         __forceFollowUp: true,
       });
+      return;
+    }
+
+    if (action === "list") {
+      await showAddToListPrompt(interaction, { id: gameId, title: game.title });
       return;
     }
 
