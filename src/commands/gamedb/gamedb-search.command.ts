@@ -47,6 +47,7 @@ import {
 import {
   buildGameProfile,
   buildGameProfileActionRow,
+  canOfferGameLists,
   showGameProfile,
   trimTextDisplayContent,
 } from "./gamedb-profile.service.js";
@@ -434,6 +435,8 @@ export class GameDbSearchCommand {
     const actionRows = buildGameProfileActionRow(
       gameId,
       profile.featuredVideoUrl,
+      false,
+      await canOfferGameLists(interaction.user.id),
     );
 
     try {

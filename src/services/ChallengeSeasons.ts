@@ -14,6 +14,7 @@ import {
   formatMonthDay,
   listJoin,
   memberName,
+  poolProgressText,
 } from "../functions/ChallengeCopy.js";
 import { buildChallengeRunId } from "../functions/ChallengeCustomIds.js";
 import { challengePageUrl } from "../config/website.js";
@@ -247,8 +248,9 @@ export function buildSeasonEndingDm(
   content: { daysLeft: number; endsOn: string | null },
 ): IChallengePost {
   const { cleared, target } = run.progress;
+  const poolProgress = poolProgressText(run.progress);
   const progress = challenge.challenge_format === "pool"
-    ? `You've Cleared ${cleared} of ${target}.`
+    ? (poolProgress ? `Your Run: ${poolProgress}.` : `You've Cleared ${cleared} of ${target}.`)
     : `Your Run: ${runProgressText(run)}.`;
   const ends = content.endsOn ? ` The Season ends on ${dayAndMonth(content.endsOn)}.` : "";
   const container = new ContainerBuilder()

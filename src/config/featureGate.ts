@@ -7,6 +7,8 @@
 import {
   CHALLENGE_CUSTOM_ID_PREFIX,
   CODEX_CUSTOM_ID_PREFIX,
+  GAMEDB_LIST_ACTION_PREFIX,
+  GAME_LIST_CUSTOM_ID_PREFIX,
   NEWS_CATEGORY_PICK_PREFIX,
 } from "./customIdPrefixes.js";
 import {
@@ -27,6 +29,12 @@ export const CHALLENGES_FEATURE_KEY = "challenges";
  * one entry below.
  */
 export const CLUB_CODEX_FEATURE_KEY = "club_codex";
+
+/**
+ * Game Lists (spec api#442): `/list`, its components, and the game view's Add to a Game
+ * List button. It has no posts.
+ */
+export const GAME_LISTS_FEATURE_KEY = "game_lists";
 
 /** Top-level slash command or context menu name -> Feature key. */
 export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
@@ -60,6 +68,7 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   challenge: CHALLENGES_FEATURE_KEY,
   codex: CLUB_CODEX_FEATURE_KEY,
   funfact: CLUB_CODEX_FEATURE_KEY,
+  list: GAME_LISTS_FEATURE_KEY,
 };
 
 /**
@@ -118,6 +127,9 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
   [CHALLENGE_CUSTOM_ID_PREFIX, CHALLENGES_FEATURE_KEY],
 
   [CODEX_CUSTOM_ID_PREFIX, CLUB_CODEX_FEATURE_KEY],
+
+  [GAME_LIST_CUSTOM_ID_PREFIX, GAME_LISTS_FEATURE_KEY],
+  [GAMEDB_LIST_ACTION_PREFIX, GAME_LISTS_FEATURE_KEY],
 ];
 
 /**

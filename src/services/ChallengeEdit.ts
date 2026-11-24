@@ -76,10 +76,16 @@ function button(
 function lockText(challenge: IChallenge): string[] {
   const lines: string[] = [];
   const runs = challenge.run_count ?? 0;
-  if (rulesLocked(challenge)) {
+  if (rulesLocked(challenge) && challenge.challenge_format === "pool") {
     lines.push(
       `**The rules are locked:** this Challenge has ${plural(runs, "Run")}, ` +
-        "so its Format, schedule, Season and Pool can't change. " +
+        "so its Format, schedule and Season can't change. " +
+        "Its Pool, name, description and end date still can.",
+    );
+  } else if (rulesLocked(challenge)) {
+    lines.push(
+      `**The rules are locked:** this Challenge has ${plural(runs, "Run")}, ` +
+        "so its Format, schedule and Season can't change. " +
         "Its name, description and end date still can.",
     );
   } else {
@@ -116,9 +122,10 @@ export function buildEditPanel(
   const rows: ActionRowBuilder<ButtonBuilder | UserSelectMenuBuilder>[] = [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       button("details", id, "Name and description", { style: ButtonStyle.Primary }),
-      button("rules", id, "Rules", {
-        disabled: rulesLocked(challenge),
-      }),
+      // A Pool stays editable with Runs (spec api#442): the button then opens the Pool.
+      rulesLocked(challenge) && challenge.challenge_format === "pool"
+        ? button("rules", id, "Pool")
+        : button("rules", id, "Rules", { disabled: rulesLocked(challenge) }),
     ),
   ];
   if (options.canModerate) {

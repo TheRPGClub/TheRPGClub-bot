@@ -107,6 +107,13 @@ import {
   type IChallengeJobDeps,
 } from "./ChallengeAnnouncements.js";
 import { announceRunFinished } from "./ChallengeRunFinished.js";
+import {
+  isClubHostedProposal,
+  poolGoalChangedDm,
+  poolProposalAcceptedDm,
+  poolProposalDevPost,
+  poolProposalDm,
+} from "./ChallengePoolDms.js";
 import { announceRunCaughtUp } from "./ChallengeCaughtUp.js";
 import {
   announceSeasonOpened,
@@ -1121,13 +1128,18 @@ const CHALLENGE_DMS: Readonly<Record<
   season_ending: seasonEndingDm,
   left_out_of_draw: leftOutOfDrawDm,
   pick_reminder: pickReminderDm,
+  pool_goal_changed: poolGoalChangedDm,
+  pool_proposal: poolProposalDm,
+  pool_proposal_accepted: poolProposalAcceptedDm,
 };
 
 /**
  * Payload `{ event, user_id, challenge, ..., feature_key }` (ChallengeDmJobPayload): DMs
  * the member, in Preview too (only staff can have Runs then), but not while Challenges is
  * Off. A member with DMs closed can never get it, so that is acked done with the reason
- * rather than failed and retried. An event this bot has no DM for fails the job.
+ * rather than failed and retried. An event this bot has no DM for fails the job. A
+ * club-hosted `pool_proposal` (`club_hosted: true`, no `user_id`) is posted in #dev
+ * instead, as suggestions are (spec api#442).
  */
 export const handleChallengeDm: BotJobHandler = dmOnly(async (payload, surface, context) => {
   const event = requireString(payload, "event");
@@ -1138,6 +1150,11 @@ export const handleChallengeDm: BotJobHandler = dmOnly(async (payload, surface, 
     return `Not sent: the ${featureKey} Feature is Off.`;
   }
   const deps = challengeDeps(surface);
+  if (isClubHostedProposal(payload)) {
+    const devPost = poolProposalDevPost(payload);
+    await deps.postMessage(BOT_DEV_CHANNEL_ID, devPost.post);
+    return `Posted ${devPost.about} in the bot-dev channel.`;
+  }
   const dm = await build(payload, deps);
   try {
     await deps.sendDm(dm.userId, dm.post);

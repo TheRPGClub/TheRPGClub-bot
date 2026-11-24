@@ -17,7 +17,7 @@ import {
 import { buildTextContainer, buildTextDisplay } from "../functions/ComponentsV2Utils.js";
 import {
   CHALLENGE_FORMAT_LABELS,
-  describePool,
+  describePoolSources,
   describePoolTarget,
   escapeChallengeText,
   formatChallengeDate,
@@ -30,7 +30,11 @@ import {
   buildChallengeWizardId,
   type ChallengeWizardAction,
 } from "../functions/ChallengeCustomIds.js";
-import { DISCORD_SELECT_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
+import {
+  DISCORD_BUTTON_LABEL_MAX,
+  DISCORD_SELECT_LABEL_MAX,
+  DISCORD_SELECT_OPTIONS_MAX,
+} from "../config/textLimits.js";
 import {
   buildCoverWall,
   challengeRuleLines,
@@ -50,13 +54,20 @@ import {
   type IPage,
   type IPoolDefinition,
   type IPoolSource,
-  type PoolTarget,
 } from "./ChallengeApi.js";
+import { franchiseMainlineGames, type IFranchiseGame } from "./ChallengeProposalApi.js";
+import { GAME_LIST_API, type IGameListApi } from "./GameListApi.js";
+import { plural } from "../utilities/TextUtils.js";
+import { logError } from "../utilities/LogUtils.js";
 
 // /challenge create and the rules part of /challenge edit (spec api#376), design 6C "Two
 // modals and a cover preview": a basics modal, the Format's settings modal, the pick of
-// franchises and collections, then a preview of the Pool's covers where games are left
-// out or added by hand before saving. A Slots Challenge (bot#1550) sets Counts past play in
+// franchises and Series, then a preview of the Pool's covers where games are left out or
+// added by hand before saving. A Pool has Core and Optional Games (spec api#442, ADR 0014,
+// bot design 1A "Two lines, one tick-box"): the preview names both, one paged select ticks
+// the Core Games (unticked ones stay as Optional Games), and a button sets the Optional
+// target. A Pool stays editable once it has Runs: that edit opens straight on the preview
+// and changes the Pool alone. A Slots Challenge (bot#1550) sets Counts past play in
 // the basics modal and its first and last year in the settings modal, then is previewed
 // in words. The draft is plain data, saved with the wizard session so every step resumes
 // after a restart.
@@ -82,10 +93,32 @@ export interface IIncludeChoice extends IWizardGame {
   year: number | null;
 }
 
+/**
+ * The Game List a Pool is made from (bot#1569): on create, the list `/challenge create
+ * from-list:` named, read after the basics modal (`name` null until then); on edit, the
+ * linked list, shown only.
+ */
+export interface IDraftGameList {
+  id: number;
+  name: string | null;
+  /** The games it brought in as Core Games (create). */
+  gameCount: number;
+  /** Edit: the member may add games to the list from this Challenge (`can_add`). */
+  canAdd?: boolean;
+}
+
+/** Where "Include a game" puts the game it finds. */
+export type IncludeAs = "core" | "optional";
+
 export interface IChallengeDraft {
   mode: "create" | "edit";
   /** The Challenge being edited; null while creating. */
   challengeId: number | null;
+  /**
+   * Edit only: the Challenge has Runs, so its Format, schedule and Season are locked and
+   * only its Pool changes (spec api#442).
+   */
+  poolOnly?: boolean;
   ownerId: string;
   /** Create only: the club is the Host (Moderators and above; the API decides). */
   clubHosted: boolean;
@@ -100,10 +133,15 @@ export interface IChallengeDraft {
   endsOn: string | null;
   pool: {
     franchises: INamedId[];
+    /** IGDB collections, shown as Series. */
     collections: INamedId[];
-    included: IWizardGame[];
+    /** Core Games: every Run Clears them. Only the Host puts a game here. */
+    core: IWizardGame[];
+    /** Optional Games picked by hand; the sources bring the rest. */
+    optional: IWizardGame[];
     excluded: IWizardGame[];
-    target: PoolTarget;
+    /** Optional Games a Run must Clear on top of every Core Game. */
+    optionalTarget: number;
   };
   /** Assignment: the Edition calendar as MM-DD. */
   assignment: { signupCutoff: string; pickDeadline: string; reveal: string };
@@ -117,8 +155,20 @@ export interface IChallengeDraft {
   sourceResults: IPoolSource[];
   /** The last "Include a game" search's results. */
   includeChoices: IIncludeChoice[];
+  /** Where the picked "Include a game" result goes. */
+  includeAs: IncludeAs;
   /** The page of the exclude pick in the preview. */
   previewPage: number;
+  /** The Game List the Pool is made from or linked to; null when none. */
+  gameList?: IDraftGameList | null;
+  /** Edit: the Core and hand-picked Optional Games the Pool had when the edit began. */
+  handBefore?: number[];
+  /**
+   * Edit of a linked Pool: whether the games this edit puts in the Pool by hand also go
+   * into the list (spec story 30); null or absent until the Host answers, which keeps
+   * the list as it is.
+   */
+  addToList?: boolean | null;
 }
 
 export type IChallengeWizardApi = Pick<
@@ -135,8 +185,8 @@ export const WIZARD_FIELDS = {
   seasonStart: "challenge-season-start",
   seasonEnd: "challenge-season-end",
   endsOn: "challenge-ends-on",
-  target: "challenge-target",
-  targetCount: "challenge-target-count",
+  optionalTarget: "challenge-optional-target",
+  includeAs: "challenge-include-as",
   search: "challenge-search",
   signupCutoff: "challenge-signup-cutoff",
   pickDeadline: "challenge-pick-deadline",
@@ -157,7 +207,7 @@ export const COUNTS_PAST_PLAY_ON = "on";
 export const WIZARD_RADIO_FIELDS: readonly string[] = [
   WIZARD_FIELDS.format,
   WIZARD_FIELDS.schedule,
-  WIZARD_FIELDS.target,
+  WIZARD_FIELDS.includeAs,
   WIZARD_FIELDS.firstYear,
   WIZARD_FIELDS.lastYear,
 ];
@@ -170,8 +220,14 @@ export type WizardFields = Readonly<Record<string, string | null | undefined>>;
 
 const NAME_MAX = 100;
 const DESCRIPTION_MAX = 2000;
-/** Games in one page of the exclude pick (a select holds 25 options). */
-const EXCLUDE_PAGE_SIZE = DISCORD_SELECT_OPTIONS_MAX;
+/** Games in one page of the Core and exclude picks (a select holds 25 options). */
+const PICK_PAGE_SIZE = DISCORD_SELECT_OPTIONS_MAX;
+/** Core Games named on the preview; past it, the rest are counted. */
+const CORE_NAMED_MAX = 15;
+/** Hand-picked Optional Games named on the preview; past it, they are counted. */
+const HAND_NAMED_MAX = 3;
+/** The largest Optional target the modal takes. */
+const OPTIONAL_TARGET_MAX = 9999;
 const SECRET_SANTA_CALENDAR = { signupCutoff: "12-01", pickDeadline: "12-15", reveal: "12-25" };
 const YEARS_ALIVE: IChallengeDraft["slots"] = {
   firstYear: "birth_year",
@@ -179,7 +235,11 @@ const YEARS_ALIVE: IChallengeDraft["slots"] = {
   countsPastPlay: false,
 };
 
-export function newChallengeDraft(ownerId: string, clubHosted: boolean): IChallengeDraft {
+export function newChallengeDraft(
+  ownerId: string,
+  clubHosted: boolean,
+  gameListId: number | null = null,
+): IChallengeDraft {
   return {
     mode: "create",
     challengeId: null,
@@ -192,12 +252,21 @@ export function newChallengeDraft(ownerId: string, clubHosted: boolean): IChalle
     schedule: "seasonal",
     season: null,
     endsOn: null,
-    pool: { franchises: [], collections: [], included: [], excluded: [], target: 1 },
+    pool: {
+      franchises: [],
+      collections: [],
+      core: [],
+      optional: [],
+      excluded: [],
+      optionalTarget: 0,
+    },
     assignment: { ...SECRET_SANTA_CALENDAR },
     slots: { ...YEARS_ALIVE },
     sourceResults: [],
     includeChoices: [],
+    includeAs: "core",
     previewPage: 1,
+    gameList: gameListId ? { id: gameListId, name: null, gameCount: 0 } : null,
   };
 }
 
@@ -205,9 +274,12 @@ function draftPool(pool: IChallengePool): IChallengeDraft["pool"] {
   return {
     franchises: (pool.franchises ?? []).map((f) => ({ id: f.franchise_id, name: f.name })),
     collections: (pool.collections ?? []).map((c) => ({ id: c.collection_id, name: c.name })),
-    included: (pool.included_games ?? []).map((g) => ({ id: g.game_id, title: g.title })),
+    core: (pool.core_games ?? []).map((g) => ({ id: g.game_id, title: g.title })),
+    optional: (pool.optional_games ?? [])
+      .filter((g) => g.source === "hand")
+      .map((g) => ({ id: g.game_id, title: g.title })),
     excluded: (pool.excluded_games ?? []).map((g) => ({ id: g.game_id, title: g.title })),
-    target: pool.target,
+    optionalTarget: pool.optional_target ?? 0,
   };
 }
 
@@ -219,14 +291,20 @@ function draftSlots(slots: IChallengeSlots): IChallengeDraft["slots"] {
   };
 }
 
-/** The draft for editing a Challenge's rules, starting at basics. */
+/**
+ * The draft for editing a Challenge's rules, starting at basics. A Pool with Runs can only
+ * change its Pool, so it starts at the preview.
+ */
 export function draftFromChallenge(challenge: IChallenge, ownerId: string): IChallengeDraft {
   const draft = newChallengeDraft(ownerId, false);
   const assignment = challenge.assignment;
+  const poolOnly = challenge.challenge_format === "pool" && (challenge.run_count ?? 0) > 0;
   return {
     ...draft,
     mode: "edit",
     challengeId: challenge.id,
+    poolOnly,
+    step: poolOnly ? "preview" : "basics",
     name: challenge.name,
     description: challenge.description,
     format: challenge.challenge_format,
@@ -244,7 +322,28 @@ export function draftFromChallenge(challenge: IChallenge, ownerId: string): ICha
       }
       : draft.assignment,
     slots: challenge.slots ? draftSlots(challenge.slots) : draft.slots,
+    gameList: challenge.pool?.game_list
+      ? {
+        id: challenge.pool.game_list.id,
+        name: challenge.pool.game_list.name,
+        gameCount: 0,
+        canAdd: challenge.pool.game_list.can_add,
+      }
+      : null,
+    handBefore: challenge.pool
+      ? [...(challenge.pool.core_games ?? []).map((g) => g.game_id),
+        ...(challenge.pool.optional_games ?? []).filter((g) => g.source === "hand")
+          .map((g) => g.game_id)]
+      : [],
+    addToList: null,
   };
+}
+
+function isDraftGameList(value: unknown): value is IDraftGameList {
+  const list = value as Partial<IDraftGameList> | null | undefined;
+  return !!list && typeof list === "object" && Number.isInteger(list.id) &&
+    (list.name === null || typeof list.name === "string") &&
+    Number.isInteger(list.gameCount);
 }
 
 function isYear(value: unknown, keyword: string): boolean {
@@ -276,7 +375,8 @@ export function challengeDraftFromState(state: unknown): IChallengeDraft | null 
     !!pool &&
     isNamedIdList(pool.franchises) &&
     isNamedIdList(pool.collections) &&
-    isGameList(pool.included) &&
+    isGameList(pool.core) &&
+    isGameList(pool.optional) &&
     isGameList(pool.excluded) &&
     !!draft.assignment &&
     Array.isArray(draft.sourceResults) &&
@@ -286,10 +386,21 @@ export function challengeDraftFromState(state: unknown): IChallengeDraft | null 
   const slots = draft.slots as Partial<IChallengeDraft["slots"]> | undefined;
   const slotsValid = !!slots && isYear(slots.firstYear, "birth_year") &&
     isYear(slots.lastYear, "current_year") && typeof slots.countsPastPlay === "boolean";
+  const target = Number(pool.optionalTarget);
   return {
     ...draft,
+    pool: {
+      ...draft.pool,
+      optionalTarget: Number.isInteger(target) && target >= 0 ? target : 0,
+    },
+    includeAs: draft.includeAs === "optional" ? "optional" : "core",
     slots: slotsValid ? draft.slots : { ...YEARS_ALIVE },
     previewPage: Math.max(1, Number(draft.previewPage) || 1),
+    gameList: isDraftGameList(draft.gameList) ? draft.gameList : null,
+    handBefore: Array.isArray(draft.handBefore)
+      ? draft.handBefore.filter((id) => Number.isInteger(id))
+      : [],
+    addToList: typeof draft.addToList === "boolean" ? draft.addToList : null,
   };
 }
 
@@ -327,6 +438,52 @@ export function applyBasics(
       // An Assignment Challenge runs in Editions: Always Open, with no end date.
       schedule: format === "assignment" ? "always_open" : schedule as ChallengeSchedule,
       slots: { ...draft.slots, countsPastPlay },
+    },
+    errors: [],
+  };
+}
+
+/**
+ * After the basics modal on a create started `from-list:` (bot#1569): reads the list once
+ * and brings its games in as Core Games, ranked order first. A Format other than Pool
+ * drops the list (only a Pool is fed by one), as does a list the member can't read.
+ */
+export async function applyGameList(
+  draft: IChallengeDraft,
+  actingUserId: string,
+  api: Pick<IGameListApi, "get"> = GAME_LIST_API,
+): Promise<{ draft: IChallengeDraft; errors: string[] }> {
+  const pending = draft.gameList;
+  if (draft.mode !== "create" || !pending || pending.name !== null) return { draft, errors: [] };
+  if (draft.format !== "pool") {
+    return {
+      draft: { ...draft, gameList: null },
+      errors: ["A Game List only starts a Pool Challenge, so this one starts without it."],
+    };
+  }
+  const list = await api.get(pending.id, actingUserId);
+  if (!list) {
+    return {
+      draft: { ...draft, gameList: null },
+      errors: ["That Game List is gone, or you can't see it, so the Pool starts empty."],
+    };
+  }
+  const games = [...(list.entries ?? [])]
+    .sort((a, b) => a.position - b.position)
+    .map((entry) => ({ id: entry.game.game_id, title: entry.game.title }));
+  let core = draft.pool.core;
+  for (const game of games) core = withGame(core, game);
+  const ids = new Set(games.map((game) => game.id));
+  return {
+    draft: {
+      ...draft,
+      pool: {
+        ...draft.pool,
+        core,
+        optional: without(draft.pool.optional, ids),
+        excluded: without(draft.pool.excluded, ids),
+      },
+      gameList: { id: list.id, name: list.name, gameCount: games.length },
     },
     errors: [],
   };
@@ -444,13 +601,32 @@ function applySlotsSettings(
 }
 
 function hasPoolDefinition(pool: IChallengeDraft["pool"]): boolean {
-  return pool.franchises.length + pool.collections.length + pool.included.length > 0;
+  return pool.franchises.length + pool.collections.length + pool.core.length +
+    pool.optional.length > 0;
+}
+
+/** A Pool's Season or end date from the settings modal; a Pool-only edit keeps its own. */
+function readPoolSchedule(
+  draft: IChallengeDraft,
+  fields: WizardFields,
+  errors: string[],
+): Pick<IChallengeDraft, "season" | "endsOn"> {
+  if (draft.poolOnly) return { season: draft.season, endsOn: draft.endsOn };
+  if (draft.schedule === "seasonal") {
+    const start = readMonthDay(fields, WIZARD_FIELDS.seasonStart, "Season starts", errors);
+    const end = readMonthDay(fields, WIZARD_FIELDS.seasonEnd, "Season ends", errors);
+    return { season: start && end ? { start, end } : null, endsOn: null };
+  }
+  const typed = field(fields, WIZARD_FIELDS.endsOn);
+  const endsOn = typed ? parseChallengeDate(typed) : null;
+  if (typed && !endsOn) errors.push(`End date: "${typed}" is not a date, such as 3 March 2027.`);
+  return { season: null, endsOn };
 }
 
 /**
- * Applies the Format's settings modal. For a Pool, a search runs the franchise and
- * collection lookup and moves to the pick; with no search, a Pool that already has games
- * moves to the preview. Errors leave the draft as it was.
+ * Applies the Format's settings modal. For a Pool, a search runs the franchise and Series
+ * lookup and moves to the pick; with no search it moves to the preview, where games can
+ * also be included by hand. Errors leave the draft as it was.
  */
 export async function applySettings(
   draft: IChallengeDraft,
@@ -461,32 +637,7 @@ export async function applySettings(
   if (draft.format === "slots") return applySlotsSettings(draft, fields);
 
   const errors: string[] = [];
-  let season: IChallengeDraft["season"] = null;
-  let endsOn: string | null = null;
-  if (draft.schedule === "seasonal") {
-    const start = readMonthDay(fields, WIZARD_FIELDS.seasonStart, "Season starts", errors);
-    const end = readMonthDay(fields, WIZARD_FIELDS.seasonEnd, "Season ends", errors);
-    season = start && end ? { start, end } : null;
-  } else {
-    const typed = field(fields, WIZARD_FIELDS.endsOn);
-    endsOn = typed ? parseChallengeDate(typed) : null;
-    if (typed && !endsOn) {
-      errors.push(`End date: "${typed}" is not a date, such as 3 March 2027.`);
-    }
-  }
-
-  let target: PoolTarget = "all";
-  if (field(fields, WIZARD_FIELDS.target) !== "all") {
-    const count = Number(field(fields, WIZARD_FIELDS.targetCount));
-    if (!Number.isInteger(count) || count < 1 || !field(fields, WIZARD_FIELDS.targetCount)) {
-      errors.push(
-        "Games to Clear: give a whole number of 1 or more, or choose every game in the Pool.",
-      );
-    } else {
-      target = count;
-    }
-  }
-
+  const schedule = readPoolSchedule(draft, fields, errors);
   const query = field(fields, WIZARD_FIELDS.search);
   let sourceResults = draft.sourceResults;
   if (!errors.length && query) {
@@ -495,17 +646,12 @@ export async function applySettings(
       errors.push(`Nothing in the GameDB matches "${query}". Try another search.`);
     }
   }
-  if (!errors.length && !query && !hasPoolDefinition(draft.pool)) {
-    errors.push("Search for a franchise or collection to build the Pool from.");
-  }
   if (errors.length) return { draft, errors };
   return {
     draft: {
       ...draft,
+      ...schedule,
       step: query ? "sources" : "preview",
-      season,
-      endsOn,
-      pool: { ...draft.pool, target },
       sourceResults,
       previewPage: 1,
     },
@@ -513,25 +659,51 @@ export async function applySettings(
   };
 }
 
+/** Applies the Optional target modal: a whole number of 0 or more. */
+export function applyOptionalTarget(
+  draft: IChallengeDraft,
+  fields: WizardFields,
+): { draft: IChallengeDraft; errors: string[] } {
+  const typed = field(fields, WIZARD_FIELDS.optionalTarget);
+  const target = Number(typed || "0");
+  if (!/^\d*$/.test(typed) || !Number.isInteger(target) || target > OPTIONAL_TARGET_MAX) {
+    return {
+      draft,
+      errors: [`Optional target: "${typed}" is not a whole number of 0 or more.`],
+    };
+  }
+  return { draft: { ...draft, pool: { ...draft.pool, optionalTarget: target } }, errors: [] };
+}
+
 function sourceValue(source: { kind: string; id: number }): string {
   return `${source.kind}:${source.id}`;
 }
 
-/** The options of the franchise and collection pick: the last results, then the chosen. */
-function sourceOptions(draft: IChallengeDraft): { value: string; label: string }[] {
+const SOURCE_KIND_LABELS: Readonly<Record<IPoolSource["kind"], string>> = {
+  franchise: "Franchise",
+  collection: "Series",
+};
+
+/** The options of the franchise and Series pick: the last results, then the chosen. */
+function sourceOptions(
+  draft: IChallengeDraft,
+): { value: string; label: string; description: string }[] {
   const options = draft.sourceResults.map((source) => ({
     value: sourceValue(source),
-    label: `${source.name} (${source.kind}, ${source.game_count} ` +
-      `${source.game_count === 1 ? "game" : "games"})`,
+    label: source.name,
+    description: `${SOURCE_KIND_LABELS[source.kind]} · ` +
+      `${source.game_count} ${source.game_count === 1 ? "game" : "games"}`,
   }));
   const chosen = [
     ...draft.pool.franchises.map((f) => ({
       value: `franchise:${f.id}`,
-      label: `${f.name} (franchise)`,
+      label: f.name,
+      description: SOURCE_KIND_LABELS.franchise,
     })),
     ...draft.pool.collections.map((c) => ({
       value: `collection:${c.id}`,
-      label: `${c.name} (collection)`,
+      label: c.name,
+      description: SOURCE_KIND_LABELS.collection,
     })),
   ];
   for (const option of chosen) {
@@ -541,7 +713,7 @@ function sourceOptions(draft: IChallengeDraft): { value: string; label: string }
 }
 
 /**
- * Applies the franchise and collection pick: the ticked ones join the Pool and the ones
+ * Applies the franchise and Series pick: the ticked ones join the Pool and the ones
  * offered but left unticked leave it.
  */
 export function applySourcePick(
@@ -567,8 +739,74 @@ export function applySourcePick(
 }
 
 /**
+ * After the franchise and Series pick: each Franchise newly added brings its Mainline games
+ * in as Core Games (spec api#442; the owner confirmed it), unless the Host left them out or
+ * already made them Core. Add-ons are never Mainline (GET /franchises/:id). A Franchise that
+ * can't be read adds its games as Optional only, as before.
+ */
+export async function applyFranchiseMainline(
+  before: IChallengeDraft,
+  after: IChallengeDraft,
+  mainlineOf: (franchiseId: number) => Promise<IFranchiseGame[]> = franchiseMainlineGames,
+): Promise<IChallengeDraft> {
+  const had = new Set(before.pool.franchises.map((f) => f.id));
+  const added = after.pool.franchises.filter((f) => !had.has(f.id));
+  if (!added.length) return after;
+  const excluded = new Set(after.pool.excluded.map((g) => g.id));
+  let core = after.pool.core;
+  const ids = new Set<number>();
+  for (const franchise of added) {
+    let games: IFranchiseGame[] = [];
+    try {
+      games = await mainlineOf(franchise.id);
+    } catch (err: unknown) {
+      logError("ChallengeWizard.applyFranchiseMainline", err);
+    }
+    for (const game of games) {
+      if (excluded.has(game.game_id)) continue;
+      core = withGame(core, { id: game.game_id, title: game.title });
+      ids.add(game.game_id);
+    }
+  }
+  return {
+    ...after,
+    pool: { ...after.pool, core, optional: without(after.pool.optional, ids) },
+  };
+}
+
+function without(games: readonly IWizardGame[], ids: ReadonlySet<number>): IWizardGame[] {
+  return games.filter((game) => !ids.has(game.id));
+}
+
+function withGame(games: readonly IWizardGame[], game: IWizardGame): IWizardGame[] {
+  return games.some((g) => g.id === game.id) ? [...games] : [...games, game];
+}
+
+/**
+ * Applies a page of the Core pick (design 1A): of the games `shown`, the ticked ones are
+ * Core Games and the unticked ones Optional Games. A Core Game unticked is kept in the Pool
+ * as an Optional Game picked by hand, since no source may hold it.
+ */
+export function applyCorePick(
+  draft: IChallengeDraft,
+  shown: readonly IWizardGame[],
+  values: readonly string[],
+): IChallengeDraft {
+  const ticked = new Set(values.map(Number));
+  let core = draft.pool.core.filter((game) =>
+    ticked.has(game.id) || !shown.some((g) => g.id === game.id));
+  let optional = without(draft.pool.optional, ticked);
+  for (const game of shown) {
+    const picked = { id: game.id, title: game.title };
+    if (ticked.has(game.id)) core = withGame(core, picked);
+    else if (draft.pool.core.some((g) => g.id === game.id)) optional = withGame(optional, picked);
+  }
+  return { ...draft, pool: { ...draft.pool, core, optional } };
+}
+
+/**
  * Applies a page of the exclude pick: of the games `shown`, the ticked ones are left out
- * and the rest put back. Ticking a game added by hand takes it back out of the Pool.
+ * (a Core Game or one picked by hand too) and the rest put back.
  */
 export function applyExcludePick(
   draft: IChallengeDraft,
@@ -577,48 +815,85 @@ export function applyExcludePick(
 ): IChallengeDraft {
   const ticked = new Set(values.map(Number));
   const shownIds = new Set(shown.map((game) => game.id));
-  const included = draft.pool.included.filter((game) => !ticked.has(game.id));
   const excluded = draft.pool.excluded.filter((game) => !shownIds.has(game.id));
   for (const game of shown) {
-    const byHand = draft.pool.included.some((g) => g.id === game.id);
-    if (ticked.has(game.id) && !byHand) excluded.push({ id: game.id, title: game.title });
+    if (ticked.has(game.id)) excluded.push({ id: game.id, title: game.title });
   }
-  return { ...draft, pool: { ...draft.pool, included, excluded } };
+  return {
+    ...draft,
+    pool: {
+      ...draft.pool,
+      core: without(draft.pool.core, ticked),
+      optional: without(draft.pool.optional, ticked),
+      excluded,
+    },
+  };
 }
 
-/** Runs the "Include a game" search; the preview then offers what it found. */
+/**
+ * Runs the "Include a game" search; the preview then offers what it found, to add as a
+ * Core or an Optional Game (`as`).
+ */
 export async function applyIncludeSearch(
   draft: IChallengeDraft,
   query: string,
   searchGames: (query: string) => Promise<IIncludeChoice[]>,
+  as: IncludeAs = "core",
 ): Promise<IChallengeDraft> {
   const choices = query.trim() ? await searchGames(query.trim()) : [];
-  return { ...draft, includeChoices: choices.slice(0, DISCORD_SELECT_OPTIONS_MAX) };
+  return {
+    ...draft,
+    includeAs: as,
+    includeChoices: choices.slice(0, DISCORD_SELECT_OPTIONS_MAX),
+  };
 }
 
-/** Adds the picked game to the Pool by hand (and no longer leaves it out). */
+/** Adds the picked game to the Pool by hand, as a Core or Optional Game, no longer left out. */
 export function applyIncludePick(draft: IChallengeDraft, value: string): IChallengeDraft {
   const choice = draft.includeChoices.find((c) => String(c.id) === value);
   if (!choice) return { ...draft, includeChoices: [] };
-  const included = draft.pool.included.some((g) => g.id === choice.id)
-    ? draft.pool.included
-    : [...draft.pool.included, { id: choice.id, title: choice.title }];
+  const game = { id: choice.id, title: choice.title };
+  const ids = new Set([choice.id]);
+  const core = draft.includeAs === "core"
+    ? withGame(draft.pool.core, game)
+    : without(draft.pool.core, ids);
+  const optional = draft.includeAs === "optional"
+    ? withGame(draft.pool.optional, game)
+    : without(draft.pool.optional, ids);
   return {
     ...draft,
     includeChoices: [],
-    pool: {
-      ...draft.pool,
-      included,
-      excluded: draft.pool.excluded.filter((g) => g.id !== choice.id),
-    },
+    pool: { ...draft.pool, core, optional, excluded: without(draft.pool.excluded, ids) },
   };
+}
+
+/**
+ * The games an edit of a list-linked Pool puts in the Pool by hand (new Core Games or
+ * Optional Games picked by hand), when the member may add them to the list: what
+ * `add_to_list` would add (spec story 30). Empty otherwise.
+ */
+export function newListGames(draft: IChallengeDraft): IWizardGame[] {
+  if (draft.mode !== "edit" || !draft.gameList?.canAdd) return [];
+  const before = new Set(draft.handBefore ?? []);
+  const seen = new Set<number>();
+  return [...draft.pool.core, ...draft.pool.optional].filter((game) => {
+    if (before.has(game.id) || seen.has(game.id)) return false;
+    seen.add(game.id);
+    return true;
+  });
+}
+
+/** The Host's answer to "Also add to <list>?" on an edit of a list-linked Pool. */
+export function applyAddToList(draft: IChallengeDraft, add: boolean): IChallengeDraft {
+  return { ...draft, addToList: add };
 }
 
 function poolDefinition(draft: IChallengeDraft, withExcluded: boolean): IPoolDefinition {
   return {
     franchise_ids: draft.pool.franchises.map((f) => f.id),
     collection_ids: draft.pool.collections.map((c) => c.id),
-    included_game_ids: draft.pool.included.map((g) => g.id),
+    core_game_ids: draft.pool.core.map((g) => g.id),
+    optional_game_ids: draft.pool.optional.map((g) => g.id),
     excluded_game_ids: withExcluded ? draft.pool.excluded.map((g) => g.id) : [],
   };
 }
@@ -634,6 +909,15 @@ function slotsOf(draft: IChallengeDraft): IChallengeSlots {
 
 /** The create or edit body for the draft. */
 export function challengeWriteOf(draft: IChallengeDraft): IChallengeWrite {
+  const pool: NonNullable<IChallengeWrite["pool"]> = {
+    ...poolDefinition(draft, true),
+    optional_target: draft.pool.optionalTarget,
+  };
+  // A Game List is linked only on create; the API copies its games in as Core Games too.
+  if (draft.mode === "create" && draft.gameList?.name) pool.game_list_id = draft.gameList.id;
+  const addToList = draft.addToList === true && newListGames(draft).length > 0;
+  // With Runs, only the Pool may change: the rest is locked (spec api#442).
+  if (draft.poolOnly) return addToList ? { pool, add_to_list: true } : { pool };
   const write: IChallengeWrite = {
     name: draft.name,
     description: draft.description,
@@ -643,7 +927,7 @@ export function challengeWriteOf(draft: IChallengeDraft): IChallengeWrite {
     ends_on: draft.schedule === "always_open" ? draft.endsOn : null,
   };
   if (draft.format === "pool") {
-    write.pool = { ...poolDefinition(draft, true), target: draft.pool.target };
+    write.pool = pool;
   } else if (draft.format === "slots") {
     write.slots = slotsOf(draft);
   } else {
@@ -654,6 +938,7 @@ export function challengeWriteOf(draft: IChallengeDraft): IChallengeWrite {
     };
   }
   if (draft.mode === "create" && draft.clubHosted) write.hosted_by_club = true;
+  if (addToList && draft.format === "pool") write.add_to_list = true;
   return write;
 }
 
@@ -717,21 +1002,24 @@ function basicsView(sessionId: string, draft: IChallengeDraft, notice: string[])
   ]);
 }
 
-function chosenSources(draft: IChallengeDraft): string {
-  const parts = [
-    ...draft.pool.franchises.map((f) => `the ${escapeChallengeText(f.name)} franchise`),
-    ...draft.pool.collections.map((c) => `the ${escapeChallengeText(c.name)} collection`),
-  ];
-  return parts.length ? listJoin(parts) : "nothing yet";
+/** The draft's sources in words, as the Pool's posts name them. */
+function draftSources(draft: IChallengeDraft): string | null {
+  return describePoolSources({
+    optional_target: 0,
+    core_count: 0,
+    franchises: draft.pool.franchises.map((f) => ({ franchise_id: f.id, name: f.name })),
+    collections: draft.pool.collections.map((c) => ({ collection_id: c.id, name: c.name })),
+  });
 }
 
 function sourcesView(sessionId: string, draft: IChallengeDraft, notice: string[]): IChallengeView {
   const lines = [
     ...noticeLines(notice),
-    `### ${stepTitle(draft)} (2 of 2): the Pool`,
-    "Pick the franchises and collections whose games are in the Pool. " +
-      "You can leave games out, or add others by hand, in the preview.",
-    `Chosen: ${chosenSources(draft)}`,
+    `### ${stepTitle(draft)}${draft.poolOnly ? "" : " (2 of 2)"}: the Pool`,
+    "Pick the franchises and Series whose games join the Pool. A franchise's Mainline " +
+      "games come in as Core Games, the rest as Optional Games. In the preview you tick the " +
+      "Core Games, leave games out and add others by hand.",
+    `Chosen: ${draftSources(draft) ?? "nothing yet"}`,
   ];
   const options = sourceOptions(draft);
   const chosen = new Set([
@@ -743,18 +1031,19 @@ function sourcesView(sessionId: string, draft: IChallengeDraft, notice: string[]
     rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(buildChallengeWizardId("sources", sessionId))
-        .setPlaceholder("Franchises and collections")
+        .setPlaceholder("Franchises and Series")
         .setMinValues(0)
         .setMaxValues(options.length)
         .addOptions(...options.map((option) => ({
           label: option.label.slice(0, DISCORD_SELECT_LABEL_MAX),
+          description: option.description,
           value: option.value,
           default: chosen.has(option.value),
         }))),
     ));
   }
   rows.push(buttonRow(
-    button(sessionId, "preview", "Preview", ButtonStyle.Primary, !hasPoolDefinition(draft.pool)),
+    button(sessionId, "preview", "Preview", ButtonStyle.Primary),
     button(sessionId, "settings", "Search again"),
     button(sessionId, "cancel", "Cancel"),
   ));
@@ -850,87 +1139,206 @@ function yearOf(game: IGameSummary): string | null {
   return Number.isFinite(year) ? String(year) : null;
 }
 
+/** "A, B and 3 more": titles named up to `max`, the rest counted. */
+function namedTitles(games: readonly IWizardGame[], max: number): string {
+  const named = games.slice(0, max).map((g) => escapeChallengeText(g.title));
+  const more = games.length - named.length;
+  return more > 0 ? `${named.join(", ")} and ${more} more` : listJoin(named);
+}
+
+/** "**Optional Games (12)** from the Final Fantasy franchise, plus X added by hand" */
+function optionalLine(draft: IChallengeDraft, optionalCount: number): string {
+  const head = `**Optional Games (${optionalCount})**`;
+  const sources = draftSources(draft);
+  const hand = draft.pool.optional;
+  const handText = hand.length <= HAND_NAMED_MAX
+    ? `${namedTitles(hand, HAND_NAMED_MAX)} added by hand`
+    : `${hand.length} added by hand`;
+  if (sources && hand.length) return `${head} from ${sources}, plus ${handText}`;
+  if (sources) return `${head} from ${sources}`;
+  if (hand.length) return `${head} ${handText}`;
+  return `${head} none yet`;
+}
+
+/** Where the Pool's linked Game List stands (design 1A): made from it, or linked to it. */
+function gameListLine(draft: IChallengeDraft): string | null {
+  const list = draft.gameList;
+  if (!list?.name) return null;
+  const name = `**${escapeChallengeText(list.name)}**`;
+  if (draft.mode === "create") {
+    return `-# Made from your Game List ${name}. ` +
+      (list.gameCount === 1
+        ? "Its one game came in as a Core Game. "
+        : `Its ${plural(list.gameCount, "game")} came in as Core Games. `) +
+      "Games you add to the list later arrive as Optional Games.";
+  }
+  return `-# Linked to the Game List ${name}. Games added to it arrive as Optional Games.`;
+}
+
+function selectRow(select: StringSelectMenuBuilder): Row {
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+}
+
+function gameOption(game: IGameSummary, ticked: boolean) {
+  const year = yearOf(game);
+  return {
+    label: game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
+    value: String(game.game_id),
+    default: ticked,
+    ...(year ? { description: year } : {}),
+  };
+}
+
+/**
+ * The Pool preview (design 1A "Two lines, one tick-box"): the target, the covers, a line
+ * for the Core Games and one for where the Optional Games come from, then the Core pick
+ * (ticked is Core, unticked stays Optional), the exclude pick, and the target button.
+ */
 async function poolPreview(
   sessionId: string,
   draft: IChallengeDraft,
   api: Pick<IChallengeWizardApi, "poolPreview">,
   notice: string[],
 ): Promise<IChallengeView> {
-  const [candidates, resolved]: IPage<IGameSummary>[] = await Promise.all([
-    api.poolPreview(poolDefinition(draft, false), draft.previewPage, EXCLUDE_PAGE_SIZE),
+  const [candidates, inPool, resolved]: IPage<IGameSummary>[] = await Promise.all([
+    api.poolPreview(poolDefinition(draft, false), draft.previewPage, PICK_PAGE_SIZE),
+    api.poolPreview(poolDefinition(draft, true), draft.previewPage, PICK_PAGE_SIZE),
     api.poolPreview(poolDefinition(draft, true), 1, COVER_WALL_MAX),
   ]);
-  const pool: IChallengePool = {
-    target: draft.pool.target,
-    franchises: draft.pool.franchises.map((f) => ({ franchise_id: f.id, name: f.name })),
-    collections: draft.pool.collections.map((c) => ({ collection_id: c.id, name: c.name })),
-    included_games: draft.pool.included.map((g) => ({ game_id: g.id, title: g.title })),
-    game_count: resolved.count,
-  };
+  const core = draft.pool.core;
+  const coreIds = new Set(core.map((g) => g.id));
+  const optionalCount = Math.max(0, resolved.count - core.length);
+  const target = describePoolTarget({
+    optional_target: draft.pool.optionalTarget,
+    core_count: core.length,
+  });
   const container = buildTextContainer([
     ...noticeLines(notice),
     `## Preview: ${escapeChallengeText(draft.name)}`,
-    `-# Pool · ${describePoolTarget(pool)} · ${scheduleSummary(draft)}`,
+    `-# Pool · ${target} · ${scheduleSummary(draft)}`,
   ].join("\n"));
   const wall = buildCoverWall(resolved.items);
   if (wall) container.addMediaGalleryComponents(wall);
-  const details = [describePool(pool)];
+  const details: string[] = [];
+  if (!resolved.count && !hasPoolDefinition(draft.pool)) {
+    details.push(draft.poolOnly
+      ? "No games yet. Include a game, or add a franchise or Series with Sources."
+      : "No games yet. Include a game, or go Back and search for a franchise or Series.");
+  } else {
+    details.push(
+      `**Core Games (${core.length})** ` +
+        (core.length ? namedTitles(core, CORE_NAMED_MAX) : "none yet"),
+      optionalLine(draft, optionalCount),
+    );
+  }
   if (draft.pool.excluded.length) {
-    const titles = draft.pool.excluded.map((g) => escapeChallengeText(g.title));
-    details.push(`-# Left out: ${listJoin(titles)}`);
+    details.push(`-# Left out: ${namedTitles(draft.pool.excluded, CORE_NAMED_MAX)}`);
   }
-  if (candidates.pages > 1) {
-    details.push(`-# Leave games out below: page ${draft.previewPage} of ${candidates.pages}`);
+  const listLine = gameListLine(draft);
+  if (listLine) details.push(listLine);
+  const listAsk = listQuestion(draft);
+  if (listAsk) details.push(listAsk.line);
+  if (draft.pool.franchises.length + draft.pool.collections.length) {
+    details.push("-# Add-ons never come in from a franchise or Series. " +
+      "Add one by hand if you want it.");
   }
+  if (draft.poolOnly) {
+    details.push("-# Runs see the change at once. Adding Core Games or raising the target " +
+      "DMs members with an Active Run.");
+  }
+  const pages = Math.max(candidates.pages, inPool.pages);
+  if (pages > 1) details.push(`-# Games below: page ${draft.previewPage} of ${pages}`);
   container.addTextDisplayComponents(buildTextDisplay(details.join("\n")));
 
   const rows: Row[] = [];
+  if (inPool.items.length) {
+    rows.push(selectRow(new StringSelectMenuBuilder()
+      .setCustomId(buildChallengeWizardId("core", sessionId))
+      .setPlaceholder("Core Games: tick the games every Run must Clear")
+      .setMinValues(0)
+      .setMaxValues(inPool.items.length)
+      .addOptions(...inPool.items.map((game) => gameOption(game, coreIds.has(game.game_id))))));
+  }
   const excluded = new Set(draft.pool.excluded.map((g) => g.id));
   if (candidates.items.length) {
-    rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(buildChallengeWizardId("exclude", sessionId))
-        .setPlaceholder("Leave games out")
-        .setMinValues(0)
-        .setMaxValues(candidates.items.length)
-        .addOptions(...candidates.items.map((game) => {
-          const year = yearOf(game);
-          return {
-            label: game.title.slice(0, DISCORD_SELECT_LABEL_MAX),
-            value: String(game.game_id),
-            default: excluded.has(game.game_id),
-            ...(year ? { description: year } : {}),
-          };
-        })),
-    ));
+    rows.push(selectRow(new StringSelectMenuBuilder()
+      .setCustomId(buildChallengeWizardId("exclude", sessionId))
+      .setPlaceholder("Leave games out")
+      .setMinValues(0)
+      .setMaxValues(candidates.items.length)
+      .addOptions(...candidates.items.map((game) =>
+        gameOption(game, excluded.has(game.game_id))))));
   }
   if (draft.includeChoices.length) {
-    rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(buildChallengeWizardId("include-pick", sessionId))
-        .setPlaceholder("Pick the game to add")
-        .addOptions(...draft.includeChoices.map((choice) => ({
-          label: (choice.year ? `${choice.title} (${choice.year})` : choice.title)
-            .slice(0, DISCORD_SELECT_LABEL_MAX),
-          value: String(choice.id),
-        }))),
-    ));
+    rows.push(selectRow(new StringSelectMenuBuilder()
+      .setCustomId(buildChallengeWizardId("include-pick", sessionId))
+      .setPlaceholder(draft.includeAs === "core"
+        ? "Pick the game to add as a Core Game"
+        : "Pick the game to add as an Optional Game")
+      .addOptions(...draft.includeChoices.map((choice) => ({
+        label: (choice.year ? `${choice.title} (${choice.year})` : choice.title)
+          .slice(0, DISCORD_SELECT_LABEL_MAX),
+        value: String(choice.id),
+      })))));
   }
   rows.push(buttonRow(
     saveButton(sessionId, draft),
+    button(sessionId, "target", `Optional target: ${draft.pool.optionalTarget}`),
     button(sessionId, "include", "Include a game"),
-    button(sessionId, "basics", "Back"),
+    draft.poolOnly
+      ? button(sessionId, "settings", "Sources")
+      : button(sessionId, "basics", "Back"),
     button(sessionId, "cancel", "Cancel"),
   ));
-  if (candidates.pages > 1) {
-    rows.push(buttonRow(
+  const extra: ButtonBuilder[] = [];
+  if (pages > 1) {
+    extra.push(
       button(sessionId, "page-prev", "Previous games", ButtonStyle.Secondary,
         draft.previewPage <= 1),
       button(sessionId, "page-next", "More games", ButtonStyle.Secondary,
-        draft.previewPage >= candidates.pages),
-    ));
+        draft.previewPage >= pages),
+    );
   }
+  if (listAsk) extra.push(...listAsk.buttons(sessionId));
+  if (extra.length) rows.push(buttonRow(...extra));
   return wizardView(container, rows);
+}
+
+/**
+ * "Also add to <list>?" (spec story 30), once an edit of a list-linked Pool puts games in
+ * it by hand and the member may add to the list. The answer covers every game the edit
+ * adds by hand, as `add_to_list` does; until the Host answers, the list stays as it is.
+ */
+function listQuestion(draft: IChallengeDraft): {
+  line: string;
+  buttons: (sessionId: string) => ButtonBuilder[];
+} | null {
+  const games = newListGames(draft);
+  const list = draft.gameList;
+  if (!games.length || !list?.name) return null;
+  const name = `**${escapeChallengeText(list.name)}**`;
+  const titles = namedTitles(games, CORE_NAMED_MAX);
+  const addLabel = `Add to ${list.name}`.slice(0, DISCORD_BUTTON_LABEL_MAX);
+  if (draft.addToList === true) {
+    return {
+      line: `-# Saving also adds ${titles} to ${name}.`,
+      buttons: (sessionId) => [button(sessionId, "list-skip", "Keep the list as it is")],
+    };
+  }
+  if (draft.addToList === false) {
+    return {
+      line: `-# ${name} stays as it is.`,
+      buttons: (sessionId) => [button(sessionId, "list-add", addLabel)],
+    };
+  }
+  return {
+    line: `**Also add ${titles} to ${name}?**\n` +
+      "-# It feeds this Challenge. Members who can see the list will see them there.",
+    buttons: (sessionId) => [
+      button(sessionId, "list-add", addLabel, ButtonStyle.Primary),
+      button(sessionId, "list-skip", "Keep the list as it is"),
+    ],
+  };
 }
 
 /**
@@ -1128,11 +1536,23 @@ function slotsSettingsLabels(draft: IChallengeDraft): LabelBuilder[] {
   return labels;
 }
 
-/** Modal 2: the Format's settings (a Pool's schedule, target and search; a calendar). */
+function sourceSearchInput(): LabelBuilder {
+  return textInput(WIZARD_FIELDS.search, "Search franchises and Series", {
+    required: false,
+    description: "Their games join as Optional Games. Leave it empty to go to the preview.",
+    maxLength: 100,
+  });
+}
+
+/**
+ * Modal 2: the Format's settings (a Pool's schedule and source search; a calendar). A
+ * Pool-only edit (the Challenge has Runs) holds just the search.
+ */
 export function buildSettingsModal(sessionId: string, draft: IChallengeDraft): ModalBuilder {
   const modal = new ModalBuilder()
     .setCustomId(buildChallengeWizardId("settings-modal", sessionId))
-    .setTitle(`${settingsLabel(draft)} (2 of 2)`);
+    .setTitle(draft.poolOnly ? "Pool sources" : `${settingsLabel(draft)} (2 of 2)`);
+  if (draft.poolOnly) return modal.addLabelComponents(sourceSearchInput());
   if (draft.format === "assignment") {
     const { signupCutoff, pickDeadline, reveal } = draft.assignment;
     return modal.addLabelComponents(
@@ -1166,33 +1586,47 @@ export function buildSettingsModal(sessionId: string, draft: IChallengeDraft): M
       required: false,
     }));
   }
-  const target = draft.pool.target;
-  labels.push(
-    radio(WIZARD_FIELDS.target, "Target", [
-      { label: "A number of games", value: "number" },
-      { label: "Every game in the Pool", value: "all" },
-    ], target === "all" ? "all" : "number"),
-    textInput(WIZARD_FIELDS.targetCount, "Games to Clear", {
-      value: typeof target === "number" ? String(target) : undefined,
-      required: false,
-      maxLength: 4,
-    }),
-    textInput(WIZARD_FIELDS.search, "Search franchises and collections", {
-      required: !hasPoolDefinition(draft.pool),
-      description: "You'll choose from the results next.",
-      maxLength: 100,
-    }),
-  );
+  labels.push(sourceSearchInput());
   return modal.addLabelComponents(...labels);
 }
 
-/** The "Include a game" modal: a GameDB title search. */
-export function buildIncludeModal(sessionId: string): ModalBuilder {
+/** The "Include a game" modal: a GameDB title search, and whether it joins as Core. */
+export function buildIncludeModal(sessionId: string, draft: IChallengeDraft): ModalBuilder {
   return new ModalBuilder()
     .setCustomId(buildChallengeWizardId("include-modal", sessionId))
     .setTitle("Include a game")
-    .addLabelComponents(textInput(WIZARD_FIELDS.includeQuery, "Game title", {
-      description: "You'll choose from the GameDB matches next.",
-      maxLength: 100,
+    .addLabelComponents(
+      textInput(WIZARD_FIELDS.includeQuery, "Game title", {
+        description: "You'll choose from the GameDB matches next.",
+        maxLength: 100,
+      }),
+      radio(WIZARD_FIELDS.includeAs, "Add it as", [
+        { label: "Core Game", value: "core", description: "Every Run must Clear it" },
+        {
+          label: "Optional Game",
+          value: "optional",
+          description: "It counts toward the Optional target",
+        },
+      ], draft.includeAs),
+    );
+}
+
+/** Where the include modal put the game: Core unless Optional was chosen. */
+export function includeAsOf(fields: WizardFields): IncludeAs {
+  return field(fields, WIZARD_FIELDS.includeAs) === "optional" ? "optional" : "core";
+}
+
+/** The Optional target button's modal (design 1A): one number. */
+export function buildOptionalTargetModal(
+  sessionId: string,
+  draft: IChallengeDraft,
+): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId(buildChallengeWizardId("target-modal", sessionId))
+    .setTitle("Optional target")
+    .addLabelComponents(textInput(WIZARD_FIELDS.optionalTarget, "Optional Games to Clear", {
+      value: String(draft.pool.optionalTarget),
+      description: "On top of every Core Game. 0 means the Core Games alone.",
+      maxLength: 4,
     }));
 }

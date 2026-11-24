@@ -37,11 +37,14 @@ export function poolChallenge(overrides: Partial<IChallenge> = {}): IChallenge {
     season: { start: "09-22", end: "12-21", crosses_new_year: false },
     open: true,
     pool: {
-      target: 3,
+      optional_target: 3,
       franchises: [{ franchise_id: 5, name: "Final Fantasy" }],
       collections: [],
-      included_games: [],
+      core_games: [],
+      optional_games: [],
       excluded_games: [],
+      core_count: 0,
+      optional_count: 38,
       game_count: 38,
     },
     slots: null,
@@ -369,7 +372,8 @@ export function buttonsOf(components: unknown): IButtonView[] {
 
 export interface ISelectView {
   customId: string;
-  options: { label: string; value: string; default: boolean }[];
+  placeholder: string | null;
+  options: { label: string; value: string; default: boolean; description?: string }[];
   minValues: number | null;
   maxValues: number | null;
 }
@@ -379,10 +383,21 @@ export function selectsOf(components: unknown): ISelectView[] {
   const selects: ISelectView[] = [];
   walk(components, (c) => {
     if (c.type !== 3) return;
-    const options = (c.options as { label: string; value: string; default?: boolean }[]) ?? [];
+    const options = (c.options as {
+      label: string;
+      value: string;
+      default?: boolean;
+      description?: string;
+    }[]) ?? [];
     selects.push({
       customId: String(c.custom_id),
-      options: options.map((o) => ({ label: o.label, value: o.value, default: !!o.default })),
+      placeholder: typeof c.placeholder === "string" ? c.placeholder : null,
+      options: options.map((o) => ({
+        label: o.label,
+        value: o.value,
+        default: !!o.default,
+        ...(o.description ? { description: o.description } : {}),
+      })),
       minValues: typeof c.min_values === "number" ? c.min_values : null,
       maxValues: typeof c.max_values === "number" ? c.max_values : null,
     });

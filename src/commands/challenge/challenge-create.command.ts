@@ -1,6 +1,7 @@
 import {
   ApplicationCommandOptionType,
   MessageFlags,
+  type AutocompleteInteraction,
   type ButtonInteraction,
   type CommandInteraction,
   type ModalSubmitInteraction,
@@ -17,11 +18,13 @@ import {
   SlashOption,
 } from "discordx";
 import {
+  isAutocompleteGated,
   safeDeferModalSubmit,
   safeDeferReply,
   safeDeferUpdate,
   safeEditReply,
   safeFollowUpIfSettled,
+  safeRespond,
   type AnyRepliable,
 } from "../../functions/InteractionUtils.js";
 import {
@@ -50,14 +53,21 @@ import {
 } from "../../services/ChallengeEdit.js";
 import {
   applyBasics,
+  applyCorePick,
   applyExcludePick,
+  applyFranchiseMainline,
+  applyGameList,
   applyIncludePick,
+  applyAddToList,
   applyIncludeSearch,
+  applyOptionalTarget,
   applySettings,
   applySourcePick,
   buildBasicsModal,
   buildIncludeModal,
+  buildOptionalTargetModal,
   buildSettingsModal,
+  includeAsOf,
   challengeDraftFromState,
   draftFromChallenge,
   newChallengeDraft,
@@ -69,6 +79,8 @@ import {
   wizardClosedView,
   type IChallengeDraft,
 } from "../../services/ChallengeWizard.js";
+import { startListChoices } from "../../services/GameLists.js";
+import { parsePositiveId } from "../../functions/CustomIdUtils.js";
 import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
@@ -201,6 +213,14 @@ async function openWizardModal(
   if (restored) await showStep(interaction, target.sessionId, restored);
 }
 
+/** The games a paged Pool select offered, read back from its options. */
+function shownGames(interaction: StringSelectMenuInteraction): { id: number; title: string }[] {
+  return interaction.component.options.map((option) => ({
+    id: Number(option.value),
+    title: option.label,
+  }));
+}
+
 /** Acks a wizard component or modal and hands its draft to `step`. */
 async function withDraft(
   interaction: WizardInteraction,
@@ -246,6 +266,23 @@ function editPanel(
   return buildEditPanel(challenge, { canModerate: canModerate(interaction), notice });
 }
 
+/**
+ * Autocomplete for `from-list:`: the member's own Game Lists, or the club's they may edit
+ * when `club-hosted` is set. Nothing while the game_lists Feature is hidden from them.
+ */
+async function autocompleteFromList(interaction: AutocompleteInteraction): Promise<void> {
+  if (await isAutocompleteGated(interaction)) {
+    await safeRespond(interaction, []);
+    return;
+  }
+  const focused = interaction.options.getFocused(true);
+  await safeRespond(interaction, await startListChoices({
+    query: String(focused?.value ?? ""),
+    actingUserId: interaction.user.id,
+    clubHosted: interaction.options.getBoolean("club-hosted") ?? false,
+  }));
+}
+
 function missingChallenge(challengeId: number): IChallengeView {
   return challengeTextView(
     `There is no Challenge ${challengeId}, or it is hidden from you.`,
@@ -265,9 +302,21 @@ export class ChallengeCreateCommand {
       required: false,
     })
     clubHosted: boolean | undefined,
+    @SlashOption({
+      name: "from-list",
+      description: "Start a Pool from one of your Game Lists: its games become Core Games",
+      type: ApplicationCommandOptionType.String,
+      required: false,
+      autocomplete: autocompleteFromList,
+    })
+    fromList: string | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
-    const draft = newChallengeDraft(interaction.user.id, clubHosted ?? false);
+    const draft = newChallengeDraft(
+      interaction.user.id,
+      clubHosted ?? false,
+      fromList ? parsePositiveId(fromList) : null,
+    );
     const sessionId = startWizard(interaction, draft);
     safeIgnore(interaction.showModal(buildBasicsModal(sessionId, draft)));
   }
@@ -316,7 +365,21 @@ export class ChallengeCreateCommand {
 
   @ButtonComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:include:`) })
   async includeButton(interaction: ButtonInteraction): Promise<void> {
-    await openWizardModal(interaction, (sessionId) => buildIncludeModal(sessionId));
+    await openWizardModal(interaction, buildIncludeModal);
+  }
+
+  @ButtonComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:target:`) })
+  async targetButton(interaction: ButtonInteraction): Promise<void> {
+    await openWizardModal(interaction, buildOptionalTargetModal);
+  }
+
+  @ModalComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:target-modal:`) })
+  async targetModal(interaction: ModalSubmitInteraction): Promise<void> {
+    await withDraft(interaction, async (sessionId, draft) => {
+      const result = applyOptionalTarget(draft, readModalFields(interaction));
+      saveDraft(interaction, sessionId, result.draft);
+      await showStep(interaction, sessionId, result.draft, result.errors);
+    });
   }
 
   @ModalComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:basics-modal:`) })
@@ -326,8 +389,12 @@ export class ChallengeCreateCommand {
         draft,
         readModalFields(interaction, WIZARD_RADIO_FIELDS, WIZARD_CHECKBOX_FIELDS),
       );
-      saveDraft(interaction, sessionId, result.draft);
-      await showStep(interaction, sessionId, result.draft, result.errors);
+      // A create started from a Game List reads the list once the Format is known.
+      const listed = result.errors.length
+        ? result
+        : await applyGameList(result.draft, interaction.user.id);
+      saveDraft(interaction, sessionId, listed.draft);
+      await showStep(interaction, sessionId, listed.draft, [...result.errors, ...listed.errors]);
     });
   }
 
@@ -347,8 +414,14 @@ export class ChallengeCreateCommand {
   @ModalComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:include-modal:`) })
   async includeModal(interaction: ModalSubmitInteraction): Promise<void> {
     await withDraft(interaction, async (sessionId, draft) => {
-      const query = readModalFields(interaction)[WIZARD_FIELDS.includeQuery] ?? "";
-      const next = await applyIncludeSearch(draft, query, searchIncludeGames);
+      const fields = readModalFields(interaction, WIZARD_RADIO_FIELDS);
+      const query = fields[WIZARD_FIELDS.includeQuery] ?? "";
+      const next = await applyIncludeSearch(
+        draft,
+        query,
+        searchIncludeGames,
+        includeAsOf(fields),
+      );
       saveDraft(interaction, sessionId, next);
       const notice = next.includeChoices.length
         ? []
@@ -360,7 +433,19 @@ export class ChallengeCreateCommand {
   @SelectMenuComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:sources:`) })
   async sourcesSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await withDraft(interaction, async (sessionId, draft) => {
-      const next = applySourcePick(draft, interaction.values);
+      const next = await applyFranchiseMainline(
+        draft,
+        applySourcePick(draft, interaction.values),
+      );
+      saveDraft(interaction, sessionId, next);
+      await showStep(interaction, sessionId, next);
+    });
+  }
+
+  @SelectMenuComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:core:`) })
+  async coreSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    await withDraft(interaction, async (sessionId, draft) => {
+      const next = applyCorePick(draft, shownGames(interaction), interaction.values);
       saveDraft(interaction, sessionId, next);
       await showStep(interaction, sessionId, next);
     });
@@ -369,11 +454,7 @@ export class ChallengeCreateCommand {
   @SelectMenuComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:exclude:`) })
   async excludeSelect(interaction: StringSelectMenuInteraction): Promise<void> {
     await withDraft(interaction, async (sessionId, draft) => {
-      const shown = interaction.component.options.map((option) => ({
-        id: Number(option.value),
-        title: option.label,
-      }));
-      const next = applyExcludePick(draft, shown, interaction.values);
+      const next = applyExcludePick(draft, shownGames(interaction), interaction.values);
       saveDraft(interaction, sessionId, next);
       await showStep(interaction, sessionId, next);
     });
@@ -402,6 +483,16 @@ export class ChallengeCreateCommand {
     const step = interaction.customId.includes(":page-next:") ? 1 : -1;
     await withDraft(interaction, async (sessionId, draft) => {
       const next = { ...draft, previewPage: Math.max(1, draft.previewPage + step) };
+      saveDraft(interaction, sessionId, next);
+      await showStep(interaction, sessionId, next);
+    });
+  }
+
+  @ButtonComponent({ id: new RegExp(`^${CHALLENGE_WIZARD_PREFIX}:list-(add|skip):`) })
+  async listButton(interaction: ButtonInteraction): Promise<void> {
+    const add = interaction.customId.includes(":list-add:");
+    await withDraft(interaction, async (sessionId, draft) => {
+      const next = applyAddToList(draft, add);
       saveDraft(interaction, sessionId, next);
       await showStep(interaction, sessionId, next);
     });
@@ -489,7 +580,8 @@ export class ChallengeCreateCommand {
         await safeEditReply(interaction, missingChallenge(target.challengeId));
         return;
       }
-      if (rulesLocked(challenge)) {
+      // A Pool stays editable with Runs: the wizard then changes its Pool alone.
+      if (rulesLocked(challenge) && challenge.challenge_format !== "pool") {
         await safeEditReply(interaction, editPanel(interaction, challenge));
         return;
       }

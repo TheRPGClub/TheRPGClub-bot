@@ -37,3 +37,18 @@ export function codexHistoryUrl(): string {
 export function codexFunFactsUrl(): string {
   return `${WEBSITE_BASE_URL}/codex/fun-facts`;
 }
+
+/** A Game List's page (spec api#442). */
+export function gameListPageUrl(listId: number): string {
+  return `${WEBSITE_BASE_URL}/lists/${listId}`;
+}
+
+/** Where a member starts a new Game List. */
+export function newGameListUrl(): string {
+  return `${WEBSITE_BASE_URL}/lists/new`;
+}
+
+/** A game's page in the GameDB on the website. */
+export function gamePageUrl(gameId: number): string {
+  return `${WEBSITE_BASE_URL}/games/${gameId}`;
+}

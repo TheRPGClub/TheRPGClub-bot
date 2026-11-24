@@ -40,15 +40,28 @@ function fakeApi(options: { error?: unknown; challenge?: IChallenge } = {}): IFa
   return api;
 }
 
-test("edit panel: a Challenge with Runs says plainly its rules are locked", () => {
+test("edit panel: a Pool with Runs locks its rules but keeps its Pool editable", () => {
   const view = buildEditPanel(poolChallenge({ run_count: 3 }), { canModerate: false });
   const text = textOf(view.components);
 
   assert.match(text, /^## Edit: Fall of Final Fantasy$/m);
   assert.ok(text.includes(
-    "**The rules are locked:** this Challenge has 3 Runs, so its Format, schedule, " +
-      "Season and Pool can't change.",
+    "**The rules are locked:** this Challenge has 3 Runs, so its Format, schedule and " +
+      "Season can't change.",
   ), text);
+  assert.match(text, /Its Pool, name, description and end date still can\./);
+  const pool = buttonsOf(view.components).find((b) => b.label === "Pool");
+  assert.equal(pool?.disabled, false);
+  assert.equal(pool?.customId, "challenge-edit-v1:rules:7");
+});
+
+test("edit panel: a Slots Challenge with Runs says plainly its rules are locked", () => {
+  const view = buildEditPanel(
+    poolChallenge({ run_count: 3, challenge_format: "slots", pool: null }),
+    { canModerate: false },
+  );
+  const text = textOf(view.components);
+
   assert.match(text, /Its name, description and end date still can\./);
   const rules = buttonsOf(view.components).find((b) => b.label === "Rules");
   assert.equal(rules?.disabled, true);

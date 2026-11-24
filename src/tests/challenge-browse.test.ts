@@ -129,7 +129,7 @@ test("show by game: each Pool game with who Cleared it and who has it In Progres
   assert.match(text, /Play Final Fantasy through the autumn\. Clear 3 to Finish\./);
   const closes = Math.floor(Date.parse("2026-12-22T05:00:00Z") / 1000);
   assert.ok(text.includes(
-    "-# Pool · 38 games · Clear 3 · Seasonal, 22 September to 21 December · " +
+    "-# Pool · 38 games · Clear 3 Optional Games · Seasonal, 22 September to 21 December · " +
       `Open, closes <t:${closes}:R>`,
   ), text);
   // The Host is the header's button, linking to their profile.
@@ -166,9 +166,45 @@ test("show by game: the buttons flip the view and page through the Pool", async 
       ["By member", "challenge-show-v1:7:m:1:u", false],
       ["Previous", "challenge-show-v1:7:g:1:u", false],
       ["Next", "challenge-show-v1:7:g:3:u", false],
+      // A Pool's own row (bot#1569): anyone may propose; Proposals only for deciders.
+      ["Propose a game", "challenge-proposal-v1:propose:7", false],
     ],
   );
 });
+
+test("show: whoever decides gets Proposals with the count, and the list notices",
+  async () => {
+    const challenge = poolChallenge({
+      pending_proposals: 3,
+      pool: {
+        ...poolChallenge().pool!,
+        game_list: { id: 12, name: "Soulslike, but make it history", visible: true,
+          can_add: true },
+      },
+      list_notices: [1, 2, 3, 4].map((id) => ({
+        id,
+        game: { game_id: 100 + id, title: `Souls ${id}`, cover_url: null },
+        created_at: "2026-11-20T10:00:00Z",
+      })),
+    });
+    const view = await show(fakeApi({ challenge, games }));
+    const text = textOf(view.components);
+
+    assert.ok(text.includes("**Souls 1** was removed from **Soulslike, but make it history**. " +
+      "It is still a Core Game here."), text);
+    assert.match(text, /^\*\*Souls 3\*\* was removed/m);
+    assert.doesNotMatch(text, /Souls 4/);
+    assert.match(text, /^-# 1 more list notice on the Challenge page\.$/m);
+    const ids = buttonsOf(view.components).map((b) => [b.label, b.customId]);
+    assert.deepEqual(ids.filter(([, id]) => id?.includes(":notice-")).slice(0, 2), [
+      ["Remove from the Challenge", "challenge-proposal-v1:notice-remove:7:1"],
+      ["Keep it", "challenge-proposal-v1:notice-keep:7:1"],
+    ]);
+    assert.deepEqual(ids.slice(-2), [
+      ["Propose a game", "challenge-proposal-v1:propose:7"],
+      ["Proposals (3)", "challenge-proposal-v1:view:7:1:u"],
+    ]);
+  });
 
 test("show by member: each Run with its status and progress", async () => {
   const view = await show(fakeApi({ games, runs }), "member");
@@ -181,6 +217,42 @@ test("show by member: each Run with its status and progress", async () => {
   const labels = buttonsOf(view.components).map((b) => [b.label, b.disabled]);
   assert.deepEqual(labels.slice(1, 3), [["By game", false], ["By member", true]]);
 });
+
+test("show: a Pool with Core Games tags each game, and Runs show Core and Optional",
+  async () => {
+    const challenge = poolChallenge({
+      pool: {
+        ...poolChallenge().pool!,
+        optional_target: 1,
+        core_games: [{ game_id: 1, title: "Final Fantasy" }, { game_id: 4, title: "FF IV" }],
+        optional_games: [
+          { game_id: 5, title: "Final Fantasy V", source: "franchise", new: false },
+          { game_id: 10, title: "Final Fantasy X", source: "hand", new: true },
+        ],
+        core_count: 2,
+      },
+    });
+    const byGame = textOf((await show(fakeApi({ challenge, games }))).components);
+    assert.match(byGame, /· Clear every Core Game \(2\) and 1 Optional Game ·/);
+    assert.match(byGame, /^\*\*Final Fantasy\*\* `1987` · Core$/m);
+    assert.match(byGame, /^\*\*Final Fantasy V\*\* `1992` · Optional$/m);
+    assert.match(byGame, /^\*\*Final Fantasy X\*\* `2001` · Optional · new$/m);
+
+    const pooled = runs.map((r) => ({
+      ...r,
+      progress: {
+        ...r.progress,
+        core: { cleared: 1, total: 2 },
+        optional: { cleared: 0, target: 1 },
+      },
+    }));
+    const byMember = textOf((await show(fakeApi({ challenge, runs: pooled }), "member"))
+      .components);
+    assert.ok(
+      byMember.includes("**tenpenny** · Active · Core 1/2 · Optional 0/1 · 1 In Progress\n"),
+      byMember,
+    );
+  });
 
 test("show by member: no Runs yet says so", async () => {
   const view = await show(fakeApi({ games, runs: [] }), "member");

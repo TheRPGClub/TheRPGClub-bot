@@ -304,6 +304,7 @@ test("move a game: the first step offers the Cleared games with their years", as
     label: "Chrono Trigger",
     value: "501",
     default: false,
+    description: "waiting for an open year",
   });
   assert.match(textOf(result.view.components), /Showing 25 of 34 games/);
 });

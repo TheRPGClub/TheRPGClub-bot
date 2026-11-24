@@ -40,6 +40,7 @@ import {
 import {
   buildGameProfile,
   buildGameProfileActionRow,
+  canOfferGameLists,
   refreshGameProfileMessage,
   showGameProfile,
 } from "./gamedb-profile.service.js";
@@ -64,6 +65,7 @@ import { buildApiErrorMessage } from "../../utilities/ApiErrorUtils.js";
 import { logError } from "../../utilities/LogUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { linkCommandMentions } from "../../services/CommandMentionService.js";
+import { showAddToListPrompt } from "../list.command.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -94,7 +96,7 @@ export class GameDbViewCommand {
   }
 
   @ButtonComponent({
-    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog|collection|igdb-import):\d+$/,
+    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog|collection|igdb-import|list):\d+$/,
   })
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 2);
@@ -147,6 +149,11 @@ export class GameDbViewCommand {
       return;
     }
 
+    if (action === "list") {
+      await showAddToListPrompt(interaction, { id: gameId, title: game.title });
+      return;
+    }
+
     if (action === "video") {
       const videoUrl = game.featuredVideoUrl;
       if (!videoUrl) {
@@ -162,6 +169,7 @@ export class GameDbViewCommand {
           gameId,
           profile.featuredVideoUrl,
           true,
+          await canOfferGameLists(interaction.user.id),
         );
         const existingComponents = interaction.message?.components ?? [];
         const searchRows = getSearchRowsFromComponents(existingComponents);

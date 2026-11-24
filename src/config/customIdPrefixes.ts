@@ -73,6 +73,8 @@ export const CHALLENGE_SLOTS_PREFIX = "challenge-slots-v1";
 export const CHALLENGE_SANTA_PREFIX = "challenge-santa-v1";
 /** A Santa's pick: open, page, search and choose, with the Edition ID, page and search. */
 export const CHALLENGE_SANTA_PICK_PREFIX = "challenge-santa-pick-v1";
+/** Pool Proposals: propose, step through and decide them, and the list notices. */
+export const CHALLENGE_PROPOSAL_PREFIX = "challenge-proposal-v1";
 
 // Club Codex (spec api#397). Every Club Codex component's custom ID starts with this, so
 // the Feature gate maps them all to the club_codex Feature.
@@ -89,3 +91,13 @@ export const CODEX_HISTORY_PREFIX = `${CODEX_CUSTOM_ID_PREFIX}history`;
  * modal) and remove, each with the member's Discord ID. Not a Feature, so ungated.
  */
 export const BIRTH_DATE_PREFIX = "birth-date-v1";
+
+// Game Lists (spec api#442). Every Game List component's custom ID starts with this, so the
+// Feature gate maps them all to the game_lists Feature.
+export const GAME_LIST_CUSTOM_ID_PREFIX = "game-list-";
+/** /list view: Previous and Next, with the list ID and page. */
+export const GAME_LIST_PAGE_PREFIX = `${GAME_LIST_CUSTOM_ID_PREFIX}page-v1`;
+/** The game view's Add to a Game List select, with the game ID. */
+export const GAME_LIST_ADD_PREFIX = `${GAME_LIST_CUSTOM_ID_PREFIX}add-v1`;
+/** The game view's Add to a Game List button (a gamedb action), with the game ID. */
+export const GAMEDB_LIST_ACTION_PREFIX = "gamedb-action:list:";
