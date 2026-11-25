@@ -18,6 +18,7 @@ import {
   FUN_FACT_CHANNEL_ID,
   GIVEAWAY_LOG_CHANNEL_ID,
   LIVE_EVENT_FORUM_ID,
+  WHATCHA_PLAYING_CHANNEL_ID,
 } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import {
@@ -139,6 +140,12 @@ import {
   postBirthdays,
   type IBirthdayPostDeps,
 } from "./BirthdayPost.js";
+import {
+  createConquestPostDeps,
+  parseFranchiseConquest,
+  postFranchiseConquest,
+  type IConquestPostDeps,
+} from "./FranchiseConquestPost.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -293,6 +300,11 @@ export interface IBotJobSurface {
    * need not build it.
    */
   birthdays?: IBirthdayPostDeps;
+  /**
+   * What the Conquest post sends with (spec api#457). Optional so fakes for other jobs
+   * need not build it.
+   */
+  conquests?: IConquestPostDeps;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -369,6 +381,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     challenges: createChallengeJobDeps(client),
     codex: createCodexJobDeps(client),
     birthdays: createBirthdayPostDeps(client),
+    conquests: createConquestPostDeps(client),
   };
 }
 
@@ -1215,6 +1228,24 @@ function birthdaysDeps(surface: IBotJobSurface): IBirthdayPostDeps {
 export const handleBirthdayPost: BotJobHandler = async (payload, surface) =>
   postBirthdays(payload, birthdaysDeps(surface));
 
+/**
+ * Payload FranchiseConquestJobPayload (`user_id`, `franchise_id`, `franchise_name`,
+ * `conquered_at`, the Playtime, `covers`, `also_conquered`, `feature_key:
+ * "franchise_progress"`): the 4B Conquest card in the completions channel, in the bot-dev
+ * channel while Franchise Progress is in Preview, and nowhere while it is Off. No pings.
+ */
+export const handleFranchiseConquest: BotJobHandler = async (payload, surface, context) => {
+  const conquest = parseFranchiseConquest(payload);
+  const featureKey = POST_FEATURE_KEYS.franchiseConquest;
+  const channelId = routeFeaturePost(
+    await jobFeatureState(featureKey, surface, context),
+    WHATCHA_PLAYING_CHANNEL_ID,
+  );
+  if (!channelId) return featureOffNotice(featureKey);
+  if (!surface.conquests) throw new Error("This bot job surface cannot post Conquests.");
+  return postFranchiseConquest(conquest, channelId, surface.conquests);
+};
+
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
@@ -1239,4 +1270,5 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   challenge_dm: handleChallengeDm,
   daily_fun_fact: handleDailyFunFact,
   birthday_post: handleBirthdayPost,
+  franchise_conquest: handleFranchiseConquest,
 };
