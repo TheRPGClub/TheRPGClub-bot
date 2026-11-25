@@ -52,3 +52,8 @@ export function newGameListUrl(): string {
 export function gamePageUrl(gameId: number): string {
   return `${WEBSITE_BASE_URL}/games/${gameId}`;
 }
+
+/** A Franchise's page in the GameDB on the website (its Progress tab is `?view=progress`). */
+export function franchisePageUrl(franchiseId: number): string {
+  return `${WEBSITE_BASE_URL}/franchises/${franchiseId}`;
+}

@@ -36,6 +36,12 @@ export const CLUB_CODEX_FEATURE_KEY = "club_codex";
  */
 export const GAME_LISTS_FEATURE_KEY = "game_lists";
 
+/**
+ * Franchise Progress (spec api#457): the website's Progress tab, and the bot's Conquest
+ * post (`franchise_conquest`). It has no commands or components in the bot.
+ */
+export const FRANCHISE_PROGRESS_FEATURE_KEY = "franchise_progress";
+
 /** Top-level slash command or context menu name -> Feature key. */
 export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   gamedb: "game_index",
@@ -151,4 +157,5 @@ export const POST_FEATURE_KEYS = {
   suggestions: "suggestions",
   challenges: CHALLENGES_FEATURE_KEY,
   clubCodex: CLUB_CODEX_FEATURE_KEY,
+  franchiseConquest: FRANCHISE_PROGRESS_FEATURE_KEY,
 } as const;
