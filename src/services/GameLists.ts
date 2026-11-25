@@ -187,7 +187,8 @@ async function editableLists(actingUserId: string, api: IGameListApi): Promise<I
 /**
  * Autocomplete for /challenge create's `from-list:` (bot#1569): the member's own lists, or,
  * for a club-hosted Challenge, the club's lists they may edit (a list links only to a
- * Challenge its owner hosts). Nothing on a failed read, such as the Feature hidden.
+ * Challenge its owner hosts). Lists that already feed a Challenge are left out: one list,
+ * one Challenge. Nothing on a failed read, such as the Feature hidden.
  */
 export async function startListChoices(
   input: { query: string; actingUserId: string; clubHosted: boolean },
@@ -198,7 +199,7 @@ export async function startListChoices(
     const lists = input.clubHosted
       ? (await api.clubLists(input.actingUserId)).filter((list) => list.viewer.can_edit)
       : await api.ownLists(input.actingUserId);
-    return distinct(lists.filter((list) => nameHas(list, input.query)))
+    return distinct(lists.filter((list) => !list.challenge && nameHas(list, input.query)))
       .map((list) => ({ name: choiceName(list, false), value: String(list.id) }));
   } catch (err: unknown) {
     logError("GameLists.startListChoices", err);

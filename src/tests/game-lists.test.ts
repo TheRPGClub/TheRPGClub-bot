@@ -402,6 +402,7 @@ test("/challenge create from-list: own lists, or the club's editable ones when c
       own: [
         list({ id: 1, name: "Soulslike, but make it history" }),
         list({ id: 4, name: "Cozy", visibility: "private" }),
+        list({ id: 5, name: "Souls already running", challenge: { id: 9, name: "Souls Autumn" } }),
       ],
       club: [
         list({ id: 2, name: "Club Souls", club: true, owner: null }),

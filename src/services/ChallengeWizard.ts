@@ -446,7 +446,8 @@ export function applyBasics(
 /**
  * After the basics modal on a create started `from-list:` (bot#1569): reads the list once
  * and brings its games in as Core Games, ranked order first. A Format other than Pool
- * drops the list (only a Pool is fed by one), as does a list the member can't read.
+ * drops the list (only a Pool is fed by one), as does a list the member can't read or
+ * one that already feeds a Challenge (one list, one Challenge).
  */
 export async function applyGameList(
   draft: IChallengeDraft,
@@ -466,6 +467,15 @@ export async function applyGameList(
     return {
       draft: { ...draft, gameList: null },
       errors: ["That Game List is gone, or you can't see it, so the Pool starts empty."],
+    };
+  }
+  if (list.challenge) {
+    return {
+      draft: { ...draft, gameList: null },
+      errors: [
+        `That Game List already feeds **${list.challenge.name}**, so the Pool starts empty. ` +
+          "Games you add to the list keep arriving in that Challenge.",
+      ],
     };
   }
   const games = [...(list.entries ?? [])]
