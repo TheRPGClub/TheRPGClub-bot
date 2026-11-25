@@ -7,6 +7,7 @@
 import {
   CHALLENGE_CUSTOM_ID_PREFIX,
   CODEX_CUSTOM_ID_PREFIX,
+  GOTY_CUSTOM_ID_PREFIX,
   GAMEDB_LIST_ACTION_PREFIX,
   GAME_LIST_CUSTOM_ID_PREFIX,
   NEWS_CATEGORY_PICK_PREFIX,
@@ -43,8 +44,8 @@ export const GAME_LISTS_FEATURE_KEY = "game_lists";
 export const FRANCHISE_PROGRESS_FEATURE_KEY = "franchise_progress";
 
 /**
- * The GOTY Vote (spec api#471): a core Feature with its own flag, starting in Preview.
- * bot#1583 routes its nomination removal notices by it.
+ * The GOTY Vote (spec api#471): `/goty`, its components, and the `goty_*` posts. A core
+ * Feature (members can't hide it) with its own flag, so Preview means staff only.
  */
 export const GOTY_VOTE_FEATURE_KEY = "goty_vote";
 
@@ -81,6 +82,7 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   codex: CLUB_CODEX_FEATURE_KEY,
   funfact: CLUB_CODEX_FEATURE_KEY,
   list: GAME_LISTS_FEATURE_KEY,
+  goty: GOTY_VOTE_FEATURE_KEY,
 };
 
 /**
@@ -142,6 +144,8 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
 
   [GAME_LIST_CUSTOM_ID_PREFIX, GAME_LISTS_FEATURE_KEY],
   [GAMEDB_LIST_ACTION_PREFIX, GAME_LISTS_FEATURE_KEY],
+
+  [GOTY_CUSTOM_ID_PREFIX, GOTY_VOTE_FEATURE_KEY],
 ];
 
 /**
