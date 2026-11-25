@@ -26,7 +26,7 @@ const MEMBER = "123456789012345678";
 const GAME_ID = 42;
 
 function playtimeDoc(playthrough: { minutes: number } | null): any {
-  return { data: { user_id: MEMBER, game_id: GAME_ID, total_minutes: 900, playthrough } };
+  return { user_id: MEMBER, game_id: GAME_ID, total_minutes: 900, playthrough };
 }
 
 function inputs(modalJson: any): any[] {
@@ -46,7 +46,7 @@ test("the prefill is the open Playthrough's time, or nothing when none is open",
   assert.equal(prefillHoursFromPlaytime(playtimeDoc({ minutes: 750 })), 12.5);
   assert.equal(prefillHoursFromPlaytime(playtimeDoc(null)), null);
   assert.equal(prefillHoursFromPlaytime(null), null);
-  assert.equal(prefillHoursFromPlaytime({ data: {} }), null);
+  assert.equal(prefillHoursFromPlaytime({}), null);
 });
 
 test("a modal input shows the prefill as plain hours", () => {
@@ -57,15 +57,15 @@ test("a modal input shows the prefill as plain hours", () => {
 });
 
 test("fetchHours reads the member's playtime for the game", async () => {
-  const paths: string[] = [];
+  const reads: [string, number][] = [];
   const hours = await playthroughPrefill.fetchHours(MEMBER, GAME_ID, {
-    get: async (path) => {
-      paths.push(path);
+    get: async (userId, gameId) => {
+      reads.push([userId, gameId]);
       return playtimeDoc({ minutes: 125 });
     },
   });
   assert.equal(hours, 2.08);
-  assert.deepEqual(paths, [`/api/v1/users/${MEMBER}/games/${GAME_ID}/playtime`]);
+  assert.deepEqual(reads, [[MEMBER, GAME_ID]]);
 });
 
 test("fetchHours leaves the field blank on a 404, an error or a slow API", async (t) => {

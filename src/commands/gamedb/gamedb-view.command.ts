@@ -66,6 +66,7 @@ import { logError } from "../../utilities/LogUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
 import { linkCommandMentions } from "../../services/CommandMentionService.js";
 import { showAddToListPrompt } from "../list.command.js";
+import { showMyPlaytime } from "../playtime.command.js";
 
 @Discord()
 @SlashGroup("gamedb")
@@ -96,7 +97,10 @@ export class GameDbViewCommand {
   }
 
   @ButtonComponent({
-    id: /^gamedb-action:(nowplaying|video|hltb-import|backlog|collection|igdb-import|list):\d+$/,
+    id: new RegExp(
+      "^gamedb-action:" +
+      "(nowplaying|video|hltb-import|backlog|collection|igdb-import|list|playtime):\\d+$",
+    ),
   })
   async handleGameDbAction(interaction: ButtonInteraction): Promise<void> {
     const segs = assertCustomIdSegments(interaction, 2);
@@ -151,6 +155,15 @@ export class GameDbViewCommand {
 
     if (action === "list") {
       await showAddToListPrompt(interaction, { id: gameId, title: game.title });
+      return;
+    }
+
+    if (action === "playtime") {
+      await showMyPlaytime(interaction, {
+        id: gameId,
+        title: game.title,
+        coverUrl: game.coverUrl ?? null,
+      });
       return;
     }
 
