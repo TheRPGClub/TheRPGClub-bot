@@ -168,4 +168,5 @@ export const POST_FEATURE_KEYS = {
   challenges: CHALLENGES_FEATURE_KEY,
   clubCodex: CLUB_CODEX_FEATURE_KEY,
   franchiseConquest: FRANCHISE_PROGRESS_FEATURE_KEY,
+  gotyVote: GOTY_VOTE_FEATURE_KEY,
 } as const;

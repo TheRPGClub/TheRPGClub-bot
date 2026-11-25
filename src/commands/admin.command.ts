@@ -77,6 +77,18 @@ import {
   handleEditRoundButton,
   handleEditRoundModal,
 } from "./admin/round-admin.service.js";
+import {
+  autocompleteGotyNomination,
+  handleGotyDates,
+  handleGotyDeleteNomination,
+  handleGotyDeleteNominationModal,
+  handleGotyTie,
+  handleGotyTieSelect,
+} from "./admin/goty-admin.service.js";
+import {
+  GOTY_NOM_DEL_MODAL_ID_PATTERN,
+  GOTY_TIE_SELECT_ID_PATTERN,
+} from "../functions/GotyAdminHelpers.js";
 import { type AdminHelpTopicId } from "./admin/admin.types.js";
 import { refreshCommandMentions } from "../services/CommandMentionService.js";
 
@@ -396,6 +408,116 @@ export class Admin {
     }
 
     await handleAdminNominationDeleteReasonModalAction(interaction);
+  }
+
+  @Slash({
+    description: "Move a GOTY Vote's nomination open, voting open or voting close date",
+    name: "goty-dates",
+  })
+  async gotyDates(
+    @SlashOption({
+      description: "Nominations open (US Eastern), e.g. 2027-01-01 or 2027-01-01 00:00",
+      name: "nominations-open",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    nominationsOpen: string | undefined,
+    @SlashOption({
+      description: "Voting opens (US Eastern; a date alone means noon)",
+      name: "voting-open",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    votingOpen: string | undefined,
+    @SlashOption({
+      description: "Voting closes (US Eastern; a date alone means the end of that day)",
+      name: "voting-close",
+      required: false,
+      type: ApplicationCommandOptionType.String,
+    })
+    votingClose: string | undefined,
+    @SlashOption({
+      description: "GOTY Vote year (defaults to the current one)",
+      name: "year",
+      required: false,
+      type: ApplicationCommandOptionType.Integer,
+      minValue: 2000,
+      maxValue: 2999,
+    })
+    year: number | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    if (!(await isAdmin(interaction))) return;
+
+    await handleGotyDates(interaction, year, {
+      nominationsOpenAt: nominationsOpen,
+      votingOpensAt: votingOpen,
+      votingClosesAt: votingClose,
+    });
+  }
+
+  @Slash({
+    description: "Pick the winner of a GOTY Vote Award whose runoff tied",
+    name: "goty-tie",
+  })
+  async gotyTie(
+    @SlashOption({
+      description: "GOTY Vote year (defaults to the current one)",
+      name: "year",
+      required: false,
+      type: ApplicationCommandOptionType.Integer,
+      minValue: 2000,
+      maxValue: 2999,
+    })
+    year: number | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
+    if (!(await isAdmin(interaction))) return;
+
+    await handleGotyTie(interaction, year);
+  }
+
+  @SelectMenuComponent({ id: GOTY_TIE_SELECT_ID_PATTERN })
+  async handleAdminGotyTieSelect(interaction: StringSelectMenuInteraction): Promise<void> {
+    if (!(await isAdmin(interaction))) return;
+    await handleGotyTieSelect(interaction);
+  }
+
+  @Slash({
+    description: "Delete a Game of the Year nomination, with a reason",
+    name: "goty-delete-nom",
+  })
+  async gotyDeleteNomination(
+    @SlashOption({
+      autocomplete: (interaction) => autocompleteGotyNomination(interaction),
+      description: "Nomination to delete (game and nominator)",
+      name: "nomination",
+      required: true,
+      type: ApplicationCommandOptionType.String,
+    })
+    nomination: string,
+    @SlashOption({
+      description: "GOTY Vote year (defaults to the current one)",
+      name: "year",
+      required: false,
+      type: ApplicationCommandOptionType.Integer,
+      minValue: 2000,
+      maxValue: 2999,
+    })
+    year: number | undefined,
+    interaction: CommandInteraction,
+  ): Promise<void> {
+    // Not deferred: the reason modal must be the first response.
+    if (!(await isAdmin(interaction))) return;
+    await handleGotyDeleteNomination(interaction, year, nomination);
+  }
+
+  @ModalComponent({ id: GOTY_NOM_DEL_MODAL_ID_PATTERN })
+  async handleAdminGotyNomDeleteModal(interaction: ModalSubmitInteraction): Promise<void> {
+    if (!(await isAdmin(interaction))) return;
+    await handleGotyDeleteNominationModal(interaction);
   }
 
   @Slash({ description: "Add a new GOTM round", name: "add-gotm" })
