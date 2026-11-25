@@ -34,7 +34,7 @@ import {
   buildRefreshedNominationList,
   postNominationChange,
 } from "../functions/NominationAdminHelpers.js";
-import { gotyAdminApi } from "../classes/GotyVoteAdmin.js";
+import { gotyAdminApi } from "./GotyVoteApi.js";
 import {
   buildGotyNominationDeletedNotice,
   postGotyNominationChange,

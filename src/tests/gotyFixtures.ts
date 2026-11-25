@@ -15,4 +15,6 @@ export const UNUSED_GOTY_API: IGotyVoteApi = {
   nominate: async () => unexpected("nominate"),
   withdrawNomination: async () => unexpected("withdrawNomination"),
   eligibility: async () => unexpected("eligibility"),
+  moveDates: async () => unexpected("moveDates"),
+  resolveTie: async () => unexpected("resolveTie"),
 };

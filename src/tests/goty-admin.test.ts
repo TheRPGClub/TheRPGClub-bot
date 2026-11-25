@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AxiosError, AxiosHeaders } from "axios";
+import { UNUSED_GOTY_API } from "./gotyFixtures.js";
 import {
   buildGotyDatesBody,
+  createGotyAdminApi,
   mapGotyVoteAdminView,
-  type GotyAward,
+  type GotyAwardKey,
   type IGotyAdminApi,
   type IGotyDateChanges,
-  type IGotyNomination,
+  type IGotyAdminNomination,
   type IGotyVoteAdminView,
-} from "../classes/GotyVoteAdmin.js";
+  type IGotyVoteForAdmin,
+} from "../services/GotyVoteApi.js";
 import {
   buildGotyNominationListText,
   buildGotyTiePrompt,
@@ -48,7 +51,7 @@ function view(overrides: Partial<IGotyVoteAdminView> = {}): IGotyVoteAdminView {
   };
 }
 
-const NOMINATIONS: IGotyNomination[] = [
+const NOMINATIONS: IGotyAdminNomination[] = [
   { id: 11, year: 2026, userId: "u1", gameId: 100, gameTitle: "Clair Obscur", userName: "Ada" },
   { id: 12, year: 2026, userId: "u2", gameId: 100, gameTitle: "Clair Obscur", userName: "Bo" },
   { id: 13, year: 2026, userId: "u2", gameId: 200, gameTitle: "Hades II", userName: "Bo" },
@@ -75,7 +78,7 @@ function fakeApi(options: {
   tieError?: unknown;
   deleteResult?: boolean;
   deleteError?: unknown;
-  nominations?: IGotyNomination[];
+  nominations?: IGotyAdminNomination[];
 } = {}): IGotyAdminApi & { calls: Call[] } {
   const calls: Call[] = [];
   let nominations = options.nominations ?? NOMINATIONS;
@@ -95,7 +98,7 @@ function fakeApi(options: {
       if (options.moveError) throw options.moveError;
       return view({ year, name: `GOTY Vote ${year}`, ...changes });
     },
-    resolveTie: async (year, award: GotyAward, gameId) => {
+    resolveTie: async (year, award: GotyAwardKey, gameId) => {
       calls.push(["resolveTie", year, award, gameId]);
       if (options.tieError) throw options.tieError;
       return view({
@@ -223,7 +226,7 @@ test("no GOTY Vote at all says so", async () => {
 // Ties
 // ---------------------------------------------------------------------------
 
-const AWARD_PAYLOAD = {
+const AWARD_PAYLOAD: IGotyVoteForAdmin = {
   year: 2026,
   name: "GOTY Vote 2026",
   phase: "tie",
@@ -398,4 +401,23 @@ test("the nomination list groups nominators per game", () => {
       "1. Clair Obscur (<@u1>, <@u2>)\n2. Hades II (<@u2>)",
   );
   assert.match(buildGotyNominationListText(2026, []), /No nominations yet\./);
+});
+
+test("the admin view reads the one GOTY client; delete is the withdraw", async () => {
+  const calls: unknown[][] = [];
+  const api = createGotyAdminApi({
+    ...UNUSED_GOTY_API,
+    getVote: async (...args) => {
+      calls.push(["getVote", ...args]);
+      return { ...AWARD_PAYLOAD, cap: 1 } as never;
+    },
+    withdrawNomination: async (...args) => {
+      calls.push(["withdrawNomination", ...args]);
+      return false;
+    },
+  });
+  const vote = await api.getVote(2026);
+  assert.equal(vote?.ties[0]?.award, "game_of_the_year");
+  assert.equal(await api.deleteNomination(2026, 11), false);
+  assert.deepEqual(calls, [["getVote", 2026], ["withdrawNomination", 2026, 11]]);
 });

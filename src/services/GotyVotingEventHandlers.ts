@@ -2,7 +2,7 @@ import { AttachmentBuilder, type Client, type ContainerBuilder } from "discord.j
 import {
   gotyAdminApi,
   type IGotyAdminApi,
-} from "../classes/GotyVoteAdmin.js";
+} from "./GotyVoteApi.js";
 import {
   parseGotyEventPayload,
   type IGotyEventAward,

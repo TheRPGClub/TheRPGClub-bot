@@ -91,6 +91,7 @@ import {
 } from "../functions/GotyAdminHelpers.js";
 import { type AdminHelpTopicId } from "./admin/admin.types.js";
 import { refreshCommandMentions } from "../services/CommandMentionService.js";
+import { GOTY_YEAR_MAX, GOTY_YEAR_MIN } from "./goty/goty-year.utils.js";
 
 @Discord()
 @SlashGroup({
@@ -441,8 +442,8 @@ export class Admin {
       name: "year",
       required: false,
       type: ApplicationCommandOptionType.Integer,
-      minValue: 2000,
-      maxValue: 2999,
+      minValue: GOTY_YEAR_MIN,
+      maxValue: GOTY_YEAR_MAX,
     })
     year: number | undefined,
     interaction: CommandInteraction,
@@ -467,8 +468,8 @@ export class Admin {
       name: "year",
       required: false,
       type: ApplicationCommandOptionType.Integer,
-      minValue: 2000,
-      maxValue: 2999,
+      minValue: GOTY_YEAR_MIN,
+      maxValue: GOTY_YEAR_MAX,
     })
     year: number | undefined,
     interaction: CommandInteraction,
@@ -503,8 +504,8 @@ export class Admin {
       name: "year",
       required: false,
       type: ApplicationCommandOptionType.Integer,
-      minValue: 2000,
-      maxValue: 2999,
+      minValue: GOTY_YEAR_MIN,
+      maxValue: GOTY_YEAR_MAX,
     })
     year: number | undefined,
     interaction: CommandInteraction,

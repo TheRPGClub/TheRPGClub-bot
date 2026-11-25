@@ -8,15 +8,15 @@ import {
 } from "discord.js";
 import { DateTime } from "luxon";
 import {
-  GOTY_AWARD_NAMES,
+  GOTY_AWARD_LABELS,
   isGotyAward,
-  type GotyAward,
+  type GotyAwardKey,
   type IGotyAdminApi,
-  type IGotyNomination,
+  type IGotyAdminNomination,
   type IGotyTie,
   type IGotyVoteAdminView,
   type IGotyVoteSchedule,
-} from "../classes/GotyVoteAdmin.js";
+} from "../services/GotyVoteApi.js";
 import { GOTM_NOMINATION_CHANNEL_ID } from "../config/nominationChannels.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
 import { DISCORD_SELECT_OPTIONS_MAX } from "../config/textLimits.js";
@@ -131,13 +131,13 @@ export async function resolveGotyYear(
 // Tie prompt
 // ---------------------------------------------------------------------------
 
-export function buildGotyTieSelectId(year: number, award: GotyAward): string {
+export function buildGotyTieSelectId(year: number, award: GotyAwardKey): string {
   return `${GOTY_TIE_SELECT_PREFIX}:${year}:${award}`;
 }
 
 export function parseGotyTieSelectId(
   customId: string,
-): { year: number; award: GotyAward } | null {
+): { year: number; award: GotyAwardKey } | null {
   const [prefix, year, award] = customId.split(":");
   if (prefix !== GOTY_TIE_SELECT_PREFIX || !/^\d{4}$/.test(year ?? "")) return null;
   if (!isGotyAward(award)) return null;
@@ -208,7 +208,7 @@ export function parseGotyNomDeleteModalId(
 
 export function buildGotyNomDeleteModal(
   year: number,
-  nomination: IGotyNomination,
+  nomination: IGotyAdminNomination,
 ): ModalBuilder {
   const title = nomination.gameTitle ?? `Game ${nomination.gameId}`;
   return new ModalBuilder()
@@ -224,14 +224,14 @@ export function buildGotyNomDeleteModal(
 }
 
 /** An autocomplete choice for a nomination: the game and who nominated it. */
-export function gotyNominationChoiceName(nomination: IGotyNomination): string {
+export function gotyNominationChoiceName(nomination: IGotyAdminNomination): string {
   const title = nomination.gameTitle ?? `Game ${nomination.gameId}`;
   const who = nomination.userName ?? nomination.userId;
   return truncateWithEllipsis(`${title} (${who})`, 100);
 }
 
 export function filterGotyNominationChoices(
-  nominations: IGotyNomination[],
+  nominations: IGotyAdminNomination[],
   query: string,
 ): { name: string; value: string }[] {
   const needle = query.trim().toLowerCase();
@@ -261,9 +261,9 @@ export function buildGotyNominationDeletedNotice(
 /** The year's Game of the Year nominations, one line per game with its nominators. */
 export function buildGotyNominationListText(
   year: number,
-  nominations: IGotyNomination[],
+  nominations: IGotyAdminNomination[],
 ): string {
-  const heading = `## GOTY Vote ${year}: ${GOTY_AWARD_NAMES.game_of_the_year} nominations`;
+  const heading = `## GOTY Vote ${year}: ${GOTY_AWARD_LABELS.game_of_the_year} nominations`;
   if (nominations.length === 0) return `${heading}\nNo nominations yet.`;
   const byGame = new Map<number, { title: string; userIds: string[] }>();
   for (const nomination of nominations) {
@@ -286,7 +286,7 @@ export async function postGotyNominationChange(
   client: Client,
   year: number,
   content: string,
-  nominations: IGotyNomination[],
+  nominations: IGotyAdminNomination[],
   featureState?: FeatureState | null,
 ): Promise<void> {
   const channelId = await routeFeaturePostFor(

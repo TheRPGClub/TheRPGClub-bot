@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AttachmentBuilder, type Client } from "discord.js";
-import type { IGotyVoteAdminView } from "../classes/GotyVoteAdmin.js";
+import type { IGotyVoteAdminView } from "../services/GotyVoteApi.js";
 import { parseGotyEventPayload } from "../classes/GotyEventPayload.js";
 import type {
   GotyVotingEventKind,

@@ -2,13 +2,15 @@ import {
   apiDelete,
   apiGet,
   apiGetOrThrow,
+  apiPatchOrThrow,
   apiPostOrThrow,
 } from "./RpgClubApiClient.js";
 
-// The GOTY Vote endpoints (spec api#471) the bot's /goty reads and writes. Field names
-// follow the API's swagger (GotyVoteSummary, GotyVote, GotyAward, GotyVoteCastResult), so
-// the shapes below are the wire shapes. Every /goty subcommand shares this client; each
-// ticket adds the endpoints it needs (nominations, results, admin) to IGotyVoteApi.
+// The GOTY Vote endpoints (spec api#471) the bot reads and writes: the one GOTY API client
+// and type module. Field names follow the API's swagger (GotyVoteSummary, GotyVote,
+// GotyAward, GotyVoteCastResult), so the shapes below are the wire shapes. /goty uses
+// them directly; /admin's GOTY actions and the outbox tie prompt read them through
+// gotyAdminApi (end of file), a camelCase view over the same client.
 
 /** The three Awards, in the order the API lists them. */
 export const GOTY_AWARDS = ["gotm", "nr_gotm", "game_of_the_year"] as const;
@@ -21,8 +23,12 @@ export const GOTY_AWARD_LABELS: Readonly<Record<GotyAwardKey, string>> = {
   game_of_the_year: "Game of the Year",
 };
 
+export function isGotyAward(value: unknown): value is GotyAwardKey {
+  return typeof value === "string" && (GOTY_AWARDS as readonly string[]).includes(value);
+}
+
 export function parseGotyAward(value: string): GotyAwardKey | null {
-  return (GOTY_AWARDS as readonly string[]).includes(value) ? (value as GotyAwardKey) : null;
+  return isGotyAward(value) ? value : null;
 }
 
 export type GotyVotePhase =
@@ -164,8 +170,11 @@ export interface IGotyVoteCastResult {
 export interface IGotyVoteApi {
   /** Every year's GOTY Vote, newest first. */
   listVotes(): Promise<IGotyVoteSummary[]>;
-  /** One year's GOTY Vote with `userId`'s own votes; null for a year with none. */
-  getVote(year: number, userId: string): Promise<IGotyVote | null>;
+  /**
+   * One year's GOTY Vote, with `userId`'s own votes when given; null for a year with
+   * none (404).
+   */
+  getVote(year: number, userId?: string): Promise<IGotyVote | null>;
   /**
    * Casts or toggles `userId`'s vote in an Award. Throws the AxiosError on a refusal
    * (422 voting_closed, not_a_candidate, uncontested, not_in_runoff, ...).
@@ -191,6 +200,33 @@ export interface IGotyVoteApi {
   withdrawNomination(year: number, nominationId: number): Promise<boolean>;
   /** Whether the game may be nominated for the year. Throws on any failure. */
   eligibility(gameId: number, year: number): Promise<IGotyEligibility>;
+  /** PATCH /goty_votes/:year: moves the dates given. Throws the AxiosError on a refusal. */
+  moveDates(year: number, changes: IGotyDateChanges): Promise<IGotyVote>;
+  /** Records an admin's pick for an Award's tie. Throws the AxiosError on a refusal. */
+  resolveTie(year: number, award: GotyAwardKey, gameId: number): Promise<IGotyVote>;
+}
+
+/** The dates an admin moves; only the ones given are sent. */
+export interface IGotyDateChanges {
+  nominationsOpenAt?: Date;
+  votingOpensAt?: Date;
+  votingClosesAt?: Date;
+}
+
+/** The PATCH /goty_votes/:year body: only the dates being moved. */
+export function buildGotyDatesBody(changes: IGotyDateChanges): Record<string, string> {
+  const data: Record<string, string> = {};
+  if (changes.nominationsOpenAt) {
+    data.nominations_open_at = changes.nominationsOpenAt.toISOString();
+  }
+  if (changes.votingOpensAt) data.voting_opens_at = changes.votingOpensAt.toISOString();
+  if (changes.votingClosesAt) data.voting_closes_at = changes.votingClosesAt.toISOString();
+  return data;
+}
+
+function requireVote(payload: { data?: IGotyVote } | null, what: string): IGotyVote {
+  if (!payload?.data) throw new Error(`The API returned no GOTY Vote after ${what}.`);
+  return payload.data;
 }
 
 const GOTY_VOTES_PATH = "/api/v1/goty_votes";
@@ -204,7 +240,7 @@ export const GOTY_VOTE_API: IGotyVoteApi = {
   },
   async getVote(year, userId) {
     const payload = await apiGet<{ data: IGotyVote }>(`${GOTY_VOTES_PATH}/${year}`, {
-      params: { user_id: userId },
+      params: userId ? { user_id: userId } : {},
     });
     return payload?.data ?? null;
   },
@@ -244,4 +280,178 @@ export const GOTY_VOTE_API: IGotyVoteApi = {
     );
     return payload.data;
   },
+  async moveDates(year, changes) {
+    const payload = await apiPatchOrThrow<{ data?: IGotyVote }>(`${GOTY_VOTES_PATH}/${year}`, {
+      data: buildGotyDatesBody(changes),
+    });
+    return requireVote(payload, `moving the GOTY Vote ${year} dates`);
+  },
+  async resolveTie(year, award, gameId) {
+    const payload = await apiPostOrThrow<{ data?: IGotyVote }>(
+      `${GOTY_VOTES_PATH}/${year}/awards/${award}/resolve_tie`,
+      { data: { gamedb_game_id: gameId } },
+    );
+    return requireVote(payload, `settling the GOTY Vote ${year} tie`);
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Admin view (bot#1583): /admin's GOTY actions and the outbox tie prompt read the same
+// endpoints as a camelCase view with the ties and winners picked out.
+// ---------------------------------------------------------------------------
+
+/** A game as the admin prompts name it. */
+export interface IGotyGameRef {
+  id: number;
+  title: string;
+}
+
+export interface IGotyVoteSchedule {
+  year: number;
+  name: string;
+  phase: string;
+  nominationsOpenAt: Date;
+  votingOpensAt: Date;
+  votingClosesAt: Date;
+  decidedAt: Date | null;
+}
+
+/** An Award whose runoff tied again (or whose runoff is still open), for an admin pick. */
+export interface IGotyTie {
+  award: GotyAwardKey;
+  name: string;
+  games: IGotyGameRef[];
+}
+
+export interface IGotyWinner {
+  award: GotyAwardKey;
+  name: string;
+  game: IGotyGameRef;
+  decidedBy: string;
+}
+
+export interface IGotyVoteAdminView extends IGotyVoteSchedule {
+  ties: IGotyTie[];
+  winners: IGotyWinner[];
+}
+
+export interface IGotyAdminNomination {
+  id: number;
+  year: number;
+  userId: string;
+  gameId: number;
+  gameTitle: string | null;
+  /** The nominator's display name, for pickers; null when the API sent none. */
+  userName: string | null;
+}
+
+export interface IGotyAdminApi {
+  /** Every GOTY Vote, newest year first. */
+  listVotes(): Promise<IGotyVoteSchedule[]>;
+  /** One year's GOTY Vote; null on 404. */
+  getVote(year: number): Promise<IGotyVoteAdminView | null>;
+  /** Moves the dates given. Throws the AxiosError for every failure. */
+  moveDates(year: number, changes: IGotyDateChanges): Promise<IGotyVoteAdminView>;
+  /** Settles an Award's tie. Throws the AxiosError. */
+  resolveTie(year: number, award: GotyAwardKey, gameId: number): Promise<IGotyVoteAdminView>;
+  /** The year's nominations, oldest first. */
+  listNominations(year: number): Promise<IGotyAdminNomination[]>;
+  /** Plain delete as the service; false when it was already gone (404). */
+  deleteNomination(year: number, nominationId: number): Promise<boolean>;
+}
+
+type IGotyScheduleFields = Pick<
+  IGotyVoteSummary,
+  "year" | "name" | "phase" | "nominations_open_at" | "voting_opens_at" | "voting_closes_at" |
+    "decided_at"
+>;
+
+/** What the admin view reads of a GotyVote. */
+export type IGotyVoteForAdmin = IGotyScheduleFields & {
+  awards?: Pick<IGotyAward, "award" | "name" | "ballot" | "pending_tie" | "winner">[];
+};
+
+function gameRefTitle(game: IGotyGame | null | undefined, id: number): string {
+  return game?.title?.trim() || `Game ${id}`;
+}
+
+export function mapGotyVoteSchedule(data: IGotyScheduleFields): IGotyVoteSchedule {
+  return {
+    year: data.year,
+    name: data.name ?? `GOTY Vote ${data.year}`,
+    phase: data.phase,
+    nominationsOpenAt: new Date(data.nominations_open_at),
+    votingOpensAt: new Date(data.voting_opens_at),
+    votingClosesAt: new Date(data.voting_closes_at),
+    decidedAt: data.decided_at ? new Date(data.decided_at) : null,
+  };
+}
+
+export function mapGotyVoteAdminView(data: IGotyVoteForAdmin): IGotyVoteAdminView {
+  const ties: IGotyTie[] = [];
+  const winners: IGotyWinner[] = [];
+  for (const award of data.awards ?? []) {
+    if (!isGotyAward(award.award)) continue;
+    const name = award.name ?? GOTY_AWARD_LABELS[award.award];
+    const ballot = new Map(
+      (award.ballot ?? []).map((game) => [game.game_id, gameRefTitle(game, game.game_id)]),
+    );
+    const tied = award.pending_tie ?? [];
+    if (tied.length > 0) {
+      ties.push({
+        award: award.award,
+        name,
+        games: tied.map((id) => ({ id, title: ballot.get(id) ?? `Game ${id}` })),
+      });
+    }
+    if (award.winner) {
+      const id = award.winner.gamedb_game_id;
+      const title = award.winner.game
+        ? gameRefTitle(award.winner.game, id)
+        : ballot.get(id) ?? `Game ${id}`;
+      winners.push({
+        award: award.award,
+        name,
+        game: { id, title },
+        decidedBy: award.winner.decided_by,
+      });
+    }
+  }
+  return { ...mapGotyVoteSchedule(data), ties, winners };
+}
+
+export function mapGotyAdminNomination(data: IGotyNomination): IGotyAdminNomination {
+  return {
+    id: data.id,
+    year: data.year,
+    userId: data.user_id,
+    gameId: data.gamedb_game_id,
+    gameTitle: data.game?.title?.trim() || null,
+    userName: data.user?.global_name?.trim() || data.user?.username?.trim() || null,
+  };
+}
+
+/** The admin view over `api` (GOTY_VOTE_API by default). */
+export function createGotyAdminApi(api: IGotyVoteApi = GOTY_VOTE_API): IGotyAdminApi {
+  return {
+    async listVotes() {
+      return (await api.listVotes()).map(mapGotyVoteSchedule);
+    },
+    async getVote(year) {
+      const vote = await api.getVote(year);
+      return vote ? mapGotyVoteAdminView(vote) : null;
+    },
+    async moveDates(year, changes) {
+      return mapGotyVoteAdminView(await api.moveDates(year, changes));
+    },
+    async resolveTie(year, award, gameId) {
+      return mapGotyVoteAdminView(await api.resolveTie(year, award, gameId));
+    },
+    async listNominations(year) {
+      return (await api.listNominations(year)).map(mapGotyAdminNomination);
+    },
+    deleteNomination: (year, nominationId) => api.withdrawNomination(year, nominationId),
+  };
+}
+
+export const gotyAdminApi: IGotyAdminApi = createGotyAdminApi();

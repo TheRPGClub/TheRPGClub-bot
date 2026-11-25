@@ -9,9 +9,9 @@ import {
   gotyAdminApi,
   type IGotyAdminApi,
   type IGotyDateChanges,
-  type IGotyNomination,
+  type IGotyAdminNomination,
   type IGotyVoteAdminView,
-} from "../../classes/GotyVoteAdmin.js";
+} from "../../services/GotyVoteApi.js";
 import {
   buildGotyNomDeleteModal,
   buildGotyNominationDeletedNotice,
@@ -265,7 +265,7 @@ export async function findGotyNomination(
   api: IGotyAdminApi,
   yearOption: number | undefined,
   rawNominationId: string,
-): Promise<{ year: number; nomination: IGotyNomination } | IGotyAdminOutcome> {
+): Promise<{ year: number; nomination: IGotyAdminNomination } | IGotyAdminOutcome> {
   const nominationId = Number(rawNominationId.trim());
   if (!Number.isInteger(nominationId) || nominationId <= 0) {
     return { ok: false, text: "Pick a nomination from the list." };
@@ -307,7 +307,7 @@ export async function handleGotyDeleteNomination(
 
 export interface IGotyNominationRemoval extends IGotyAdminOutcome {
   /** Set once removed: the public notice and the list to post with it. */
-  announcement?: { year: number; content: string; nominations: IGotyNomination[] };
+  announcement?: { year: number; content: string; nominations: IGotyAdminNomination[] };
 }
 
 /**
@@ -348,7 +348,7 @@ export async function removeGotyNomination(
     nomination.gameTitle,
     reason,
   );
-  let nominations: IGotyNomination[] = [];
+  let nominations: IGotyAdminNomination[] = [];
   try {
     nominations = await api.listNominations(year);
   } catch (err: unknown) {
