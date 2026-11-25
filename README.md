@@ -73,6 +73,8 @@ These are required or commonly used by the bot. Values depend on your deployment
 - `BACKBLAZE_B2_BUCKET_ID`
 - `BACKBLAZE_B2_BUCKET_NAME`
 - `TEST_GUILD_ID`
+- `BOT_OWNER_USER_ID`: the owner's Discord user ID, DMed operational alerts (a PSN
+  login expiry). Unset skips the DM; the alert still posts in the bot-dev channel.
 
 ### Test guild mode
 
