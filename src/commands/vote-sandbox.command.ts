@@ -15,7 +15,7 @@ import {
   SlashOption,
 } from "discordx";
 import { parseNominationKind } from "../classes/Nomination.js";
-import type { VotingEventKind } from "../classes/VotingEvents.js";
+import type { RoundVotingEventKind } from "../classes/VotingEvents.js";
 import { isVotingRoundCategory } from "../classes/VotingRounds.js";
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import { safeDeferReply, safeFollowUpIfSettled } from "../functions/InteractionUtils.js";
@@ -64,7 +64,7 @@ const OUTCOME_CHOICES = [
   { name: "No votes", value: "no-votes" },
 ];
 
-const EVENT_CHOICES: Array<{ name: string; value: VotingEventKind }> = [
+const EVENT_CHOICES: Array<{ name: string; value: RoundVotingEventKind }> = [
   { name: "nomination_reminder_5d", value: "nomination_reminder_5d" },
   { name: "nomination_reminder_1d", value: "nomination_reminder_1d" },
   { name: "voting_opened", value: "voting_opened" },

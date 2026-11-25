@@ -353,6 +353,7 @@ function decidedEvent(): IVotingEvent {
   return {
     id: 9,
     roundNumber: 12,
+    gotyYear: null,
     kind: "round_decided",
     rawKind: "round_decided",
     payload: {},

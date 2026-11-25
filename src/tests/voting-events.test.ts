@@ -4,8 +4,10 @@ import type { Client } from "discord.js";
 import {
   mapVotingEventApiData,
   mapVotingEventClaimResponse,
+  votingEventScope,
+  type IGotyVotingEvent,
   type IVotingEvent,
-  type VotingEventKind,
+  type RoundVotingEventKind,
 } from "../classes/VotingEvents.js";
 import {
   createVotingEventDeliveryState,
@@ -23,10 +25,16 @@ import {
 
 const client = {} as Client;
 
-function event(id: number, roundNumber: number, kind: VotingEventKind, attempts = 1): IVotingEvent {
+function event(
+  id: number,
+  roundNumber: number,
+  kind: RoundVotingEventKind,
+  attempts = 1,
+): IVotingEvent {
   return {
     id,
     roundNumber,
+    gotyYear: null,
     kind,
     rawKind: kind,
     payload: {},
@@ -185,6 +193,96 @@ test("mapVotingEventApiData marks a kind this bot does not know as unknown", () 
 
   assert.equal(mapped.kind, "unknown");
   assert.equal(mapped.rawKind, "something_new");
+});
+
+test("mapVotingEventApiData reads a GOTY Vote event by its year", () => {
+  const mapped = mapVotingEventApiData({
+    id: 21,
+    round_number: null,
+    goty_year: 2026,
+    kind: "goty_decided",
+    payload: { year: 2026 },
+    available_at: "2027-01-19T05:00:00.000Z",
+    expires_at: null,
+    attempts: 1,
+  });
+
+  assert.equal(mapped.kind, "goty_decided");
+  assert.equal(mapped.gotyYear, 2026);
+  assert.equal(mapped.roundNumber, null);
+  assert.equal(votingEventScope(mapped), "GOTY Vote 2026");
+});
+
+test("mapVotingEventApiData keeps a round event's round and a null goty_year", () => {
+  const mapped = mapVotingEventApiData({
+    id: 22,
+    round_number: 143,
+    goty_year: null,
+    kind: "voting_opened",
+    payload: {},
+    available_at: "2026-09-28T04:00:00.000Z",
+    expires_at: null,
+    attempts: 1,
+  });
+
+  assert.equal(mapped.kind, "voting_opened");
+  assert.equal(mapped.roundNumber, 143);
+  assert.equal(mapped.gotyYear, null);
+  assert.equal(votingEventScope(mapped), "Round 143");
+});
+
+test("mapVotingEventApiData reads a kind without the round or year it needs as unknown", () => {
+  const roundKindNoRound = mapVotingEventApiData({
+    id: 23,
+    round_number: null,
+    goty_year: 2026,
+    kind: "voting_opened",
+    payload: {},
+    available_at: "2026-09-28T04:00:00.000Z",
+    expires_at: null,
+    attempts: 1,
+  });
+  const gotyKindNoYear = mapVotingEventApiData({
+    id: 24,
+    round_number: 143,
+    kind: "goty_decided",
+    payload: {},
+    available_at: "2026-09-28T04:00:00.000Z",
+    expires_at: null,
+    attempts: 1,
+  });
+
+  assert.equal(roundKindNoRound.kind, "unknown");
+  assert.equal(gotyKindNoYear.kind, "unknown");
+  assert.equal(
+    votingEventScope({ ...roundKindNoRound, roundNumber: null, gotyYear: null }),
+    "event 23",
+  );
+});
+
+test("processVotingEvents holds a GOTY Vote's later events back, not the round's", async () => {
+  const goty = (id: number, kind: IGotyVotingEvent["kind"]): IVotingEvent => ({
+    id,
+    roundNumber: null,
+    gotyYear: 2026,
+    kind,
+    rawKind: kind,
+    payload: {},
+    availableAt: new Date("2027-01-19T05:00:00.000Z"),
+    expiresAt: null,
+    attempts: 1,
+  });
+  const r = recorder(new Set([1]));
+  await processVotingEvents(
+    client,
+    [goty(1, "goty_runoff_closed"), event(2, 143, "voting_opened"), goty(3, "goty_decided")],
+    r.handle,
+    r.ack,
+    r.state,
+  );
+
+  assert.deepEqual(r.handled, [1, 2]);
+  assert.deepEqual(r.acked, [2]);
 });
 
 test("buildNominationReminderText points at the vote with Discord timestamps", () => {

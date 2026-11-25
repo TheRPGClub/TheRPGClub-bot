@@ -11,7 +11,7 @@ import type {
   IVoteTallyRow,
   VoteBallot,
 } from "../classes/Vote.js";
-import type { VotingEventKind } from "../classes/VotingEvents.js";
+import type { RoundVotingEventKind } from "../classes/VotingEvents.js";
 import {
   toVotingRoundCategory,
   type IVotingRound,
@@ -101,7 +101,7 @@ export interface ISandboxVote {
 
 export interface ISandboxQueuedEvent {
   id: number;
-  kind: VotingEventKind;
+  kind: RoundVotingEventKind;
 }
 
 export interface IVotingSandboxState {
@@ -553,12 +553,12 @@ export function seedSandboxOutcome(
   });
 }
 
-function enqueue(state: IVotingSandboxState, kind: VotingEventKind): void {
+function enqueue(state: IVotingSandboxState, kind: RoundVotingEventKind): void {
   state.outbox.push({ id: state.nextId++, kind });
 }
 
 /** Queues any event by hand, whatever the phase, to exercise the handlers' skips. */
-export function queueSandboxEvent(state: IVotingSandboxState, kind: VotingEventKind): void {
+export function queueSandboxEvent(state: IVotingSandboxState, kind: RoundVotingEventKind): void {
   enqueue(state, kind);
 }
 

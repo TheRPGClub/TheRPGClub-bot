@@ -8,7 +8,7 @@ import {
   type NominationKind,
 } from "../../classes/Nomination.js";
 import NrGotm from "../../classes/NrGotm.js";
-import type { VotingEventKind } from "../../classes/VotingEvents.js";
+import type { RoundVotingEventKind } from "../../classes/VotingEvents.js";
 import { toVotingRoundCategory } from "../../classes/VotingRounds.js";
 import { IS_TEST_MODE, TEST_GUILD_ID } from "../../config/testMode.js";
 import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
@@ -333,7 +333,7 @@ export async function handleSandboxClose(interaction: CommandInteraction): Promi
 
 export async function handleSandboxEvent(
   interaction: CommandInteraction,
-  kind: VotingEventKind | null,
+  kind: RoundVotingEventKind | null,
 ): Promise<void> {
   if (!kind) {
     await safeReply(interaction, buildTextReply("Please choose a voting event kind.", true));

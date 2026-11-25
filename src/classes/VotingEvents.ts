@@ -1,6 +1,6 @@
 import { apiPostOrThrow } from "../services/RpgClubApiClient.js";
 
-export type VotingEventKind =
+export type RoundVotingEventKind =
   | "nomination_reminder_5d"
   | "nomination_reminder_1d"
   | "voting_opened"
@@ -10,7 +10,20 @@ export type VotingEventKind =
   | "tie_pending"
   | "round_decided";
 
-const VOTING_EVENT_KINDS: ReadonlySet<string> = new Set<VotingEventKind>([
+/** A GOTY Vote's posts (api#475): the event names its year, not a round. */
+export type GotyVotingEventKind =
+  | "goty_nominations_opened"
+  | "goty_nomination_reminder_5d"
+  | "goty_nomination_reminder_1d"
+  | "goty_voting_opened"
+  | "goty_runoff_opened"
+  | "goty_runoff_closed"
+  | "goty_tie_pending"
+  | "goty_decided";
+
+export type VotingEventKind = RoundVotingEventKind | GotyVotingEventKind;
+
+const ROUND_VOTING_EVENT_KINDS: ReadonlySet<string> = new Set<RoundVotingEventKind>([
   "nomination_reminder_5d",
   "nomination_reminder_1d",
   "voting_opened",
@@ -21,21 +34,27 @@ const VOTING_EVENT_KINDS: ReadonlySet<string> = new Set<VotingEventKind>([
   "round_decided",
 ]);
 
-function isVotingEventKind(kind: string): kind is VotingEventKind {
-  return VOTING_EVENT_KINDS.has(kind);
+const GOTY_VOTING_EVENT_KINDS: ReadonlySet<string> = new Set<GotyVotingEventKind>([
+  "goty_nominations_opened",
+  "goty_nomination_reminder_5d",
+  "goty_nomination_reminder_1d",
+  "goty_voting_opened",
+  "goty_runoff_opened",
+  "goty_runoff_closed",
+  "goty_tie_pending",
+  "goty_decided",
+]);
+
+function isRoundVotingEventKind(kind: string): kind is RoundVotingEventKind {
+  return ROUND_VOTING_EVENT_KINDS.has(kind);
 }
 
-/**
- * A Discord post the API's round lifecycle calls for, claimed from its outbox.
- * The claim is a lease: ack after posting, or the event is handed out again
- * once the lease runs out. `payload` carries ids only; handlers read the rest
- * from the regular endpoints.
- */
-export interface IVotingEvent {
+function isGotyVotingEventKind(kind: string): kind is GotyVotingEventKind {
+  return GOTY_VOTING_EVENT_KINDS.has(kind);
+}
+
+interface IVotingEventBase {
   id: number;
-  roundNumber: number;
-  /** "unknown" for a kind this bot predates; `rawKind` keeps what the API sent. */
-  kind: VotingEventKind | "unknown";
   rawKind: string;
   payload: Record<string, unknown>;
   availableAt: Date;
@@ -43,9 +62,41 @@ export interface IVotingEvent {
   attempts: number;
 }
 
+/**
+ * A GOTM / NR-GOTM round's post. `payload` carries ids only; handlers read the rest from
+ * the regular endpoints.
+ */
+export interface IRoundVotingEvent extends IVotingEventBase {
+  kind: RoundVotingEventKind;
+  roundNumber: number;
+  gotyYear: null;
+}
+
+/** A GOTY Vote's post. `payload` is self-contained (IGotyEventPayload). */
+export interface IGotyVotingEvent extends IVotingEventBase {
+  kind: GotyVotingEventKind;
+  roundNumber: null;
+  gotyYear: number;
+}
+
+/** A kind this bot predates (or one without the round or year it needs). */
+export interface IUnknownVotingEvent extends IVotingEventBase {
+  kind: "unknown";
+  roundNumber: number | null;
+  gotyYear: number | null;
+}
+
+/**
+ * A Discord post the API's voting lifecycle calls for, claimed from its outbox: a round's
+ * (round_number set) or a GOTY Vote's (goty_year set). The claim is a lease: ack after
+ * posting, or the event is handed out again once the lease runs out.
+ */
+export type IVotingEvent = IRoundVotingEvent | IGotyVotingEvent | IUnknownVotingEvent;
+
 type VotingEventApiData = {
   id: number;
-  round_number: number;
+  round_number?: number | null;
+  goty_year?: number | null;
   kind: string;
   payload: Record<string, unknown> | null;
   available_at: string;
@@ -53,17 +104,42 @@ type VotingEventApiData = {
   attempts: number;
 };
 
+function optionalNumber(value: number | null | undefined): number | null {
+  return value === null || value === undefined ? null : Number(value);
+}
+
 export function mapVotingEventApiData(d: VotingEventApiData): IVotingEvent {
-  return {
+  const base: IVotingEventBase = {
     id: Number(d.id),
-    roundNumber: Number(d.round_number),
-    kind: isVotingEventKind(d.kind) ? d.kind : "unknown",
     rawKind: d.kind,
     payload: d.payload ?? {},
     availableAt: new Date(d.available_at),
     expiresAt: d.expires_at ? new Date(d.expires_at) : null,
     attempts: Number(d.attempts),
   };
+  const roundNumber = optionalNumber(d.round_number);
+  const gotyYear = optionalNumber(d.goty_year);
+  if (isRoundVotingEventKind(d.kind) && roundNumber !== null) {
+    return { ...base, kind: d.kind, roundNumber, gotyYear: null };
+  }
+  if (isGotyVotingEventKind(d.kind) && gotyYear !== null) {
+    return { ...base, kind: d.kind, roundNumber: null, gotyYear };
+  }
+  return { ...base, kind: "unknown", roundNumber, gotyYear };
+}
+
+export function isGotyVotingEvent(event: IVotingEvent): event is IGotyVotingEvent {
+  return event.kind !== "unknown" && event.gotyYear !== null;
+}
+
+/**
+ * What an event belongs to, for logs and for holding back its later events after a
+ * failure: "Round 143", "GOTY Vote 2026", or the event itself when it names neither.
+ */
+export function votingEventScope(event: IVotingEvent): string {
+  if (event.roundNumber !== null) return `Round ${event.roundNumber}`;
+  if (event.gotyYear !== null) return `GOTY Vote ${event.gotyYear}`;
+  return `event ${event.id}`;
 }
 
 /** One claim from the outbox. */
