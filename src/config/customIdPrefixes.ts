@@ -101,3 +101,9 @@ export const GAME_LIST_PAGE_PREFIX = `${GAME_LIST_CUSTOM_ID_PREFIX}page-v1`;
 export const GAME_LIST_ADD_PREFIX = `${GAME_LIST_CUSTOM_ID_PREFIX}add-v1`;
 /** The game view's Add to a Game List button (a gamedb action), with the game ID. */
 export const GAMEDB_LIST_ACTION_PREFIX = "gamedb-action:list:";
+
+// Playtime (spec api#457). Ungated: Playtime is part of every game page.
+/** The /playtime add receipt's Undo, with the member, game, platform and earlier minutes. */
+export const PLAYTIME_UNDO_PREFIX = "playtime-undo-v1";
+/** The game view's My Playtime button (a gamedb action), with the game ID. */
+export const GAMEDB_PLAYTIME_ACTION_PREFIX = "gamedb-action:playtime:";
