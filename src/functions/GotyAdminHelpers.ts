@@ -300,12 +300,10 @@ export function buildGotyNominationChangeComponents(
   content: string,
   nominations: IGotyAdminNomination[] | null,
 ): ContainerBuilder[] {
-  return [
-    buildTextContainer(safeV2TextContent(content, 3500)),
-    ...(nominations
-      ? [buildTextContainer(safeV2TextContent(buildGotyNominationListText(year, nominations), 3500))]
-      : []),
-  ];
+  const notice = buildTextContainer(safeV2TextContent(content, 3500));
+  if (!nominations) return [notice];
+  const list = buildGotyNominationListText(year, nominations);
+  return [notice, buildTextContainer(safeV2TextContent(list, 3500))];
 }
 
 /**
