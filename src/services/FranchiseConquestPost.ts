@@ -18,6 +18,7 @@ import {
   type IComponentsV2View,
 } from "../functions/ComponentsV2Utils.js";
 import { joinWithAnd } from "../utilities/TextUtils.js";
+import { formatPlaytime } from "./Playtime.js";
 
 // The Conquest post (spec api#457, bot#1574, design pick 4B): a Components V2 card in the
 // completions channel, right after the completion post, when a member Conquers a Franchise
@@ -123,10 +124,9 @@ export function parseFranchiseConquest(payload: Record<string, unknown>): IFranc
   };
 }
 
-/** Playtime as the website writes it: "812 h", "1,240 h", or "45 m" under an hour. */
+/** The card's Playtime in whole hours: "812 h", "1,240 h", or "45 m" under an hour. */
 export function formatConquestPlaytime(minutes: number): string {
-  if (minutes < 60) return `${minutes} m`;
-  return `${Math.round(minutes / 60).toLocaleString("en-US")} h`;
+  return formatPlaytime(minutes < 60 ? minutes : Math.round(minutes / 60) * 60);
 }
 
 /** "25 Nov 2026": the day it was Conquered, in the club's time zone. */
