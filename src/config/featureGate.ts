@@ -42,6 +42,12 @@ export const GAME_LISTS_FEATURE_KEY = "game_lists";
  */
 export const FRANCHISE_PROGRESS_FEATURE_KEY = "franchise_progress";
 
+/**
+ * The GOTY Vote (spec api#471): a core Feature with its own flag, starting in Preview.
+ * bot#1583 routes its nomination removal notices by it.
+ */
+export const GOTY_VOTE_FEATURE_KEY = "goty_vote";
+
 /** Top-level slash command or context menu name -> Feature key. */
 export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   gamedb: "game_index",
@@ -158,4 +164,5 @@ export const POST_FEATURE_KEYS = {
   challenges: CHALLENGES_FEATURE_KEY,
   clubCodex: CLUB_CODEX_FEATURE_KEY,
   franchiseConquest: FRANCHISE_PROGRESS_FEATURE_KEY,
+  gotyVote: GOTY_VOTE_FEATURE_KEY,
 } as const;

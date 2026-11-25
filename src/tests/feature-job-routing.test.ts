@@ -45,6 +45,7 @@ function recordingSurface(): IBotJobSurface & { calls: Call[] } {
     fetchSuggestion: async () => ({ createdBy: "author-1", createdByName: "Ada" }),
     sendChannelMessage: record("sendChannelMessage"),
     announceNominationChange: record("announceNominationChange"),
+    announceGotyNominationChange: record("announceGotyNominationChange"),
     fetchCompletionForUser: async () => ({
       completionType: "Main Story",
       completedAt: null,
@@ -163,10 +164,24 @@ const NOMINATION_DELETED = {
   reason: "Duplicate",
 };
 
+const GOTY_NOMINATION_DELETED = {
+  year: 2026,
+  user_id: "u1",
+  game_title: "Hades II",
+  deleted_by_user_id: "admin-1",
+  reason: "Released in 2024",
+};
+
 const STATE_PASSING_JOBS = [
   ["suggestion_submitted", "suggestions", { suggestion_id: 7, created_by: null }, null],
   ["completion_announce", "game_completions", COMPLETION, "announceCompletion"],
   ["nomination_deleted", "voting_gotm", NOMINATION_DELETED, "announceNominationChange"],
+  [
+    "goty_nomination_deleted",
+    "goty_vote",
+    GOTY_NOMINATION_DELETED,
+    "announceGotyNominationChange",
+  ],
   ["giveaway_hub_refresh", "giveaways", { reason: "claim", key_id: 3 }, "refreshGiveawayHub"],
 ] as const;
 
