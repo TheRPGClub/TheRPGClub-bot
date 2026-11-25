@@ -48,6 +48,7 @@ import { featureGateSource } from "../../services/FeatureAccessService.js";
 import { FEATURE_ACCESS_WAIT_MS } from "../../config/cacheDefaults.js";
 import { GAME_LISTS_FEATURE_KEY } from "../../config/featureGate.js";
 import { buildGameDbListActionId } from "../../functions/GameListCustomIds.js";
+import { GAMEDB_PLAYTIME_ACTION_PREFIX } from "../../config/customIdPrefixes.js";
 
 export type GameProfileRenderContext = {
   guildId?: string;
@@ -195,6 +196,13 @@ export function buildGameProfileActionRow(
   primaryButtons.push(buildActionButton({
     customId: `gamedb-action:collection:${gameId}`,
     label: "Add to Collection",
+    style: ButtonStyle.Secondary,
+  }));
+  // My Playtime (bot#1572, design 6B): the fifth button, for everyone (Playtime is
+  // ungated). Whoever presses it gets their own breakdown privately.
+  primaryButtons.push(buildActionButton({
+    customId: `${GAMEDB_PLAYTIME_ACTION_PREFIX}${gameId}`,
+    label: "My Playtime",
     style: ButtonStyle.Secondary,
   }));
   rows.push(buildButtonRow(...primaryButtons));

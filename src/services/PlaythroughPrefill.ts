@@ -1,10 +1,10 @@
-import { apiGet } from "./RpgClubApiClient.js";
+import { PLAYTIME_API, withinDeadline, type IGamePlaytime } from "./PlaytimeApi.js";
 import { logError } from "../utilities/LogUtils.js";
 
 /**
  * Final playtime prefill from the member's open Playthrough (spec api#457, bot#1573).
  *
- * The completion flows read `GET /users/:id/games/:game_id/playtime` and offer the open
+ * The completion flows read `GET /users/:id/games/:game_id/playtime` (PlaytimeApi `find`) and offer the open
  * Playthrough's time, in hours, as the final playtime. The member can change it. The API
  * also fills an empty `final_playtime_hrs` from the same Playthrough on create, so a lookup
  * that fails or is slow just leaves the field blank.
@@ -13,13 +13,11 @@ import { logError } from "../utilities/LogUtils.js";
 /** Modal flows must answer within Discord's 3 second window, so the lookup is capped. */
 export const PLAYTHROUGH_PREFILL_TIMEOUT_MS = 1_500;
 
-type PlaytimeDocument = {
-  data?: {
-    playthrough?: { minutes?: number | null } | null;
-  } | null;
-};
+/** The part of a member's Playtime document the prefill reads. */
+type PlaytimeDocument = { playthrough?: Pick<IGamePlaytime, "playthrough">["playthrough"] };
 
-type PlaytimeGetter = (path: string) => Promise<PlaytimeDocument | null>;
+/** Reads a member's Playtime for a game: null on a 404. The Playtime API client's `find`. */
+type PlaytimeGetter = (userId: string, gameId: number) => Promise<PlaytimeDocument | null>;
 
 /** Playthrough minutes as hours with 2 decimals, as the API fills `final_playtime_hrs`. */
 export function playthroughMinutesToHours(minutes: number): number {
@@ -28,7 +26,7 @@ export function playthroughMinutesToHours(minutes: number): number {
 
 /** The open Playthrough's time in hours, or null when none is open. */
 export function prefillHoursFromPlaytime(doc: PlaytimeDocument | null): number | null {
-  const minutes = doc?.data?.playthrough?.minutes;
+  const minutes = doc?.playthrough?.minutes;
   if (typeof minutes !== "number" || !Number.isFinite(minutes) || minutes < 0) {
     return null;
   }
@@ -38,22 +36,6 @@ export function prefillHoursFromPlaytime(doc: PlaytimeDocument | null): number |
 /** The text a modal input shows for a prefill, or undefined to leave it blank. */
 export function prefillInputValue(hours: number | null | undefined): string | undefined {
   return hours == null ? undefined : String(hours);
-}
-
-function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | null> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => resolve(null), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err: unknown) => {
-        clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
 }
 
 export const playthroughPrefill = {
@@ -66,13 +48,12 @@ export const playthroughPrefill = {
     gameId: number,
     options: { timeoutMs?: number; get?: PlaytimeGetter } = {},
   ): Promise<number | null> {
-    const get: PlaytimeGetter = options.get ?? ((path) => apiGet<PlaytimeDocument>(path));
-    const path = `/api/v1/users/${userId}/games/${gameId}/playtime`;
+    const get: PlaytimeGetter = options.get ?? ((user, game) => PLAYTIME_API.find(user, game));
     try {
-      const request = get(path);
+      const request = get(userId, gameId);
       const doc = options.timeoutMs == null
         ? await request
-        : await withDeadline(request, options.timeoutMs);
+        : await withinDeadline(request, options.timeoutMs);
       return prefillHoursFromPlaytime(doc);
     } catch (err: unknown) {
       logError("PlaythroughPrefill.fetchHours", err);

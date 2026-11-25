@@ -358,11 +358,11 @@ test("Add to a Game List: with no list yet, a link to start one", async () => {
   assert.match(buttonsOf(result.notice.components)[0]!.url ?? "", /\/lists\/new$/);
 });
 
-test("game view: Add to a Game List sits on a row of its own under the first row's four",
+test("game view: Add to a Game List sits on a row of its own under the first row's five",
   () => {
     const rows = buildGameProfileActionRow(12, "https://youtu.be/x").map((r) => r.toJSON());
     assert.equal(rows.length, 2);
-    assert.equal(rows[0]!.components.length, 4);
+    assert.equal(rows[0]!.components.length, 5);
     const [button] = buttonsOf(rows[1]);
     assert.equal(button!.label, "Add to a Game List");
     assert.equal(button!.customId, "gamedb-action:list:12");
