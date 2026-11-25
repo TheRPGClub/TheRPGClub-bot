@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AxiosError, AxiosHeaders } from "axios";
-import { UNUSED_GOTY_API } from "./gotyFixtures.js";
+import { apiCurrentGotyVote, UNUSED_GOTY_API } from "./gotyFixtures.js";
 import {
   buildGotyDatesBody,
   createGotyAdminApi,
@@ -87,10 +87,10 @@ function fakeApi(options: {
   let nominations = options.nominations ?? NOMINATIONS;
   return {
     calls,
-    listVotes: async () => {
-      calls.push(["listVotes"]);
-      return (options.votes ?? [{ year: 2026, phase: "nominating" }])
-        .map((entry) => ({ ...view(), ...entry, name: `GOTY Vote ${entry.year}` }));
+    current: async () => {
+      calls.push(["current"]);
+      const current = apiCurrentGotyVote(options.votes ?? [{ year: 2026, phase: "nominating" }]);
+      return current ? view({ ...current, name: `GOTY Vote ${current.year}` }) : null;
     },
     getVote: async (year) => {
       calls.push(["getVote", year]);
@@ -167,23 +167,58 @@ test("the PATCH body carries only the dates being moved", () => {
   );
 });
 
-test("moving dates PATCHes the current GOTY Vote and asks the poll to re-read", async () => {
+// In January last year's vote takes nominations or votes while this year's is upcoming.
+const JANUARY = [{ year: 2027, phase: "upcoming" }, { year: 2026, phase: "nominating" }];
+
+test("moving dates PATCHes the Current GOTY Vote and asks the poll to re-read", async () => {
   const api = fakeApi({
     votes: [{ year: 2027, phase: "upcoming" }, { year: 2026, phase: "decided" }],
   });
   const outcome = await moveGotyDates(api, undefined, { votingOpensAt: "2028-01-21" });
   assert.equal(outcome.ok, true);
   assert.equal(outcome.poll, true);
-  assert.deepEqual(api.calls.at(-1), [
-    "moveDates", 2027, { votingOpensAt: new Date("2028-01-21T17:00:00.000Z") },
+  assert.deepEqual(api.calls, [
+    ["current"],
+    ["moveDates", 2027, { votingOpensAt: new Date("2028-01-21T17:00:00.000Z") }],
   ]);
   assert.match(outcome.text, /GOTY Vote 2027 dates moved\.\nNominations open: <t:\d+:F>/);
 });
 
-test("without an undecided GOTY Vote the newest year is used", async () => {
-  const api = fakeApi({ votes: [{ year: 2026, phase: "decided" }] });
-  await moveGotyDates(api, undefined, { votingClosesAt: "2027-01-17" });
-  assert.equal(api.calls.at(-1)?.[1], 2026);
+test("in the January overlap the admin actions work on last year's vote", async () => {
+  const dates = fakeApi({ votes: JANUARY });
+  await moveGotyDates(dates, undefined, { votingClosesAt: "2027-01-17" });
+  assert.equal(dates.calls.at(-1)?.[1], 2026);
+
+  const shown = await moveGotyDates(fakeApi({ votes: JANUARY }), undefined, {});
+  assert.match(shown.text, /nothing moved\. GOTY Vote 2026 \(nominating\):/);
+
+  const tie = await loadGotyTiePrompt(fakeApi({ votes: JANUARY }), undefined);
+  assert.equal("vote" in tie && tie.vote.year, 2026);
+
+  const nom = fakeApi({ votes: JANUARY });
+  const found = await findGotyNomination(nom, undefined, "13");
+  assert.equal("nomination" in found && found.year, 2026);
+  assert.deepEqual(nom.calls, [["current"], ["listNominations", 2026]]);
+});
+
+test("an explicit year wins over the Current GOTY Vote", async () => {
+  const api = fakeApi({ votes: JANUARY });
+  await moveGotyDates(api, 2027, { votingClosesAt: "2028-01-17" });
+  assert.deepEqual(api.calls.map(([name, year]) => [name, year]), [["moveDates", 2027]]);
+  const tie = fakeApi({ votes: JANUARY });
+  await loadGotyTiePrompt(tie, 2027);
+  assert.deepEqual(tie.calls, [["getVote", 2027]]);
+});
+
+test("with only an upcoming vote the tie prompt says when nominations open", async () => {
+  const loaded = await loadGotyTiePrompt(
+    fakeApi({ votes: [{ year: 2027, phase: "upcoming" }, { year: 2026, phase: "decided" }] }),
+    undefined,
+  );
+  assert.ok("vote" in loaded);
+  const text = JSON.stringify(buildGotyTiePrompt(loaded.vote)[0]?.toJSON());
+  assert.match(text, /no tie waiting for an admin \(phase: upcoming\)/);
+  assert.match(text, /Nominations for GOTY Vote 2027 open <t:\d+:F>\./);
 });
 
 test("an unreadable date is refused before any API call", async () => {
@@ -222,7 +257,7 @@ test("no GOTY Vote at all says so", async () => {
     votingOpensAt: "2027-01-22",
   });
   assert.equal(outcome.ok, false);
-  assert.match(outcome.text, /No GOTY Vote exists yet/);
+  assert.match(outcome.text, /No GOTY Vote is under way/);
 });
 
 // ---------------------------------------------------------------------------
@@ -418,11 +453,16 @@ test("the admin view reads the one GOTY client; delete is the withdraw", async (
       calls.push(["withdrawNomination", ...args]);
       return false;
     },
+    current: async (...args) => {
+      calls.push(["current", ...args]);
+      return { ...AWARD_PAYLOAD, cap: 1 } as never;
+    },
   });
   const vote = await api.getVote(2026);
   assert.equal(vote?.ties[0]?.award, "game_of_the_year");
+  assert.equal((await api.current())?.ties[0]?.award, "game_of_the_year");
   assert.equal(await api.deleteNomination(2026, 11), false);
-  assert.deepEqual(calls, [["getVote", 2026], ["withdrawNomination", 2026, 11]]);
+  assert.deepEqual(calls, [["getVote", 2026], ["current"], ["withdrawNomination", 2026, 11]]);
 });
 
 test("a nomination choice carries its year and id, so the modal needs no API read", async () => {

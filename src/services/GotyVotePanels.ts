@@ -33,7 +33,6 @@ import {
   type IGotyVote,
   type IGotyVoteApi,
   type IGotyVoteCastResult,
-  type IGotyVoteSummary,
 } from "./GotyVoteApi.js";
 
 // /goty vote (bot#1581): a ballot panel per Award, built from the /gotm vote panel's
@@ -93,17 +92,6 @@ export function parseGotyVoteId(
   const gameId = isPick ? Number(rawLast) : null;
   if (isPick && !isPositiveInt(gameId)) return null;
   return { target: { year, award, ballot }, gameId };
-}
-
-/**
- * The GOTY Vote /goty vote is about: the one taking votes, else the newest still under
- * way, else the newest. Null when the club has none yet.
- */
-export function pickCurrentGotyVote(votes: IGotyVoteSummary[]): IGotyVoteSummary | null {
-  return votes.find((vote) => vote.voting_open || vote.runoff_open) ??
-    votes.find((vote) => vote.phase !== "decided") ??
-    votes[0] ??
-    null;
 }
 
 function awardOf(vote: IGotyVote, award: GotyAwardKey): IGotyAward | null {
@@ -360,10 +348,18 @@ function buildGotyStatusView(vote: IGotyVote): IGotyView {
       buildTextContainer(
         `## ${vote.name}\n-# The club's yearly GOTY Vote, not this month's GOTM round.`,
       ),
+      ...(vote.phase === "upcoming" ? [buildTextContainer(upcomingText(vote))] : []),
       buildTextContainer(lines.join("\n\n")),
     ],
     flags: buildComponentsV2Flags(true),
   };
+}
+
+/** For a GOTY Vote still upcoming: plainly, when its nominations open. */
+function upcomingText(vote: IGotyVote): string {
+  return `Nothing to vote on yet. Game of the Year nominations for ${vote.name} open ` +
+    `${discordTime(vote.nominations_open_at, "F")} ` +
+    `(${discordTime(vote.nominations_open_at, "R")}).`;
 }
 
 export type GotyVoteReply = { views: IGotyView[] } | { text: string } | { error: string };
@@ -379,10 +375,9 @@ export async function gotyVoteCommandReply(
   award: GotyAwardKey | null,
 ): Promise<GotyVoteReply> {
   try {
-    const current = pickCurrentGotyVote(await api.listVotes());
-    if (!current) return { text: "There is no GOTY Vote yet." };
-    const vote = await api.getVote(current.year, userId);
-    if (!vote) return { text: `There is no GOTY Vote for ${current.year}.` };
+    // The Current GOTY Vote (the API's rule), read with the member's own votes.
+    const vote = await api.current(userId);
+    if (!vote) return { text: "There is no GOTY Vote under way." };
     if (award) return { views: [buildGotyAwardPanel(vote, award)] };
     if (!vote.voting_open && !vote.runoff_open) return { views: [buildGotyStatusView(vote)] };
     const awards = vote.runoff_open

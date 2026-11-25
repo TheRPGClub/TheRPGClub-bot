@@ -17,10 +17,9 @@ import {
   gotyVoteCast,
   gotyVoteCommandReply,
   parseGotyVoteId,
-  pickCurrentGotyVote,
 } from "../services/GotyVotePanels.js";
 import { apiError, buttonsOf, selectsOf, textOf } from "./challengeFixtures.js";
-import { UNUSED_GOTY_API } from "./gotyFixtures.js";
+import { apiCurrentGotyVote, UNUSED_GOTY_API } from "./gotyFixtures.js";
 
 // /goty vote panels (bot#1581), against a fake API client.
 
@@ -74,25 +73,29 @@ interface IFakeApi extends IGotyVoteApi {
 }
 
 function fakeApi(options: {
-  votes?: IGotyVoteSummary[];
+  /** The GOTY Votes `current` picks from by the API's rule; else it serves `reads`. */
+  votes?: IGotyVote[];
   /** Successive reads; the last one repeats. */
   reads: (IGotyVote | null)[];
   cast?: IGotyVoteCastResult | Error;
 }): IFakeApi {
   const calls: string[] = [];
   let read = 0;
+  const next = (): IGotyVote | null => {
+    const vote = options.reads[Math.min(read, options.reads.length - 1)];
+    read += 1;
+    return vote;
+  };
   return {
     ...UNUSED_GOTY_API,
     calls,
-    async listVotes() {
-      calls.push("list");
-      return options.votes ?? [summary()];
+    async current(userId) {
+      calls.push(`current ${userId}`);
+      return options.votes ? apiCurrentGotyVote(options.votes) : next();
     },
     async getVote(year, userId) {
       calls.push(`get ${year} ${userId}`);
-      const vote = options.reads[Math.min(read, options.reads.length - 1)];
-      read += 1;
-      return vote;
+      return next();
     },
     async castVote(year, userId, key, gameId) {
       calls.push(`cast ${year} ${userId} ${key} ${gameId}`);
@@ -130,16 +133,6 @@ test("custom ids: a pick and a select round-trip, and a stray id is refused", ()
   assert.deepEqual(parseGotyVoteId(buildGotyVoteSelectId(target, 0)), { target, gameId: null });
   assert.equal(parseGotyVoteId("goty-vote-pick-v1:2026:best_game:m:4"), null);
   assert.equal(parseGotyVoteId("vote-pick:gotm:12:4"), null);
-});
-
-test("pickCurrentGotyVote: the open one, else the newest under way, else the newest", () => {
-  const decided = summary({ year: 2025, phase: "decided", voting_open: false });
-  const upcoming = summary({ year: 2027, phase: "upcoming", voting_open: false });
-  const voting = summary({ year: 2026 });
-  assert.equal(pickCurrentGotyVote([upcoming, voting, decided])?.year, 2026);
-  assert.equal(pickCurrentGotyVote([upcoming, decided])?.year, 2027);
-  assert.equal(pickCurrentGotyVote([decided])?.year, 2025);
-  assert.equal(pickCurrentGotyVote([]), null);
 });
 
 test("the main panel names the GOTY Vote and year, shows the cap and a button per game", () => {
@@ -219,7 +212,7 @@ test("/goty vote: a panel per Award while voting, read for the member", async ()
   const reply = await gotyVoteCommandReply(api, MEMBER, null);
   assert.ok("views" in reply);
   assert.equal(reply.views.length, 3);
-  assert.deepEqual(api.calls, ["list", `get 2026 ${MEMBER}`]);
+  assert.deepEqual(api.calls, [`current ${MEMBER}`]);
   assert.match(textOf(reply.views[2].components), /Game of the Year/);
 });
 
@@ -249,9 +242,37 @@ test("/goty vote: before voting, one message with each Award's standing", async 
   assert.equal(buttonsOf(reply.views[0].components).length, 0);
 });
 
-test("/goty vote: no GOTY Vote yet", async () => {
-  const reply = await gotyVoteCommandReply(fakeApi({ votes: [], reads: [null] }), MEMBER, null);
-  assert.deepEqual(reply, { text: "There is no GOTY Vote yet." });
+test("/goty vote: no GOTY Vote under way", async () => {
+  const reply = await gotyVoteCommandReply(fakeApi({ votes: [], reads: [] }), MEMBER, null);
+  assert.deepEqual(reply, { text: "There is no GOTY Vote under way." });
+});
+
+test("/goty vote: in the January overlap it acts on last year's vote", async () => {
+  const upcoming = goty({ year: 2027, name: "GOTY Vote 2027", phase: "upcoming",
+    voting_open: false, candidates_frozen_at: null });
+  const api = fakeApi({ votes: [upcoming, goty()], reads: [] });
+  const reply = await gotyVoteCommandReply(api, MEMBER, null);
+  assert.ok("views" in reply);
+  assert.equal(reply.views.length, 3);
+  assert.match(textOf(reply.views[0].components), /GOTY Vote 2026/);
+  assert.deepEqual(api.calls, [`current ${MEMBER}`]);
+});
+
+test("/goty vote: with only an upcoming vote, says when its nominations open", async () => {
+  const upcoming = goty({ year: 2027, name: "GOTY Vote 2027", phase: "upcoming",
+    voting_open: false, candidates_frozen_at: null,
+    nominations_open_at: "2028-01-01T05:00:00.000Z" });
+  const decided = goty({ year: 2026, phase: "decided", voting_open: false });
+  const reply = await gotyVoteCommandReply(
+    fakeApi({ votes: [upcoming, decided], reads: [] }),
+    MEMBER,
+    null,
+  );
+  assert.ok("views" in reply);
+  const text = textOf(reply.views[0].components);
+  assert.match(text, /## GOTY Vote 2027/);
+  assert.match(text, /Game of the Year nominations for GOTY Vote 2027 open <t:1830315600:F>/);
+  assert.equal(buttonsOf(reply.views[0].components).length, 0);
 });
 
 test("a press casts for the member and redraws the panel with the vote", async () => {

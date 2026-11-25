@@ -176,6 +176,12 @@ export interface IGotyVoteApi {
    */
   getVote(year: number, userId?: string): Promise<IGotyVote | null>;
   /**
+   * The Current GOTY Vote (api#482): the undecided one taking nominations or votes, or
+   * waiting on its tally, a runoff or a tie; else the upcoming one. The API owns that
+   * rule. With `userId`'s own votes when given; null when no GOTY Vote is undecided (404).
+   */
+  current(userId?: string): Promise<IGotyVote | null>;
+  /**
    * Casts or toggles `userId`'s vote in an Award. Throws the AxiosError on a refusal
    * (422 voting_closed, not_a_candidate, uncontested, not_in_runoff, ...).
    */
@@ -245,6 +251,12 @@ export const GOTY_VOTE_API: IGotyVoteApi = {
   },
   async getVote(year, userId) {
     const payload = await apiGet<{ data: IGotyVote }>(`${GOTY_VOTES_PATH}/${year}`, {
+      params: userId ? { user_id: userId } : {},
+    });
+    return payload?.data ?? null;
+  },
+  async current(userId) {
+    const payload = await apiGet<{ data: IGotyVote }>(`${GOTY_VOTES_PATH}/current`, {
       params: userId ? { user_id: userId } : {},
     });
     return payload?.data ?? null;
@@ -358,10 +370,10 @@ export interface IGotyAdminNomination {
 }
 
 export interface IGotyAdminApi {
-  /** Every GOTY Vote, newest year first. */
-  listVotes(): Promise<IGotyVoteSchedule[]>;
   /** One year's GOTY Vote; null on 404. */
   getVote(year: number): Promise<IGotyVoteAdminView | null>;
+  /** The Current GOTY Vote (see IGotyVoteApi.current); null when none is undecided. */
+  current(): Promise<IGotyVoteAdminView | null>;
   /** Moves the dates given. Throws the AxiosError for every failure. */
   moveDates(year: number, changes: IGotyDateChanges): Promise<IGotyVoteAdminView>;
   /** Settles an Award's tie. Throws the AxiosError. */
@@ -446,11 +458,12 @@ export function mapGotyAdminNomination(data: IGotyNomination): IGotyAdminNominat
 /** The admin view over `api` (GOTY_VOTE_API by default). */
 export function createGotyAdminApi(api: IGotyVoteApi = GOTY_VOTE_API): IGotyAdminApi {
   return {
-    async listVotes() {
-      return (await api.listVotes()).map(mapGotyVoteSchedule);
-    },
     async getVote(year) {
       const vote = await api.getVote(year);
+      return vote ? mapGotyVoteAdminView(vote) : null;
+    },
+    async current() {
+      const vote = await api.current();
       return vote ? mapGotyVoteAdminView(vote) : null;
     },
     async moveDates(year, changes) {

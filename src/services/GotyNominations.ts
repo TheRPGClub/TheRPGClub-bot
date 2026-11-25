@@ -63,17 +63,6 @@ export function parseGotyWithdrawId(customId: string): IGotyWithdrawTarget | nul
   return { year, nominationId, scope };
 }
 
-/**
- * The GOTY Vote nominations are about: the one taking nominations, else the newest still
- * under way, else the newest. Null when the club has none yet.
- */
-export function pickNominationsGotyVote(votes: IGotyVoteSummary[]): IGotyVoteSummary | null {
-  return votes.find((vote) => vote.nominations_open) ??
-    votes.find((vote) => vote.phase !== "decided") ??
-    votes[0] ??
-    null;
-}
-
 function discordTime(iso: string, style: "F" | "R"): string {
   return `<t:${toUnixTimestamp(new Date(iso))}:${style}>`;
 }
@@ -240,20 +229,22 @@ export type GotyNominationsReply =
   | { text: string }
   | { error: string };
 
-const NO_VOTE_TEXT = "There is no GOTY Vote yet. Each year's opens for nominations on January 1.";
+const NO_VOTE_TEXT = "There is no GOTY Vote under way. Each year's is created on January 1 " +
+  "and takes nominations the following January.";
 
+/**
+ * The GOTY Vote a command is about: the year given, else the Current GOTY Vote (the API's
+ * rule: in January, last year's while it takes nominations or votes). Null when none.
+ */
 async function findVote(
   api: IGotyVoteApi,
   year: number | null,
 ): Promise<IGotyVoteSummary | null | { error: string }> {
-  let votes: IGotyVoteSummary[];
   try {
-    votes = await api.listVotes();
+    return year === null ? await api.current() : await api.getVote(year);
   } catch (err: unknown) {
-    return { error: buildApiRefusalMessage(err, "Could not read the GOTY Votes.") };
+    return { error: buildApiRefusalMessage(err, "Could not read the GOTY Vote.") };
   }
-  if (year === null) return pickNominationsGotyVote(votes);
-  return votes.find((vote) => vote.year === year) ?? null;
 }
 
 function noVoteText(year: number | null): string {
@@ -446,7 +437,7 @@ export interface IGotyGameChoice {
 }
 
 const ELIGIBILITY_TTL_MS = 10 * 60_000;
-const VOTES_TTL_MS = 60_000;
+const CURRENT_TTL_MS = 60_000;
 /** Autocomplete must answer within 3 seconds; checks still out by then show unmarked. */
 const ELIGIBILITY_DEADLINE_MS = 1800;
 
@@ -457,12 +448,13 @@ interface ICached<T> {
 
 /** Caches kept between keystrokes, so a member typing does not re-check the same games. */
 export interface IGotyAutocompleteCache {
-  votes: ICached<IGotyVoteSummary[]> | null;
+  /** The Current GOTY Vote's year; null when there is none. */
+  currentYear: ICached<number | null> | null;
   eligibility: Map<string, ICached<IGotyEligibility>>;
 }
 
 export function createGotyAutocompleteCache(): IGotyAutocompleteCache {
-  return { votes: null, eligibility: new Map() };
+  return { currentYear: null, eligibility: new Map() };
 }
 
 const SHARED_CACHE = createGotyAutocompleteCache();
@@ -482,12 +474,14 @@ export function ineligibleMark(eligibility: IGotyEligibility): string | null {
   return year ? `not eligible: released ${year}` : "not eligible";
 }
 
-async function cachedVotes(deps: IGotyAutocompleteDeps, now: number): Promise<IGotyVoteSummary[]> {
+async function cachedCurrentYear(deps: IGotyAutocompleteDeps, now: number): Promise<number | null> {
   const cache = deps.cache ?? SHARED_CACHE;
-  if (cache.votes && now - cache.votes.at < VOTES_TTL_MS) return cache.votes.value;
-  const votes = await deps.api.listVotes();
-  cache.votes = { value: votes, at: now };
-  return votes;
+  if (cache.currentYear && now - cache.currentYear.at < CURRENT_TTL_MS) {
+    return cache.currentYear.value;
+  }
+  const year = (await deps.api.current())?.year ?? null;
+  cache.currentYear = { value: year, at: now };
+  return year;
 }
 
 /**
@@ -547,7 +541,7 @@ export async function gotyNominateChoices(
   const now = (deps.now ?? Date.now)();
   let year: number | null;
   try {
-    year = pickNominationsGotyVote(await cachedVotes(deps, now))?.year ?? null;
+    year = await cachedCurrentYear(deps, now);
   } catch {
     year = null;
   }
