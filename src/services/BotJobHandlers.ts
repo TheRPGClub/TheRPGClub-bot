@@ -20,7 +20,7 @@ import {
   LIVE_EVENT_FORUM_ID,
   WHATCHA_PLAYING_CHANNEL_ID,
 } from "../config/channels.js";
-import { BOT_DEV_PING_USER_ID, BOT_OWNER_USER_ID } from "../config/users.js";
+import { BOT_DEV_PING_USER_ID, PSN_ALERT_DM_USER_ID } from "../config/users.js";
 import {
   buildSuggestionApprovedNotice,
   buildSuggestionRejectedNotice,
@@ -1258,7 +1258,7 @@ export const handleFranchiseConquest: BotJobHandler = async (payload, surface, c
 
 /** Where PSN login alerts go: the dev logs channel and the owner's DMs (bot#1578). */
 function psnAlertTargets(): IPsnAlertTargets {
-  return { channelId: BOT_DEV_CHANNEL_ID, ownerUserId: BOT_OWNER_USER_ID };
+  return { channelId: BOT_DEV_CHANNEL_ID, ownerUserId: PSN_ALERT_DM_USER_ID };
 }
 
 /**

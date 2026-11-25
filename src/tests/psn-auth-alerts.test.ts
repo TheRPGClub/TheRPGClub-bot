@@ -91,25 +91,25 @@ test("deliverPsnAuthAlert posts without pings and DMs the owner", async () => {
   const result = await deliverPsnAuthAlert("hi", s, TARGETS);
   assert.deepEqual(s.posts, [{ channelId: "dev-channel", pings: [] }]);
   assert.deepEqual(s.dms, ["owner-1"]);
-  assert.equal(result, "Posted in the bot-dev channel; DMed the owner.");
+  assert.equal(result, "Posted in the bot-dev channel; DMed Xer.");
 });
 
 test("a failed channel post still DMs the owner", async () => {
   const s = sender({ post: new Error("Missing Access") });
   const result = await deliverPsnAuthAlert("hi", s, TARGETS);
   assert.deepEqual(s.dms, ["owner-1"]);
-  assert.equal(result, "Not posted (Missing Access); DMed the owner.");
+  assert.equal(result, "Not posted (Missing Access); DMed Xer.");
 });
 
 test("a failed or unset owner DM still posts", async () => {
   const failed = sender({ dm: new Error("Cannot send messages to this user") });
-  assert.match(await deliverPsnAuthAlert("hi", failed, TARGETS), /not DMed to the owner/);
+  assert.match(await deliverPsnAuthAlert("hi", failed, TARGETS), /not DMed to Xer/);
   assert.equal(failed.posts.length, 1);
 
   const unset = sender();
   const result = await deliverPsnAuthAlert("hi", unset, { ...TARGETS, ownerUserId: "" });
   assert.equal(unset.posts.length, 1);
-  assert.match(result, /BOT_OWNER_USER_ID is not set/);
+  assert.match(result, /no alert DM user is configured/);
 });
 
 test("nothing delivered fails, temporary only when Discord may recover", async () => {

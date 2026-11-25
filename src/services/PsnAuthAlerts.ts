@@ -145,11 +145,11 @@ export async function deliverPsnAuthAlert(
   );
   const dm = await attempt(
     targets.ownerUserId,
-    "BOT_OWNER_USER_ID is not set",
+    "no alert DM user is configured",
     () => sender.sendDm(targets.ownerUserId, content),
   );
   const postText = post.ok ? "Posted in the bot-dev channel" : `Not posted (${post.reason})`;
-  const dmText = dm.ok ? "DMed the owner" : `not DMed to the owner (${dm.reason})`;
+  const dmText = dm.ok ? "DMed Xer" : `not DMed to Xer (${dm.reason})`;
   const summary = `${postText}; ${dmText}.`;
   if (post.ok || dm.ok) return summary;
   const temporary = [post, dm].some((o) => !o.ok && o.err !== undefined
