@@ -107,3 +107,12 @@ export const GAMEDB_LIST_ACTION_PREFIX = "gamedb-action:list:";
 export const PLAYTIME_UNDO_PREFIX = "playtime-undo-v1";
 /** The game view's My Playtime button (a gamedb action), with the game ID. */
 export const GAMEDB_PLAYTIME_ACTION_PREFIX = "gamedb-action:playtime:";
+
+// GOTY Vote (spec api#471). Every /goty component's custom ID starts with this, so the
+// Feature gate maps them all to the goty_vote Feature. Each subcommand adds its own
+// `goty-<subcommand>-...` prefix below.
+export const GOTY_CUSTOM_ID_PREFIX = "goty-";
+/** /goty vote: one game's toggle button (`<prefix>:<year>:<award>:<m|r>:<gameId>`). */
+export const GOTY_VOTE_PICK_PREFIX = "goty-vote-pick-v1";
+/** /goty vote: the select fallback on a large ballot (`<prefix>:<year>:<award>:<m|r>:<n>`). */
+export const GOTY_VOTE_SELECT_PREFIX = "goty-vote-sel-v1";
