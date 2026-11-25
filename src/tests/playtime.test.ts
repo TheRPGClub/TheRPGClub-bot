@@ -96,7 +96,10 @@ interface IFakeApi extends IPlaytimeApi {
   deletes: number[];
 }
 
-function fakeApi(start: IGamePlaytime, options: { failWrite?: Error } = {}): IFakeApi {
+function fakeApi(
+  start: IGamePlaytime,
+  options: { failWrite?: Error; goneOnDelete?: boolean } = {},
+): IFakeApi {
   let current = start;
   const api: IFakeApi = {
     writes: [],
@@ -120,7 +123,8 @@ function fakeApi(start: IGamePlaytime, options: { failWrite?: Error } = {}): IFa
     async deleteManual(entryId) {
       api.deletes.push(entryId);
       if (entryId === 70) current = withSwitch(null, current);
-      return current;
+      // Already gone: another delete got there first, and the API answers 404.
+      return options.goneOnDelete ? null : current;
     },
   };
   return api;
@@ -321,6 +325,17 @@ test("Undo: an entry the change created is deleted", async () => {
   )).components);
   assert.deepEqual(api.deletes, [70]);
   assert.equal(api.writes.length, 0);
+  assert.match(text, /Undone: removed Manual · Switch/);
+  assert.doesNotMatch(text, /Manual · Switch \*\*/);
+});
+
+test("Undo: an entry already gone renders from a fresh read, not the stale one", async () => {
+  const api = fakeApi(withSwitch(2 * 60), { goneOnDelete: true });
+  const text = textOf(viewOf(await undoPlaytimeReply(
+    { userId: MARA, gameId: 6, platformId: 4, before: null },
+    deps(api),
+  )).components);
+  assert.deepEqual(api.deletes, [70]);
   assert.match(text, /Undone: removed Manual · Switch/);
   assert.doesNotMatch(text, /Manual · Switch \*\*/);
 });

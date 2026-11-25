@@ -217,3 +217,15 @@ test("franchise_conquest with the Feature Off acks without posting", async () =>
   }]);
   assert.deepEqual(deps.posts, []);
 });
+
+test("franchise_conquest with the Feature Off acks even a malformed payload", async () => {
+  const deps = fakeDeps();
+  const acks = await run(deps, "off", payload({ franchise_name: null }));
+
+  assert.deepEqual(acks, [{
+    id: 7,
+    status: "done",
+    resultText: "Not posted: the franchise_progress Feature is Off.",
+  }]);
+  assert.deepEqual(deps.posts, []);
+});
