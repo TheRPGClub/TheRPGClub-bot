@@ -200,6 +200,11 @@ export interface IGotyVoteApi {
   withdrawNomination(year: number, nominationId: number): Promise<boolean>;
   /** Whether the game may be nominated for the year. Throws on any failure. */
   eligibility(gameId: number, year: number): Promise<IGotyEligibility>;
+  /**
+   * Eligibility for several games in one call (at most 50 ids). Unknown ids are left out,
+   * so match the answers by game_id, not by position. Throws on any failure.
+   */
+  eligibilities(gameIds: number[], year: number): Promise<IGotyEligibility[]>;
   /** PATCH /goty_votes/:year: moves the dates given. Throws the AxiosError on a refusal. */
   moveDates(year: number, changes: IGotyDateChanges): Promise<IGotyVote>;
   /** Records an admin's pick for an Award's tie. Throws the AxiosError on a refusal. */
@@ -277,6 +282,13 @@ export const GOTY_VOTE_API: IGotyVoteApi = {
     const payload = await apiGetOrThrow<{ data: IGotyEligibility }>(
       `/api/v1/games/${gameId}/goty_eligibility`,
       { params: { year } },
+    );
+    return payload.data;
+  },
+  async eligibilities(gameIds, year) {
+    const payload = await apiGetOrThrow<{ data: IGotyEligibility[] }>(
+      "/api/v1/games/goty_eligibility",
+      { params: { year, game_ids: gameIds.join(",") } },
     );
     return payload.data;
   },

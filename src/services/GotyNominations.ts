@@ -490,23 +490,32 @@ async function cachedVotes(deps: IGotyAutocompleteDeps, now: number): Promise<IG
   return votes;
 }
 
-async function cachedEligibility(
+/**
+ * The eligibility of each game, in the order given: cached ones from the cache, the rest
+ * from one batch call. A game the API left out (unknown id) or a failed call gives null.
+ */
+async function cachedEligibilities(
   deps: IGotyAutocompleteDeps,
-  gameId: number,
+  gameIds: number[],
   year: number,
   now: number,
-): Promise<IGotyEligibility | null> {
+): Promise<(IGotyEligibility | null)[]> {
   const cache = deps.cache ?? SHARED_CACHE;
-  const key = `${year}:${gameId}`;
-  const hit = cache.eligibility.get(key);
-  if (hit && now - hit.at < ELIGIBILITY_TTL_MS) return hit.value;
-  try {
-    const value = await deps.api.eligibility(gameId, year);
-    cache.eligibility.set(key, { value, at: now });
-    return value;
-  } catch {
-    return null;
+  const key = (gameId: number): string => `${year}:${gameId}`;
+  const fresh = (gameId: number): IGotyEligibility | null => {
+    const hit = cache.eligibility.get(key(gameId));
+    return hit && now - hit.at < ELIGIBILITY_TTL_MS ? hit.value : null;
+  };
+  const missing = [...new Set(gameIds.filter((gameId) => fresh(gameId) === null))];
+  if (missing.length > 0) {
+    try {
+      const answers = await deps.api.eligibilities(missing, year);
+      for (const value of answers) cache.eligibility.set(key(value.game_id), { value, at: now });
+    } catch {
+      // Left unmarked; the API decides on submit.
+    }
   }
+  return gameIds.map(fresh);
 }
 
 function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | null> {
@@ -536,7 +545,7 @@ export async function gotyNominateChoices(
   deps: IGotyAutocompleteDeps,
 ): Promise<{ name: string; value: string }[]> {
   const now = (deps.now ?? Date.now)();
-  let year: number | null = null;
+  let year: number | null;
   try {
     year = pickNominationsGotyVote(await cachedVotes(deps, now))?.year ?? null;
   } catch {
@@ -545,7 +554,7 @@ export async function gotyNominateChoices(
   const checks = year === null
     ? games.map(() => null)
     : await withDeadline(
-      Promise.all(games.map((game) => cachedEligibility(deps, game.id, year, now))),
+      cachedEligibilities(deps, games.map((game) => game.id), year, now),
       deps.deadlineMs ?? ELIGIBILITY_DEADLINE_MS,
     ) ?? games.map(() => null);
   const choices = games.map((game, index) => {

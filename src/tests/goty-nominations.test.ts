@@ -102,6 +102,15 @@ function fakeApi(options: {
       if (!found) throw new Error("no eligibility");
       return found;
     },
+    async eligibilities(gameIds, year) {
+      calls.push(`eligibilities ${gameIds.join(",")} ${year}`);
+      if (!options.eligibility) throw new Error("no eligibility");
+      // The API leaves unknown ids out; answer in reverse so tests match by game_id.
+      return gameIds
+        .map((id) => options.eligibility?.[id])
+        .filter((found): found is IGotyEligibility => found !== undefined)
+        .reverse();
+    },
   };
 }
 
@@ -352,11 +361,38 @@ test("autocomplete: eligible games first, ineligible ones marked with why", asyn
     { name: "Clair Obscur (2025) [not eligible: released 2025]", value: "gamedb:1" },
     { name: "Obscure RPG (Unknown Year) [not eligible: no known release]", value: "gamedb:3" },
   ]);
+  assert.deepEqual(api.calls, ["votes", "eligibilities 1,2,3 2026"]);
 
   // A second keystroke within the cache's life asks the API nothing again.
   api.calls.length = 0;
   await gotyNominateChoices(games, { api, cache, now: () => 2000 });
   assert.deepEqual(api.calls, []);
+});
+
+test("autocomplete: one batch call asks only for the games not cached", async () => {
+  const api = fakeApi({
+    eligibility: {
+      1: { game_id: 1, year: 2026, eligible: true },
+      4: { game_id: 4, year: 2026, eligible: false, reason: "not_released_in_year",
+        released_on: "2024-02-29" },
+    },
+  });
+  const cache = createGotyAutocompleteCache();
+  await gotyNominateChoices([{ id: 1, label: "Known (2026)" }], { api, cache, now: () => 1000 });
+
+  api.calls.length = 0;
+  const choices = await gotyNominateChoices([
+    { id: 4, label: "Old (2024)" },
+    { id: 1, label: "Known (2026)" },
+    { id: 9, label: "Gone (2026)" },
+  ], { api, cache, now: () => 2000 });
+  // Game 9 is unknown to the API, so it is left out of the answer and shows unmarked.
+  assert.deepEqual(api.calls, ["eligibilities 4,9 2026"]);
+  assert.deepEqual(choices, [
+    { name: "Known (2026)", value: "gamedb:1" },
+    { name: "Gone (2026)", value: "gamedb:9" },
+    { name: "Old (2024) [not eligible: released 2024]", value: "gamedb:4" },
+  ]);
 });
 
 test("autocomplete: with no GOTY Vote, or failing checks, games show unmarked", async () => {
@@ -377,7 +413,7 @@ test("autocomplete: with no GOTY Vote, or failing checks, games show unmarked", 
 test("autocomplete: checks still out at the deadline show unmarked", async () => {
   const api: IGotyVoteApi = {
     ...fakeApi({}),
-    eligibility: () => new Promise(() => undefined),
+    eligibilities: () => new Promise(() => undefined),
   };
   const choices = await gotyNominateChoices([{ id: 1, label: "Slow (2026)" }], {
     api,
