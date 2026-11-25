@@ -226,8 +226,10 @@ export function buildGotyRunoffClosedText(payload: IGotyEventPayload): string {
   return lines.join("\n");
 }
 
-function tallyLine(game: IGotyEventGame, hadRunoff: boolean): string {
-  const runoff = hadRunoff && game.runoffVotes !== null
+function tallyLine(game: IGotyEventGame, runoffBallot: number[]): string {
+  // The payload sends 0 runoff votes for a game that was not in the runoff, so only the
+  // runoff's own games show a runoff count.
+  const runoff = runoffBallot.includes(game.gameId) && game.runoffVotes !== null
     ? `, ${plural(game.runoffVotes, "runoff vote")}`
     : "";
   return `- ${bold(game.title)}${voteCount(game.votes)}${runoff}`;
@@ -245,12 +247,11 @@ export function buildGotyDecidedAwardText(
   }
   lines.push(winnerLine(award) ?? "No winner was recorded.");
   if (!award.uncontested) {
-    const hadRunoff = award.runoffBallot.length > 0;
     lines.push(
       ...[...award.games]
         .sort((a, b) =>
           (b.votes ?? 0) - (a.votes ?? 0) || (b.runoffVotes ?? 0) - (a.runoffVotes ?? 0))
-        .map((game) => tallyLine(game, hadRunoff)),
+        .map((game) => tallyLine(game, award.runoffBallot)),
     );
   }
   return lines.join("\n");
@@ -348,9 +349,35 @@ async function ballotMessage(
 }
 
 /**
+ * Tells the admin channel which Awards' ballots did not post. The event is acked once any
+ * ballot posted (a retry would repost the rest), so without this alert the missing ones
+ * would be lost silently.
+ */
+async function alertMissingBallots(
+  client: Client,
+  channelId: string,
+  payload: IGotyEventPayload,
+  failures: string[],
+): Promise<void> {
+  const text = [
+    `## ${payload.name}: ballot posts missing`,
+    `These ballots could not be posted in <#${channelId}> and will not be retried:`,
+    ...failures.map((failure) => `- ${failure}`),
+    `Members can still vote with ${commandMention("goty vote")}. Post the missing ` +
+      "ballots by hand if wanted.",
+  ].join("\n");
+  try {
+    await send(client, ADMIN_CHANNEL_ID, textMessage(text, false));
+  } catch (err) {
+    logError("GotyVotingEventHandlers.ballotAlert", err);
+  }
+}
+
+/**
  * The voting_opened messages, one per Award. A failed Award is logged and the rest still
  * post; only when none went out does it throw for a retry (which would repost the ones that
- * did, as for the round's panels).
+ * did, as for the round's panels). A partial failure is acked and alerted to the admin
+ * channel.
  */
 async function postBallots(
   client: Client,
@@ -375,6 +402,7 @@ async function postBallots(
   }
   if (failures.length > 0) {
     logWarn("GotyVotingEventHandlers.ballot", failures.join("\n"));
+    await alertMissingBallots(client, channelId, payload, failures);
   }
 }
 

@@ -35,7 +35,8 @@ interface ISent {
   files: number;
 }
 
-function fakeClient(): { client: Client; sent: ISent[] } {
+/** A fake client; a post whose text matches `failOn` throws instead of sending. */
+function fakeClient(failOn?: RegExp): { client: Client; sent: ISent[] } {
   const sent: ISent[] = [];
   const client = {
     channels: {
@@ -48,6 +49,7 @@ function fakeClient(): { client: Client; sent: ISent[] } {
           const json = (payload.components ?? []).map((component) =>
             typeof component.toJSON === "function" ? component.toJSON() : component,
           );
+          if (failOn?.test(JSON.stringify(json))) throw new Error("Missing Access");
           sent.push({ channelId, text: JSON.stringify(json), files: payload.files?.length ?? 0 });
           return {};
         },
@@ -263,6 +265,19 @@ test("goty_voting_opened still posts a ballot whose image failed", async () => {
   assert.equal(sent[0].files, 0);
 });
 
+test("goty_voting_opened alerts the admin channel to a ballot that did not post", async () => {
+  const { client, sent } = fakeClient(/2026: NR-GOTM of the Year/);
+  const outcome = await handleGotyVotingEvent(client, gotyEvent("goty_voting_opened"), deps());
+
+  assert.equal(outcome, "delivered");
+  const ballots = sent.filter((post) => post.channelId === ANNOUNCEMENT_CHANNEL_ID);
+  assert.equal(ballots.length, 2);
+  const alerts = sent.filter((post) => post.channelId === ADMIN_CHANNEL_ID);
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0].text, /GOTY Vote 2026: ballot posts missing/);
+  assert.match(alerts[0].text, /NR-GOTM.*Missing Access/);
+});
+
 test("goty_runoff_opened lists the tied games and the Awards already decided", async () => {
   const { client, sent } = fakeClient();
   const body = payload("goty_runoff_opened", {
@@ -316,7 +331,9 @@ test("goty_decided posts every Award's winner and tally in one message", async (
   assert.match(sent[0].text, /## GOTY Vote 2026: the winners/);
   assert.match(sent[0].text, /GOTM of the Year 2026/);
   assert.match(sent[0].text, /Chrono Trigger\*\*: 4 votes, 3 runoff votes/);
-  assert.match(sent[0].text, /Xenogears\*\*: 1 vote, 0 runoff votes/);
+  // Xenogears was not in the runoff: its 0 runoff votes are not shown.
+  assert.match(sent[0].text, /Xenogears\*\*: 1 vote"/);
+  assert.doesNotMatch(sent[0].text, /Xenogears\*\*: 1 vote, /);
   assert.match(sent[0].text, /Hades\*\* \(the only candidate/);
   assert.match(sent[0].text, /Game of the Year is not given for 2026/);
   assert.match(sent[0].text, /cdn\.test\/1\.png/);
