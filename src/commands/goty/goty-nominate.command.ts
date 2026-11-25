@@ -8,10 +8,7 @@ import { Discord, Slash, SlashGroup, SlashOption } from "discordx";
 import GameSearchService from "../../classes/GameSearchService.js";
 import Game from "../../classes/Game.js";
 import { buildErrorReply, buildTextReply } from "../../functions/ComponentsV2Utils.js";
-import {
-  formatGameTitleWithYear,
-  resolveExactTitleMatch,
-} from "../../functions/GameTitleAutocompleteUtils.js";
+import { formatGameTitleWithYear } from "../../functions/GameTitleAutocompleteUtils.js";
 import {
   safeDeferReply,
   safeReply,
@@ -19,10 +16,14 @@ import {
   sanitizeUserInput,
 } from "../../functions/InteractionUtils.js";
 import { DISCORD_SELECT_OPTIONS_MAX } from "../../config/textLimits.js";
-import { gotyNominateChoices, gotyNominateReply } from "../../services/GotyNominations.js";
+import {
+  gotyNominateChoices,
+  gotyNominateReply,
+  resolveGotyNominateGame,
+  type IGotyGameLookup,
+} from "../../services/GotyNominations.js";
 import { GOTY_VOTE_API } from "../../services/GotyVoteApi.js";
 import { buildCaughtErrorMessage } from "../../utilities/ApiErrorUtils.js";
-import { isPositiveInt } from "../../utilities/ValidationUtils.js";
 
 // /goty nominate (bot#1580): nominate a game for this year's Game of the Year, with no
 // reason. The autocomplete marks games the year can't take; the API has the last word.
@@ -46,19 +47,10 @@ async function autocompleteGotyGame(interaction: AutocompleteInteraction): Promi
   await safeRespond(interaction, choices);
 }
 
-/** The picked game's id: an autocomplete value, or a typed title that matches exactly. */
-async function resolveGameId(input: string): Promise<{ id: number | null; found: string[] }> {
-  const numericId = Number(input);
-  if (isPositiveInt(numericId)) {
-    const game = await Game.getGameById(numericId);
-    return { id: game?.id ?? null, found: game ? [game.title] : [] };
-  }
-  const games = await GameSearchService.searchGames(input);
-  return {
-    id: resolveExactTitleMatch(games, input)?.id ?? null,
-    found: games.slice(0, 5).map((game) => game.title),
-  };
-}
+const GAME_LOOKUP: IGotyGameLookup = {
+  getGameById: (id) => Game.getGameById(id),
+  searchGames: (title) => GameSearchService.searchGames(title),
+};
 
 @Discord()
 @SlashGroup("goty")
@@ -83,7 +75,7 @@ export class GotyNominateCommand {
     await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral });
     let resolved: { id: number | null; found: string[] };
     try {
-      resolved = await resolveGameId(input);
+      resolved = await resolveGotyNominateGame(input, GAME_LOOKUP);
     } catch (err: unknown) {
       await safeReply(
         interaction,

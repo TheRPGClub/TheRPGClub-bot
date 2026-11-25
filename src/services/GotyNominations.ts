@@ -8,6 +8,7 @@ import {
 } from "../functions/ComponentsV2Utils.js";
 import { buildActionButton, buildButtonRow } from "../functions/uiComponents.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
+import { resolveExactTitleMatch } from "../functions/GameTitleAutocompleteUtils.js";
 import { DISCORD_BUTTON_LABEL_MAX } from "../config/textLimits.js";
 import { GOTY_NOMINATION_WITHDRAW_PREFIX } from "../config/customIdPrefixes.js";
 import { gotyPageUrl } from "../config/website.js";
@@ -379,15 +380,64 @@ export async function gotyWithdrawReply(
   if (!nomination) {
     return redraw("That nomination is not yours, or it was already withdrawn.");
   }
+  let withdrawn: boolean;
   try {
-    await api.withdrawNomination(target.year, nomination.id);
+    withdrawn = await api.withdrawNomination(target.year, nomination.id);
   } catch (err: unknown) {
     return { error: buildApiRefusalMessage(err, "Could not withdraw that nomination.") };
   }
-  return redraw(`Withdrew **${escapeMarkdown(gameTitle(nomination))}**.`);
+  const title = escapeMarkdown(gameTitle(nomination));
+  // False is the API's 404: it went between the read and the delete (another press, say).
+  return redraw(withdrawn ? `Withdrew **${title}**.` : `**${title}** was already withdrawn.`);
 }
 
 // --- Autocomplete: mark games that can't be nominated for the year. ---
+
+/**
+ * A /goty nominate choice's value, `gamedb:<id>`. The prefix tells a picked choice from
+ * a typed title, so a title made of digits ("1942") is searched as a title, not read as
+ * a GameDB id.
+ */
+const GAME_CHOICE_PREFIX = "gamedb:";
+
+export function gotyGameChoiceValue(gameId: number): string {
+  return `${GAME_CHOICE_PREFIX}${gameId}`;
+}
+
+export function parseGotyGameChoiceValue(raw: string): number | null {
+  if (!raw.startsWith(GAME_CHOICE_PREFIX)) return null;
+  const id = Number(raw.slice(GAME_CHOICE_PREFIX.length));
+  return isPositiveInt(id) ? id : null;
+}
+
+type IGotyTitledGame = { id: number; title: string; initialReleaseDate?: Date | string | null };
+
+/** The GameDB reads /goty nominate resolves its option with. */
+export interface IGotyGameLookup {
+  getGameById(id: number): Promise<{ id: number; title: string } | null>;
+  searchGames(title: string): Promise<IGotyTitledGame[]>;
+}
+
+/**
+ * The game /goty nominate names: a picked choice's id (checked in GameDB), else a typed
+ * title that matches one game exactly. `found` lists the search's first titles for the
+ * "could not find" reply.
+ */
+export async function resolveGotyNominateGame(
+  input: string,
+  lookup: IGotyGameLookup,
+): Promise<{ id: number | null; found: string[] }> {
+  const pickedId = parseGotyGameChoiceValue(input);
+  if (pickedId !== null) {
+    const game = await lookup.getGameById(pickedId);
+    return { id: game?.id ?? null, found: game ? [game.title] : [] };
+  }
+  const games = await lookup.searchGames(input);
+  return {
+    id: resolveExactTitleMatch(games, input)?.id ?? null,
+    found: games.slice(0, 5).map((game) => game.title),
+  };
+}
 
 /** A game the GameDB search found, with its label (title and year). */
 export interface IGotyGameChoice {
@@ -504,7 +554,7 @@ export async function gotyNominateChoices(
     return {
       eligible: mark === null,
       name: truncateWithEllipsis(mark ? `${game.label} [${mark}]` : game.label, 100),
-      value: String(game.id),
+      value: gotyGameChoiceValue(game.id),
     };
   });
   return [

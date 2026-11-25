@@ -9,8 +9,8 @@ import { logError, logInfo } from "../utilities/LogUtils.js";
 import { handleVotingEvent, type VotingEventOutcome } from "./VotingEventHandlers.js";
 
 // The API runs the GOTM / NR-GOTM round lifecycle and the yearly GOTY Vote's, and
-// queues the Discord posts each step calls for; this service polls that outbox. Every poll is an API
-// call against Neon-backed compute, which suspends after 5 idle minutes, so a
+// queues the Discord posts each step calls for; this service polls that outbox. Every
+// poll is an API call against Neon-backed compute, which suspends after 5 idle minutes, so a
 // fixed poll at that pace kept the database awake around the clock. Instead
 // each claim's response says when the next event is due (next_poll_at) and the
 // service sleeps until then. The cap is a safety net for changes the API cannot

@@ -13,8 +13,10 @@ import {
   gotyNominateReply,
   gotyNominationsReply,
   gotyWithdrawReply,
+  parseGotyGameChoiceValue,
   parseGotyWithdrawId,
   pickNominationsGotyVote,
+  resolveGotyNominateGame,
 } from "../services/GotyNominations.js";
 import { apiError, buttonsOf, textOf } from "./challengeFixtures.js";
 import { UNUSED_GOTY_API } from "./gotyFixtures.js";
@@ -223,7 +225,7 @@ test("nominate: the API's refusal reads first (unknown release, cap)", async () 
   assert.match(cap.error, /"status": 422/);
 });
 
-test("nominations: every game once, with its nominators, and only own Withdraw buttons", async () => {
+test("nominations: each game once, with its nominators, and own Withdraw buttons", async () => {
   const api = fakeApi({
     lists: [[
       nomination(1, 7, "Clair Obscur", OTHER),
@@ -297,6 +299,18 @@ test("withdraw: someone else's nomination is refused without a delete", async ()
   assert.ok(!api.calls.some((call) => call.startsWith("withdraw")));
 });
 
+test("withdraw: a nomination gone before the delete says it was already withdrawn", async () => {
+  const api = fakeApi({ lists: [[nomination(2, 8, "Metaphor")], []], withdraw: false });
+  const reply = await gotyWithdrawReply(
+    api,
+    { year: 2026, nominationId: 2, scope: "mine" },
+    MEMBER,
+  );
+  const text = textOf(viewOf(reply).components);
+  assert.match(text, /\*\*Metaphor\*\* was already withdrawn\./);
+  assert.doesNotMatch(text, /Withdrew/);
+});
+
 test("withdraw: an API refusal carries the request and response", async () => {
   const api = fakeApi({
     lists: [[nomination(2, 8, "Metaphor")]],
@@ -334,9 +348,9 @@ test("autocomplete: eligible games first, ineligible ones marked with why", asyn
   ];
   const choices = await gotyNominateChoices(games, { api, cache, now: () => 1000 });
   assert.deepEqual(choices, [
-    { name: "Hollow Knight Silksong (2026)", value: "2" },
-    { name: "Clair Obscur (2025) [not eligible: released 2025]", value: "1" },
-    { name: "Obscure RPG (Unknown Year) [not eligible: no known release]", value: "3" },
+    { name: "Hollow Knight Silksong (2026)", value: "gamedb:2" },
+    { name: "Clair Obscur (2025) [not eligible: released 2025]", value: "gamedb:1" },
+    { name: "Obscure RPG (Unknown Year) [not eligible: no known release]", value: "gamedb:3" },
   ]);
 
   // A second keystroke within the cache's life asks the API nothing again.
@@ -351,13 +365,13 @@ test("autocomplete: with no GOTY Vote, or failing checks, games show unmarked", 
     api: fakeApi({ votes: [] }),
     cache: createGotyAutocompleteCache(),
   });
-  assert.deepEqual(noVote, [{ name: "Clair Obscur (2025)", value: "1" }]);
+  assert.deepEqual(noVote, [{ name: "Clair Obscur (2025)", value: "gamedb:1" }]);
 
   const failing = await gotyNominateChoices(games, {
     api: fakeApi({}),
     cache: createGotyAutocompleteCache(),
   });
-  assert.deepEqual(failing, [{ name: "Clair Obscur (2025)", value: "1" }]);
+  assert.deepEqual(failing, [{ name: "Clair Obscur (2025)", value: "gamedb:1" }]);
 });
 
 test("autocomplete: checks still out at the deadline show unmarked", async () => {
@@ -370,5 +384,30 @@ test("autocomplete: checks still out at the deadline show unmarked", async () =>
     cache: createGotyAutocompleteCache(),
     deadlineMs: 10,
   });
-  assert.deepEqual(choices, [{ name: "Slow (2026)", value: "1" }]);
+  assert.deepEqual(choices, [{ name: "Slow (2026)", value: "gamedb:1" }]);
+});
+
+test("nominate: only a picked choice is an id; a typed all-digit title is searched", async () => {
+  assert.equal(parseGotyGameChoiceValue("gamedb:42"), 42);
+  assert.equal(parseGotyGameChoiceValue("1942"), null);
+  const calls: string[] = [];
+  const lookup = {
+    getGameById: async (id: number) => {
+      calls.push(`id ${id}`);
+      return { id, title: "Picked" };
+    },
+    searchGames: async (title: string) => {
+      calls.push(`search ${title}`);
+      return [{ id: 7, title: "1942" }, { id: 8, title: "1942: Joint Strike" }];
+    },
+  };
+  assert.deepEqual(await resolveGotyNominateGame("1942", lookup), {
+    id: 7,
+    found: ["1942", "1942: Joint Strike"],
+  });
+  assert.deepEqual(await resolveGotyNominateGame("gamedb:42", lookup), {
+    id: 42,
+    found: ["Picked"],
+  });
+  assert.deepEqual(calls, ["search 1942", "id 42"]);
 });
