@@ -47,6 +47,11 @@ import {
   buildTextInputLabel,
 } from "../../functions/uiComponents.js";
 import {
+  PLAYTHROUGH_PREFILL_TIMEOUT_MS,
+  playthroughPrefill,
+  prefillInputValue,
+} from "../../services/PlaythroughPrefill.js";
+import {
   announceCompletion,
   buildDuplicateCompletionPrompt,
   notifyUnknownCompletionPlatform,
@@ -1026,9 +1031,17 @@ export class NowPlayingCompletionHandlers {
       return;
     }
 
-    const entries = await Member.getNowPlaying(session.userId);
+    // The modal must open within Discord's 3 second window, so the Playthrough lookup
+    // runs beside the Now Playing read and is capped.
+    const [entries, prefillHours] = await Promise.all([
+      Member.getNowPlaying(session.userId),
+      playthroughPrefill.fetchHours(session.userId, session.gameId, {
+        timeoutMs: PLAYTHROUGH_PREFILL_TIMEOUT_MS,
+      }),
+    ]);
     const currentEntry = entries.find((entry) => entry.gameId === session.gameId);
     const noteValue = currentEntry?.note ?? "";
+    const playtimePrefill = prefillInputValue(prefillHours);
 
     const modal = new ModalBuilder()
       .setCustomId(`${NOW_PLAYING_COMPLETE_MODAL_ID}:${sessionId}`)
@@ -1042,8 +1055,11 @@ export class NowPlayingCompletionHandlers {
       }),
       buildTextInputLabel({
         customId: NOW_PLAYING_COMPLETE_HOURS_INPUT_ID,
-        label: "Final playtime hours (optional)",
+        label: playtimePrefill
+          ? "Final playtime hours (from your Playthrough)"
+          : "Final playtime hours (optional)",
         required: false,
+        value: playtimePrefill,
       }),
       buildTextInputLabel({
         customId: NOW_PLAYING_COMPLETE_NOTE_INPUT_ID,
