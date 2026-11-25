@@ -11,12 +11,12 @@ import { formatReleaseDate, toUnixTimestamp } from "../functions/DateFormatUtils
 import { startTrackedInterval } from "../utilities/IntervalUtils.js";
 import { logError, logWarn } from "../utilities/LogUtils.js";
 
-// Coarse safety-net sweep. Each cycle runs several queries against the GameDB
-// (now on Neon). At 60s this kept Neon's serverless compute permanently active
-// (never scaling to zero), which accounts for most of our Neon compute-hour
-// cost. Releases are date-scheduled, so hourly is more than enough. Immediate,
-// on-demand announcing will move to an API endpoint in therpgclub-api so admins
-// can trigger it manually instead of relying on a tight poll.
+// Hourly check for due announcements: one read of the API's due feed. The
+// API keeps each game's announcement schedule current itself on every
+// Release write (Gamedb::ReleaseAnnouncementSchedule), so the bot no longer
+// sweeps every game to rebuild it. At 60s this check kept Neon's serverless
+// compute permanently active; releases are date-scheduled, so hourly is
+// more than enough.
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const BATCH_SIZE = 25;
 
@@ -56,7 +56,6 @@ function getGuildId(channel: SendableTextChannel): string | undefined {
 
 async function checkAndSendReleaseAnnouncements(client: Client): Promise<void> {
   const now = DateTime.utc().toJSDate();
-  await GameReleaseAnnouncement.syncReleaseAnnouncements();
 
   const due = await GameReleaseAnnouncement.listDueAnnouncements(now, BATCH_SIZE);
   if (!due.length) {
