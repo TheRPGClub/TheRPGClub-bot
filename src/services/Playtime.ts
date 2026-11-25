@@ -32,6 +32,7 @@ import {
   type IPlaytimeApi,
   type ManualPlaytimeMode,
   type PlaytimeProvider,
+  withinDeadline,
 } from "./PlaytimeApi.js";
 
 // Playtime in Discord (spec api#457, bot#1572): /playtime add with its 5B receipt and Undo,
@@ -632,16 +633,11 @@ export async function playtimePlatformChoicesFor(
   const platforms = await readPlatforms(deps);
   let doc: IGamePlaytime | null = null;
   if (input.gameId !== null) {
-    const read = api.get(input.userId, input.gameId).catch((err: unknown) => {
-      logError("Playtime.playtimePlatformChoicesFor", err);
-      return null;
-    });
-    let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), deps.waitMs ?? 1500);
-    });
-    doc = await Promise.race([read, timeout]);
-    clearTimeout(timer);
+    doc = await withinDeadline(api.get(input.userId, input.gameId), deps.waitMs ?? 1500)
+      .catch((err: unknown) => {
+        logError("Playtime.playtimePlatformChoicesFor", err);
+        return null;
+      });
   }
   return playtimePlatformChoices({ query: input.query, platforms, doc });
 }

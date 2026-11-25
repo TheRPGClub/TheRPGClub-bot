@@ -1,5 +1,6 @@
 import {
   apiDelete,
+  apiGet,
   apiGetOrThrow,
   apiPostOrThrow,
 } from "./RpgClubApiClient.js";
@@ -80,8 +81,14 @@ export interface IManualPlaytimeWrite {
 export interface IPlaytimeApi {
   /** The member's Playtime for the game. Throws the AxiosError on a failure, 404 included. */
   get(userId: string, gameId: number): Promise<IGamePlaytime>;
+  /** As `get`, but null on a 404 (an unknown member or game). */
+  find(userId: string, gameId: number): Promise<IGamePlaytime | null>;
   /** Adds to or sets the member's Manual entry on a platform (an upsert). */
-  writeManual(userId: string, gameId: number, write: IManualPlaytimeWrite): Promise<IGamePlaytime>;
+  writeManual(
+    userId: string,
+    gameId: number,
+    write: IManualPlaytimeWrite,
+  ): Promise<IGamePlaytime>;
   /** Deletes a Manual entry. Null when it is already gone. */
   deleteManual(entryId: number): Promise<IGamePlaytime | null>;
 }
@@ -97,6 +104,12 @@ export const PLAYTIME_API: IPlaytimeApi = {
     );
     return payload.data;
   },
+  async find(userId, gameId) {
+    const payload = await apiGet<{ data: IGamePlaytime }>(
+      `${playtimePath(userId, gameId)}/playtime`,
+    );
+    return payload?.data ?? null;
+  },
   async writeManual(userId, gameId, write) {
     const payload = await apiPostOrThrow<{ data: IGamePlaytime }>(
       `${playtimePath(userId, gameId)}/manual_playtimes`,
@@ -111,3 +124,23 @@ export const PLAYTIME_API: IPlaytimeApi = {
     return payload?.data ?? null;
   },
 };
+
+/**
+ * `promise`'s value, or null when it takes longer than `ms`. A rejection still rejects.
+ * For reads inside Discord's 3 second window (autocomplete, modal prefills).
+ */
+export function withinDeadline<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}

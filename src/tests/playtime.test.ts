@@ -104,6 +104,9 @@ function fakeApi(start: IGamePlaytime, options: { failWrite?: Error } = {}): IFa
     async get() {
       return current;
     },
+    async find() {
+      return current;
+    },
     async writeManual(userId, gameId, write) {
       api.writes.push({ userId, gameId, write });
       if (options.failWrite) throw options.failWrite;
@@ -258,7 +261,7 @@ test("/playtime add: a new entry's Undo deletes it; no Playthrough and no mismat
     const api = fakeApi(start);
     const view = viewOf(await addPlaytimeReply(
       { userId: MARA, gameId: 6, platformId: 4, hours: 2, set: false },
-      deps({ ...api, writeManual: api.writeManual }),
+      deps(api),
     ));
     const text = textOf(view.components);
     assert.match(text, /Added 2 h to Manual · Switch \(0 h to 2 h\)/);
