@@ -132,6 +132,39 @@ export const ADMIN_HELP_TOPICS: AdminHelpTopic[] = [
     notes: "Asks for confirmation. This cannot be undone.",
   },
   {
+    id: "goty-dates",
+    label: "/admin goty-dates",
+    summary: "Move a GOTY Vote's nomination open, voting open or voting close date.",
+    syntax:
+      "Syntax: /admin goty-dates [nominations-open:<date>] [voting-open:<date>] " +
+      "[voting-close:<date>] [year:<number>]",
+    notes:
+      "Dates are US Eastern, e.g. 2027-01-15 or 2027-01-15 12:00. A date alone means " +
+      "midnight for nominations, noon for the voting open and the end of the day for the " +
+      "close. Moving only the voting open keeps the weekend window. Once voting has " +
+      "opened only the close moves. With no date given it shows the schedule. year " +
+      "defaults to the current GOTY Vote.",
+  },
+  {
+    id: "goty-tie",
+    label: "/admin goty-tie",
+    summary: "Pick the winner of a GOTY Vote Award whose runoff tied.",
+    syntax: "Syntax: /admin goty-tie [year:<number>]",
+    notes:
+      "Shows a pick per tied Award. Settling the last tie decides the GOTY Vote, and " +
+      "the results post on their own.",
+  },
+  {
+    id: "goty-delete-nom",
+    label: "/admin goty-delete-nom",
+    summary: "Delete a Game of the Year nomination, with a required reason.",
+    syntax: "Syntax: /admin goty-delete-nom nomination:<pick> [year:<number>]",
+    notes:
+      "Pick the nomination by game and nominator, then give a reason (1 to 250 " +
+      "characters). The removal is announced in the nomination channel. Allowed until " +
+      "voting opens.",
+  },
+  {
     id: "generate-vote-image",
     label: "/admin generate-vote-image",
     summary: "Generate a combined vote image from a round's nominations.",

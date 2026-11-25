@@ -353,6 +353,7 @@ function decidedEvent(): IVotingEvent {
   return {
     id: 9,
     roundNumber: 12,
+    gotyYear: null,
     kind: "round_decided",
     rawKind: "round_decided",
     payload: {},
@@ -420,12 +421,13 @@ for (const [state, expected] of [
   });
 }
 
-test("post Features: every post kind belongs to one of the API registry's 17 keys", async () => {
+test("post Features: every post kind belongs to one of the API registry's 18 keys", async () => {
   const { POST_FEATURE_KEYS } = await import("../config/featureGate.js");
   const registry = new Set([
     "game_index", "voting_gotm", "backlog", "collection", "now_playing", "game_completions",
     "reviews", "achievement_hub", "giveaways", "journals", "suggestions", "news_hub",
     "challenges", "release_calendar", "club_codex", "game_lists", "franchise_progress",
+    "goty_vote",
   ]);
   assert.deepEqual(Object.values(POST_FEATURE_KEYS).filter((key) => !registry.has(key)), []);
 });

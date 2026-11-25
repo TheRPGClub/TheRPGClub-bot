@@ -69,6 +69,7 @@ const COMMANDS: Array<[string, string | null]> = [
   ["codex", "club_codex"],
   ["funfact", "club_codex"],
   ["list", "game_lists"],
+  ["goty", "goty_vote"],
   ["help", null],
   ["timestamp", null],
   ["profile", null],
@@ -116,6 +117,8 @@ const COMPONENTS: Array<[string, string | null]> = [
   ["game-list-page-v1:7:2", "game_lists"],
   ["game-list-add-v1:12", "game_lists"],
   ["gamedb-action:list:12", "game_lists"],
+  ["goty-nom-withdraw-v1:2026:41:m", "goty_vote"],
+  ["goty-vote-pick-v1:2026:gotm:m:4", "goty_vote"],
   ["now-playing-help-select", null],
   ["help:gamedb:main", null],
   ["admin-vote-close:4:confirm", null],
@@ -433,14 +436,14 @@ test("addPreviewNote: an edit that keeps the message body is left alone", () => 
   assert.deepEqual(addPreviewNote(embedsOnly), embedsOnly);
 });
 
-test("feature gate map: every mapped Feature is one of the API registry's 15 keys", async () => {
+test("feature gate map: every mapped Feature is one of the API registry's keys", async () => {
   const { FEATURE_COMMANDS, FEATURE_COMPONENT_PREFIXES } = await import(
     "../config/featureGate.js",
   );
   const registry = new Set([
     "game_index", "voting_gotm", "backlog", "collection", "now_playing", "game_completions",
     "reviews", "achievement_hub", "giveaways", "journals", "suggestions", "news_hub", "challenges",
-    "club_codex", "game_lists",
+    "club_codex", "game_lists", "goty_vote",
   ]);
   const mapped = [
     ...Object.values(FEATURE_COMMANDS),

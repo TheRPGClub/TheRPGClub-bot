@@ -2,14 +2,15 @@ import type { Client } from "discord.js";
 import VotingEvents, {
   type IVotingEvent,
   type IVotingEventClaim,
+  votingEventScope,
 } from "../classes/VotingEvents.js";
 import { createScheduledTask, type IScheduledTask } from "../utilities/IntervalUtils.js";
 import { logError, logInfo } from "../utilities/LogUtils.js";
 import { handleVotingEvent, type VotingEventOutcome } from "./VotingEventHandlers.js";
 
-// The API runs the GOTM / NR-GOTM round lifecycle and queues the Discord posts
-// each step calls for; this service polls that outbox. Every poll is an API
-// call against Neon-backed compute, which suspends after 5 idle minutes, so a
+// The API runs the GOTM / NR-GOTM round lifecycle and the yearly GOTY Vote's, and
+// queues the Discord posts each step calls for; this service polls that outbox. Every
+// poll is an API call against Neon-backed compute, which suspends after 5 idle minutes, so a
 // fixed poll at that pace kept the database awake around the clock. Instead
 // each claim's response says when the next event is due (next_poll_at) and the
 // service sleeps until then. The cap is a safety net for changes the API cannot
@@ -52,9 +53,9 @@ export function createVotingEventDeliveryState(): IVotingEventDeliveryState {
 
 /**
  * Handles claimed events in claim order (oldest first) and acks each one once
- * its post went out. When an event fails, the round's later events in the
- * batch are left unacked too, so a round's posts never land out of order (the
- * results before the vote panels, say); the leases hand them back later. An
+ * its post went out. When an event fails, the later events of its round (or
+ * GOTY Vote) in the batch are left unacked too, so its posts never land out of
+ * order (the results before the vote panels, say); the leases hand them back later. An
  * event whose post went out but whose ack failed is only acked when it comes
  * back, never posted again. Resolves to whether every event was acked.
  */
@@ -65,13 +66,14 @@ export async function processVotingEvents(
   ack: Ack = VotingEvents.ack,
   state: IVotingEventDeliveryState = deliveryState,
 ): Promise<boolean> {
-  const blockedRounds = new Set<number>();
+  const blockedScopes = new Set<string>();
   let acked = 0;
   for (const event of events) {
-    if (blockedRounds.has(event.roundNumber)) {
+    const scope = votingEventScope(event);
+    if (blockedScopes.has(scope)) {
       continue;
     }
-    const label = `voting event ${event.id} (${event.rawKind}, Round ${event.roundNumber})`;
+    const label = `voting event ${event.id} (${event.rawKind}, ${scope})`;
     if (!state.delivered.has(event.id)) {
       try {
         const outcome = await handle(client, event);
@@ -83,7 +85,7 @@ export async function processVotingEvents(
         const failures = (state.failures.get(event.id) ?? 0) + 1;
         if (failures < MAX_VOTING_EVENT_ATTEMPTS) {
           state.failures.set(event.id, failures);
-          blockedRounds.add(event.roundNumber);
+          blockedScopes.add(scope);
           continue;
         }
         // The round's later events still go out: holding them back forever
@@ -101,7 +103,7 @@ export async function processVotingEvents(
       acked++;
     } catch (err) {
       logError("VotingEventService.ack", err);
-      blockedRounds.add(event.roundNumber);
+      blockedScopes.add(scope);
     }
   }
   return acked === events.length;

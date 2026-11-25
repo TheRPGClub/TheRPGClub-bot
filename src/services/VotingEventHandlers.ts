@@ -7,7 +7,11 @@ import {
 } from "../classes/Nomination.js";
 import type { VoteBallot } from "../classes/Vote.js";
 import NrGotm, { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
-import type { IVotingEvent } from "../classes/VotingEvents.js";
+import {
+  isGotyVotingEvent,
+  type IRoundVotingEvent,
+  type IVotingEvent,
+} from "../classes/VotingEvents.js";
 import { toVotingRoundCategory, type IVotingRound } from "../classes/VotingRounds.js";
 import { ADMIN_CHANNEL_ID, ANNOUNCEMENT_CHANNEL_ID } from "../config/channels.js";
 import { POST_FEATURE_KEYS } from "../config/featureGate.js";
@@ -38,6 +42,7 @@ import { ensureWinnerThread, type WinnerKindLabel } from "./WinnerThreadService.
 import { apiVotingDataSource, type IVotingDataSource } from "./VotingDataSource.js";
 import { logSuppressedPost, resolveVotingPostTarget } from "./FeaturePostRouting.js";
 import { featureFlagCache } from "./FeatureAccessService.js";
+import { handleGotyVotingEvent } from "./GotyVotingEventHandlers.js";
 import type { IFeatureFlagSource } from "../functions/FeatureGate.js";
 
 /**
@@ -90,7 +95,7 @@ export function buildNominationReminderText(roundNumber: number, votingOpensAt: 
 }
 
 async function requireRound(
-  event: IVotingEvent,
+  event: IRoundVotingEvent,
   context: IVotingEventContext,
 ): Promise<IVotingRound> {
   const round = await context.source.getRound(event.roundNumber);
@@ -102,7 +107,7 @@ async function requireRound(
 
 async function postNominationReminder(
   client: Client,
-  event: IVotingEvent,
+  event: IRoundVotingEvent,
   context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
   const round = await requireRound(event, context);
@@ -138,7 +143,7 @@ async function postNominationReminder(
 
 async function postVotingPanels(
   client: Client,
-  event: IVotingEvent,
+  event: IRoundVotingEvent,
   context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
   const round = await requireRound(event, context);
@@ -181,7 +186,7 @@ async function postVotingPanels(
 
 async function postVotingResults(
   client: Client,
-  event: IVotingEvent,
+  event: IRoundVotingEvent,
   context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
   const round = await requireRound(event, context);
@@ -210,7 +215,7 @@ async function postVotingResults(
  */
 async function postRunoffPanels(
   client: Client,
-  event: IVotingEvent,
+  event: IRoundVotingEvent,
   context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
   const round = await requireRound(event, context);
@@ -262,7 +267,7 @@ async function postRunoffPanels(
 
 async function postRunoffResults(
   client: Client,
-  event: IVotingEvent,
+  event: IRoundVotingEvent,
   context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
   const round = await requireRound(event, context);
@@ -286,7 +291,7 @@ async function postRunoffResults(
 
 async function postTiePendingNotice(
   client: Client,
-  event: IVotingEvent,
+  event: IRoundVotingEvent,
   context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
   const round = await requireRound(event, context);
@@ -389,7 +394,7 @@ export const LIVE_VOTING_EVENT_CONTEXT: IVotingEventContext = {
 
 async function finishDecidedRound(
   client: Client,
-  event: IVotingEvent,
+  event: IRoundVotingEvent,
   context: IVotingEventContext,
 ): Promise<VotingEventOutcome> {
   await context.recordWinners(client, event.roundNumber);
@@ -436,11 +441,13 @@ export async function handleVotingEvent(
   baseContext: IVotingEventContext = LIVE_VOTING_EVENT_CONTEXT,
   flags: IFeatureFlagSource = featureFlagCache,
 ): Promise<VotingEventOutcome> {
-  if (event.kind === "tie_pending") return postTiePendingNotice(client, event, baseContext);
   if (event.kind === "unknown") {
     logWarn("VotingEventHandlers", `Unknown voting event kind "${event.rawKind}"; acking.`);
     return "skipped";
   }
+  // A GOTY Vote's posts follow its own Feature (goty_vote), not Voting & GOTM's.
+  if (isGotyVotingEvent(event)) return handleGotyVotingEvent(client, event, { flags });
+  if (event.kind === "tie_pending") return postTiePendingNotice(client, event, baseContext);
   const context = await routeVotingEventContext(baseContext, flags);
   if (!context) {
     logSuppressedPost(POST_FEATURE_KEYS.voting, `voting event ${event.id} (${event.kind})`);

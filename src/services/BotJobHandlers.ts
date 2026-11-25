@@ -34,6 +34,11 @@ import {
   buildRefreshedNominationList,
   postNominationChange,
 } from "../functions/NominationAdminHelpers.js";
+import { gotyAdminApi } from "./GotyVoteApi.js";
+import {
+  buildGotyNominationDeletedNotice,
+  postGotyNominationChange,
+} from "../functions/GotyAdminHelpers.js";
 import Member, { type ICompletionRecord } from "../classes/Member.js";
 import Game from "../classes/Game.js";
 import type { IGame } from "../types/GameTypes.js";
@@ -313,6 +318,16 @@ export interface IBotJobSurface {
    * need not build it.
    */
   conquests?: IConquestPostDeps;
+  /**
+   * Posts a GOTY Vote nomination removal notice with the year's refreshed Game of the Year
+   * nominations in the GOTM nomination channel, or where the GOTY Vote Feature's `state`
+   * routes it. Throws when it could not. Optional so older test surfaces need not stub it.
+   */
+  announceGotyNominationChange?(
+    year: number,
+    content: string,
+    state: FeatureState | null,
+  ): Promise<void>;
 }
 
 export function createBotJobSurface(client: Client): IBotJobSurface {
@@ -390,6 +405,10 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     codex: createCodexJobDeps(client),
     birthdays: createBirthdayPostDeps(client),
     conquests: createConquestPostDeps(client),
+    announceGotyNominationChange: async (year, content, state) => {
+      const nominations = await gotyAdminApi.listNominations(year);
+      await postGotyNominationChange(client, year, content, nominations, state);
+    },
   };
 }
 
@@ -679,6 +698,30 @@ export const handleNominationDeleted: BotJobHandler = async (payload, surface, c
     requireString(payload, "reason"),
   );
   await surface.announceNominationChange(kind, round, content, state);
+};
+
+/**
+ * Payload: `{ year, user_id, game_title, deleted_by_user_id, reason, feature_key:
+ * "goty_vote" }` (api#473). An Admin removed someone's Game of the Year nomination on the
+ * website (already deleted), so the change and the refreshed list go to the GOTM
+ * nomination channel, as /admin goty-delete-nom does. No DM.
+ */
+export const handleGotyNominationDeleted: BotJobHandler = async (payload, surface, context) => {
+  const year = payloadPositiveInt(payload, "year");
+  const featureKey = POST_FEATURE_KEYS.gotyVote;
+  const state = await jobFeatureState(featureKey, surface, context);
+  if (isSuppressed(state)) return featureOffNotice(featureKey);
+  const content = buildGotyNominationDeletedNotice(
+    year,
+    requireString(payload, "deleted_by_user_id"),
+    requireString(payload, "user_id"),
+    optionalString(payload, "game_title"),
+    requireString(payload, "reason"),
+  );
+  if (!surface.announceGotyNominationChange) {
+    throw new Error("This bot job surface cannot post GOTY Vote nomination changes.");
+  }
+  await surface.announceGotyNominationChange(year, content, state);
 };
 
 /**
@@ -1286,6 +1329,7 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   suggestion_outcome: handleSuggestionOutcome,
   gotm_cache_reload: handleGotmCacheReload,
   nomination_deleted: handleNominationDeleted,
+  goty_nomination_deleted: handleGotyNominationDeleted,
   completion_announce: handleCompletionAnnounce,
   live_event_create: handleLiveEventCreate,
   voting_results_publish: handleVotingResultsPublish,

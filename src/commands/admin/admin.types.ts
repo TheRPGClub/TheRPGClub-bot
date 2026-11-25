@@ -11,6 +11,9 @@ export type AdminHelpTopicId =
   | "voting-close"
   | "voting-results"
   | "votes-reset"
+  | "goty-dates"
+  | "goty-tie"
+  | "goty-delete-nom"
   | "generate-vote-image"
   | "sync";
 

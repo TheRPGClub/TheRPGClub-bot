@@ -24,12 +24,14 @@ function fakeApi(): IBotJobApi & { acks: Ack[] } {
 interface IRoundSurface extends IBotJobSurface {
   reloads: { category: "gotm" | "nr_gotm"; roundNumber: number }[];
   notices: { kind: NominationKind; round: number; content: string }[];
+  gotyNotices: { year: number; content: string }[];
 }
 
 function fakeSurface(options: { reloadError?: unknown; announceError?: unknown } = {}) {
   const surface: IRoundSurface = {
     reloads: [],
     notices: [],
+    gotyNotices: [],
     requestVotingEventPoll: () => {},
     fetchGameKey: async () => null,
     runGiveawayClaimSideEffects: async () => "",
@@ -50,6 +52,10 @@ function fakeSurface(options: { reloadError?: unknown; announceError?: unknown }
     announceNominationChange: async (kind, round, content) => {
       if (options.announceError) throw options.announceError;
       surface.notices.push({ kind, round, content });
+    },
+    announceGotyNominationChange: async (year, content) => {
+      if (options.announceError) throw options.announceError;
+      surface.gotyNotices.push({ year, content });
     },
     fetchLiveEvent: async () => null,
     recordLiveEventStep: async () => {},
@@ -170,5 +176,43 @@ test("nomination removal rejects a payload without a reason", async () => {
 test("nomination removal acks failed when the post fails", async () => {
   const surface = fakeSurface({ announceError: new Error("Missing Access") });
   const acks = await run(surface, [job(1, "nomination_deleted", deletedPayload)]);
+  assert.match(failure(acks), /Missing Access/);
+});
+
+const gotyDeletedPayload = {
+  year: 2026,
+  user_id: "nominator-1",
+  game_title: "Hades II",
+  deleted_by_user_id: "admin-1",
+  reason: "Released in 2024",
+  feature_key: "goty_vote",
+};
+
+test("GOTY nomination removal posts who removed it, the game and the reason", async () => {
+  const surface = fakeSurface();
+  const acks = await run(surface, [job(1, "goty_nomination_deleted", gotyDeletedPayload)]);
+  assert.deepEqual(acks, [{ id: 1, status: "done" }]);
+  assert.deepEqual(surface.gotyNotices, [{
+    year: 2026,
+    content: "<@admin-1> deleted <@nominator-1>'s GOTY Vote 2026 Game of the Year " +
+      "nomination \"Hades II\". Reason: Released in 2024",
+  }]);
+  assert.equal(surface.notices.length, 0);
+});
+
+test("GOTY nomination removal rejects a payload without a year or reason", async () => {
+  const surface = fakeSurface();
+  const acks = await run(surface, [
+    job(1, "goty_nomination_deleted", { ...gotyDeletedPayload, year: null }),
+    job(2, "goty_nomination_deleted", { ...gotyDeletedPayload, reason: "" }),
+  ]);
+  assert.match(failure([acks[0]!]), /year must be a positive integer/);
+  assert.match(failure([acks[1]!]), /reason must be a non-empty string/);
+  assert.equal(surface.gotyNotices.length, 0);
+});
+
+test("GOTY nomination removal acks failed when the post fails", async () => {
+  const surface = fakeSurface({ announceError: new Error("Missing Access") });
+  const acks = await run(surface, [job(1, "goty_nomination_deleted", gotyDeletedPayload)]);
   assert.match(failure(acks), /Missing Access/);
 });

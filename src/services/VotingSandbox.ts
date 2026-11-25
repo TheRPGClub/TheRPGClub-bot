@@ -357,6 +357,7 @@ function toVotingEvent(
   return {
     id: queued.id,
     roundNumber: state.roundNumber,
+    gotyYear: null,
     kind: queued.kind,
     rawKind: queued.kind,
     payload: {},
