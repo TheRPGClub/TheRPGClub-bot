@@ -93,6 +93,7 @@ import {
 import { buildTextReply } from "../functions/ComponentsV2Utils.js";
 import Member from "../classes/Member.js";
 import { isPositiveInt, isValidPlaytimeHours } from "../utilities/ValidationUtils.js";
+import { playthroughPrefill } from "../services/PlaythroughPrefill.js";
 import { toUnixTimestamp } from "../functions/DateFormatUtils.js";
 import GameSearchService from "../classes/GameSearchService.js";
 
@@ -151,7 +152,7 @@ export class GameCompletionCommands {
     })
     completionDate: string | undefined,
     @SlashOption({
-      description: "Final playtime in hours (e.g., 12.5)",
+      description: "Final playtime in hours (e.g., 12.5). Blank uses your open Playthrough.",
       name: "final_playtime_hours",
       required: false,
       type: ApplicationCommandOptionType.Number,
@@ -239,6 +240,11 @@ export class GameCompletionCommands {
         completedAt,
         false,
       );
+      const finalHours = await playthroughPrefill.resolveFinalHours(
+        userId,
+        exactMatch.id,
+        playtime,
+      );
 
       await saveCompletion(
         interaction,
@@ -247,7 +253,7 @@ export class GameCompletionCommands {
         selectedPlatformId,
         completionType,
         completedAt,
-        playtime,
+        finalHours,
         trimmedNote,
         exactMatch.title,
         announce,

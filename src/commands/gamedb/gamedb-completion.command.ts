@@ -65,6 +65,11 @@ import {
 } from "../../functions/uiComponents.js";
 import { safeIgnore } from "../../utilities/AsyncUtils.js";
 import GamePlatformRegionService from "../../classes/GamePlatformRegionService.js";
+import {
+  PLAYTHROUGH_PREFILL_TIMEOUT_MS,
+  playthroughPrefill,
+  prefillInputValue,
+} from "../../services/PlaythroughPrefill.js";
 
 const COMPLETION_WIZARD_SESSIONS = new Map<string, CompletionWizardSession>();
 
@@ -84,7 +89,45 @@ type CompletionWizardSession = {
   removeChoice?: "yes" | "no";
   requiresRemoveChoice: boolean;
   ephemeralMessageId?: string;
+  /** Hours from the member's open Playthrough, prefilled in the details modal. */
+  prefillPlaytimeHours?: number | null;
 };
+
+/**
+ * The details modal. The playtime input is prefilled from the open Playthrough, if any;
+ * the member can change or clear it.
+ */
+export function buildCompletionDetailsModal(
+  session: Pick<CompletionWizardSession, "id" | "dateChoice" | "prefillPlaytimeHours">,
+): ModalBuilder {
+  const modal = new ModalBuilder()
+    .setCustomId(`gamedb-completion-modal:${session.id}`)
+    .setTitle("Add Completion Details");
+
+  if (session.dateChoice === "date") {
+    modal.addLabelComponents(buildTextInputLabel({
+      customId: "completion-date",
+      label: "Completion date (YYYY-MM-DD)",
+    }));
+  }
+
+  const prefill = prefillInputValue(session.prefillPlaytimeHours);
+  modal.addLabelComponents(buildTextInputLabel({
+    customId: "completion-playtime",
+    label: prefill ? "Playtime hours (from your Playthrough)" : "Playtime hours (optional)",
+    required: false,
+    value: prefill,
+  }));
+
+  modal.addLabelComponents(buildTextInputLabel({
+    customId: "completion-note",
+    label: `Note (optional, ${MAX_COMPLETION_NOTE_LEN} chars max)`,
+    style: TextInputStyle.Paragraph,
+    required: false,
+    maxLength: MAX_COMPLETION_NOTE_LEN,
+  }));
+  return modal;
+}
 
 function buildCompletionWizardContainer(
   session: CompletionWizardSession,
@@ -274,7 +317,12 @@ export async function startCompletionWizard(
     return;
   }
 
-  const nowPlayingMeta = await Member.getNowPlayingEntryMeta(interaction.user.id, gameId);
+  const [nowPlayingMeta, prefillPlaytimeHours] = await Promise.all([
+    Member.getNowPlayingEntryMeta(interaction.user.id, gameId),
+    playthroughPrefill.fetchHours(interaction.user.id, gameId, {
+      timeoutMs: PLAYTHROUGH_PREFILL_TIMEOUT_MS,
+    }),
+  ]);
   const sessionId = interaction.id;
   const session: CompletionWizardSession = {
     id: sessionId,
@@ -287,6 +335,7 @@ export async function startCompletionWizard(
     interactionToken: interaction.token,
     applicationId: interaction.applicationId,
     requiresRemoveChoice: Boolean(nowPlayingMeta),
+    prefillPlaytimeHours,
   };
   COMPLETION_WIZARD_SESSIONS.set(sessionId, session);
 
@@ -377,32 +426,7 @@ export class GameDbCompletionCommand {
       return;
     }
 
-    const modal = new ModalBuilder()
-       
-      .setCustomId(`gamedb-completion-modal:${session.id}`)
-      .setTitle("Add Completion Details");
-
-    if (session.dateChoice === "date") {
-      modal.addLabelComponents(buildTextInputLabel({
-        customId: "completion-date",
-        label: "Completion date (YYYY-MM-DD)",
-      }));
-    }
-
-    modal.addLabelComponents(buildTextInputLabel({
-      customId: "completion-playtime",
-      label: "Playtime hours (optional)",
-      required: false,
-    }));
-
-    modal.addLabelComponents(buildTextInputLabel({
-      customId: "completion-note",
-      label: `Note (optional, ${MAX_COMPLETION_NOTE_LEN} chars max)`,
-      style: TextInputStyle.Paragraph,
-      required: false,
-      maxLength: MAX_COMPLETION_NOTE_LEN,
-    }));
-
+    const modal = buildCompletionDetailsModal(session);
     safeIgnore(interaction.showModal(modal));
   }
    

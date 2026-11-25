@@ -59,6 +59,7 @@ import {
 } from "../../functions/uiComponents.js";
 import { assertCustomIdSegments, parseCustomIdSegments } from "../../utilities/CustomIdUtils.js";
 import GameSearchService from "../../classes/GameSearchService.js";
+import { playthroughPrefill } from "../../services/PlaythroughPrefill.js";
 
 const IGDB_IMPORT_FAILED_STATUS = "Import failed. See the error below.";
 const COMPLETION_ADD_EXPIRED_MESSAGE = "This completion prompt has expired.";
@@ -415,6 +416,11 @@ async function finishCompletionForGame(
     ctx.completedAt,
     false,
   );
+  const finalHours = await playthroughPrefill.resolveFinalHours(
+    ctx.userId,
+    gameId,
+    ctx.finalPlaytimeHours,
+  );
   await saveCompletion(
     interaction,
     ctx.userId,
@@ -422,7 +428,7 @@ async function finishCompletionForGame(
     ctx.selectedPlatformId,
     ctx.completionType,
     ctx.completedAt,
-    ctx.finalPlaytimeHours,
+    finalHours,
     ctx.note,
     gameTitle,
     ctx.announce,
