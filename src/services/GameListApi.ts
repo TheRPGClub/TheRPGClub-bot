@@ -44,6 +44,11 @@ export interface IGameList {
   entry_count: number;
   /** What the acting member may do with it. */
   viewer: { can_edit: boolean; can_delete: boolean };
+  /**
+   * The Pool Challenge the list feeds (null when none, or hidden). A list feeds one
+   * Challenge at most, so no other can start from it.
+   */
+  challenge?: { id: number; name: string } | null;
   /** A single list only: every game, in its sort's order. */
   entries?: IGameListEntry[];
   updated_at: string;

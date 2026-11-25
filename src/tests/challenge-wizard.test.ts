@@ -675,7 +675,7 @@ test("from-list: after basics the list's games come in as Core Games, and create
     ));
   });
 
-test("from-list: another Format, or a list that can't be read, starts without it",
+test("from-list: another Format, an unreadable list, or one already used starts without it",
   async () => {
     const slots = applyBasics(newChallengeDraft("42", false, 12), basics({
       [WIZARD_FIELDS.format]: "slots",
@@ -691,6 +691,13 @@ test("from-list: another Format, or a list that can't be read, starts without it
     assert.deepEqual(gone.draft.pool.core, []);
     assert.match(gone.errors[0] ?? "", /That Game List is gone/);
     assert.equal(challengeWriteOf(gone.draft).pool?.game_list_id, undefined);
+
+    const feeding = await applyGameList(withBasics(newChallengeDraft("42", false, 12)), "42",
+      listApi({ ...soulsList(), challenge: { id: 9, name: "Souls Autumn" } }));
+    assert.equal(feeding.draft.gameList, null);
+    assert.deepEqual(feeding.draft.pool.core, []);
+    assert.match(feeding.errors[0] ?? "", /already feeds \*\*Souls Autumn\*\*/);
+    assert.equal(challengeWriteOf(feeding.draft).pool?.game_list_id, undefined);
   });
 
 test("from-list: an edit shows the linked list but never sends it", () => {
