@@ -1232,16 +1232,18 @@ export const handleBirthdayPost: BotJobHandler = async (payload, surface) =>
  * Payload FranchiseConquestJobPayload (`user_id`, `franchise_id`, `franchise_name`,
  * `conquered_at`, the Playtime, `covers`, `also_conquered`, `feature_key:
  * "franchise_progress"`): the 4B Conquest card in the completions channel, in the bot-dev
- * channel while Franchise Progress is in Preview, and nowhere while it is Off. No pings.
+ * channel while Franchise Progress is in Preview, and nowhere while it is Off (the payload
+ * isn't read then). No pings.
  */
 export const handleFranchiseConquest: BotJobHandler = async (payload, surface, context) => {
-  const conquest = parseFranchiseConquest(payload);
   const featureKey = POST_FEATURE_KEYS.franchiseConquest;
   const channelId = routeFeaturePost(
     await jobFeatureState(featureKey, surface, context),
     WHATCHA_PLAYING_CHANNEL_ID,
   );
+  // Off skips the job before its payload is read, so even a malformed one acks.
   if (!channelId) return featureOffNotice(featureKey);
+  const conquest = parseFranchiseConquest(payload);
   if (!surface.conquests) throw new Error("This bot job surface cannot post Conquests.");
   return postFranchiseConquest(conquest, channelId, surface.conquests);
 };

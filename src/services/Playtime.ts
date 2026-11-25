@@ -576,7 +576,11 @@ export async function undoPlaytimeReply(
       const current = await api.get(undo.userId, game.id);
       const entry = current.breakdown.manual_entries
         .find((e) => (e.platform_id ?? null) === undo.platformId);
-      doc = entry ? (await api.deleteManual(entry.id)) ?? current : current;
+      // Already gone (another delete got there first): read it afresh rather than show
+      // the entry from before the delete.
+      doc = entry
+        ? (await api.deleteManual(entry.id)) ?? await api.get(undo.userId, game.id)
+        : current;
     } else {
       doc = await api.writeManual(undo.userId, game.id, {
         platformId: undo.platformId,
