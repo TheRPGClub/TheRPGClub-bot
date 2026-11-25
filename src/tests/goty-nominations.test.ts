@@ -3,6 +3,7 @@ import test from "node:test";
 import type {
   IGotyEligibility,
   IGotyNomination,
+  IGotyVote,
   IGotyVoteApi,
   IGotyVoteSummary,
 } from "../services/GotyVoteApi.js";
@@ -15,11 +16,10 @@ import {
   gotyWithdrawReply,
   parseGotyGameChoiceValue,
   parseGotyWithdrawId,
-  pickNominationsGotyVote,
   resolveGotyNominateGame,
 } from "../services/GotyNominations.js";
 import { apiError, buttonsOf, textOf } from "./challengeFixtures.js";
-import { UNUSED_GOTY_API } from "./gotyFixtures.js";
+import { apiCurrentGotyVote, UNUSED_GOTY_API } from "./gotyFixtures.js";
 
 // /goty nominate, /goty nominations and Withdraw (bot#1580), against a fake API client.
 
@@ -57,6 +57,10 @@ function nomination(
   };
 }
 
+function asVote(vote: IGotyVoteSummary | null): IGotyVote | null {
+  return vote ? { ...vote, awards: [] } : null;
+}
+
 interface IFakeApi extends IGotyVoteApi {
   calls: string[];
 }
@@ -74,9 +78,13 @@ function fakeApi(options: {
   return {
     ...UNUSED_GOTY_API,
     calls,
-    async listVotes() {
-      calls.push("votes");
-      return options.votes ?? [summary()];
+    async current() {
+      calls.push("current");
+      return asVote(apiCurrentGotyVote(options.votes ?? [summary()]));
+    },
+    async getVote(year) {
+      calls.push(`get ${year}`);
+      return asVote((options.votes ?? [summary()]).find((vote) => vote.year === year) ?? null);
     },
     async listNominations(year, userId) {
       calls.push(`list ${year} ${userId ?? "all"}`);
@@ -102,6 +110,15 @@ function fakeApi(options: {
       if (!found) throw new Error("no eligibility");
       return found;
     },
+    async eligibilities(gameIds, year) {
+      calls.push(`eligibilities ${gameIds.join(",")} ${year}`);
+      if (!options.eligibility) throw new Error("no eligibility");
+      // The API leaves unknown ids out; answer in reverse so tests match by game_id.
+      return gameIds
+        .map((id) => options.eligibility?.[id])
+        .filter((found): found is IGotyEligibility => found !== undefined)
+        .reverse();
+    },
   };
 }
 
@@ -126,13 +143,33 @@ test("withdraw ids round-trip and refuse other prefixes", () => {
   assert.equal(parseGotyWithdrawId("goty-nom-withdraw-v1:2026:x:a"), null);
 });
 
-test("the nominations vote is the one taking nominations, else the newest under way", () => {
+test("nominate: in the January overlap it nominates for last year's vote", async () => {
+  const upcoming = summary({ year: 2027, name: "GOTY Vote 2027", phase: "upcoming",
+    nominations_open: false });
   const decided = summary({ year: 2025, phase: "decided", nominations_open: false });
-  const upcoming = summary({ year: 2027, phase: "upcoming", nominations_open: false });
-  assert.equal(pickNominationsGotyVote([upcoming, summary(), decided])?.year, 2026);
-  assert.equal(pickNominationsGotyVote([upcoming, decided])?.year, 2027);
-  assert.equal(pickNominationsGotyVote([decided])?.year, 2025);
-  assert.equal(pickNominationsGotyVote([]), null);
+  const saved = nomination(12, 7, "Clair Obscur");
+  const api = fakeApi({ votes: [upcoming, summary(), decided], nominate: saved });
+  const reply = await gotyNominateReply(api, { userId: MEMBER, gameId: 7 });
+  assert.match(textOf(viewOf(reply).components), /for Game of the Year 2026\./);
+  assert.deepEqual(api.calls, ["current", `list 2026 ${MEMBER}`, `nominate 2026 ${MEMBER} 7`]);
+});
+
+test("nominations: in the January overlap they list last year's vote", async () => {
+  const upcoming = summary({ year: 2027, name: "GOTY Vote 2027", phase: "upcoming",
+    nominations_open: false });
+  const voting = summary({ phase: "voting", nominations_open: false, voting_open: true });
+  const api = fakeApi({ votes: [upcoming, voting] });
+  const reply = await gotyNominationsReply(api, { userId: MEMBER, year: null, scope: "all" });
+  assert.match(textOf(viewOf(reply).components), /GOTY Vote 2026/);
+  assert.deepEqual(api.calls, ["current", "list 2026 all"]);
+});
+
+test("nominations: an explicit year wins over the Current GOTY Vote", async () => {
+  const upcoming = summary({ year: 2027, name: "GOTY Vote 2027", phase: "upcoming",
+    nominations_open: false });
+  const api = fakeApi({ votes: [upcoming, summary()] });
+  await gotyNominationsReply(api, { userId: MEMBER, year: 2027, scope: "all" });
+  assert.deepEqual(api.calls, ["get 2027", "list 2027 all"]);
 });
 
 test("nominate: records the game and shows how many of three are used", async () => {
@@ -145,7 +182,7 @@ test("nominate: records the game and shows how many of three are used", async ()
   assert.match(text, /You have used 2 of your 3 nominations\./);
   assert.match(text, /GOTY Vote 2026/);
   assert.doesNotMatch(text, /reason/i);
-  assert.deepEqual(api.calls, ["votes", `list 2026 ${MEMBER}`, `nominate 2026 ${MEMBER} 7`]);
+  assert.deepEqual(api.calls, ["current", `list 2026 ${MEMBER}`, `nominate 2026 ${MEMBER} 7`]);
   const labels = buttonsOf(view.components).map((button) => button.label);
   assert.deepEqual(labels, ["Withdraw Metaphor", "Withdraw Clair Obscur"]);
   assert.equal(
@@ -170,7 +207,7 @@ test("nominate: outside the window says when, without calling the API", async ()
   const reply = await gotyNominateReply(api, { userId: MEMBER, gameId: 7 });
   assert.ok("text" in reply);
   assert.match(reply.text, /nominations for GOTY Vote 2026 open <t:\d+:F>/);
-  assert.deepEqual(api.calls, ["votes"]);
+  assert.deepEqual(api.calls, ["current"]);
 
   const voting = fakeApi({
     votes: [summary({ phase: "voting", nominations_open: false, voting_open: true })],
@@ -183,7 +220,7 @@ test("nominate: outside the window says when, without calling the API", async ()
 test("nominate: with no GOTY Vote at all", async () => {
   const reply = await gotyNominateReply(fakeApi({ votes: [] }), { userId: MEMBER, gameId: 7 });
   assert.ok("text" in reply);
-  assert.match(reply.text, /There is no GOTY Vote yet/);
+  assert.match(reply.text, /There is no GOTY Vote under way/);
 });
 
 test("nominate: a game released in another year leads with that year", async () => {
@@ -246,7 +283,7 @@ test("nominations: each game once, with its nominators, and own Withdraw buttons
     buttonsOf(view.components).map((button) => button.customId),
     ["goty-nom-withdraw-v1:2026:2:a", "goty-nom-withdraw-v1:2026:3:a"],
   );
-  assert.deepEqual(api.calls, ["votes", "list 2026 all"]);
+  assert.deepEqual(api.calls, ["current", "list 2026 all"]);
 });
 
 test("nominations: once voting opens there are no Withdraw buttons", async () => {
@@ -352,11 +389,38 @@ test("autocomplete: eligible games first, ineligible ones marked with why", asyn
     { name: "Clair Obscur (2025) [not eligible: released 2025]", value: "gamedb:1" },
     { name: "Obscure RPG (Unknown Year) [not eligible: no known release]", value: "gamedb:3" },
   ]);
+  assert.deepEqual(api.calls, ["current", "eligibilities 1,2,3 2026"]);
 
   // A second keystroke within the cache's life asks the API nothing again.
   api.calls.length = 0;
   await gotyNominateChoices(games, { api, cache, now: () => 2000 });
   assert.deepEqual(api.calls, []);
+});
+
+test("autocomplete: one batch call asks only for the games not cached", async () => {
+  const api = fakeApi({
+    eligibility: {
+      1: { game_id: 1, year: 2026, eligible: true },
+      4: { game_id: 4, year: 2026, eligible: false, reason: "not_released_in_year",
+        released_on: "2024-02-29" },
+    },
+  });
+  const cache = createGotyAutocompleteCache();
+  await gotyNominateChoices([{ id: 1, label: "Known (2026)" }], { api, cache, now: () => 1000 });
+
+  api.calls.length = 0;
+  const choices = await gotyNominateChoices([
+    { id: 4, label: "Old (2024)" },
+    { id: 1, label: "Known (2026)" },
+    { id: 9, label: "Gone (2026)" },
+  ], { api, cache, now: () => 2000 });
+  // Game 9 is unknown to the API, so it is left out of the answer and shows unmarked.
+  assert.deepEqual(api.calls, ["eligibilities 4,9 2026"]);
+  assert.deepEqual(choices, [
+    { name: "Known (2026)", value: "gamedb:1" },
+    { name: "Gone (2026)", value: "gamedb:9" },
+    { name: "Old (2024) [not eligible: released 2024]", value: "gamedb:4" },
+  ]);
 });
 
 test("autocomplete: with no GOTY Vote, or failing checks, games show unmarked", async () => {
@@ -377,7 +441,7 @@ test("autocomplete: with no GOTY Vote, or failing checks, games show unmarked", 
 test("autocomplete: checks still out at the deadline show unmarked", async () => {
   const api: IGotyVoteApi = {
     ...fakeApi({}),
-    eligibility: () => new Promise(() => undefined),
+    eligibilities: () => new Promise(() => undefined),
   };
   const choices = await gotyNominateChoices([{ id: 1, label: "Slow (2026)" }], {
     api,

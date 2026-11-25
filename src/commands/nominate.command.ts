@@ -24,13 +24,15 @@ import {
   upsertNomination,
 } from "../classes/Nomination.js";
 import type { IGame } from "../types/GameTypes.js";
+import {
+  gotyGameChoiceValue,
+  resolveGotyNominateGame,
+  type IGotyGameLookup,
+} from "../services/GotyNominations.js";
 import { buildNominationListPayload } from "../functions/NominationListComponents.js";
 import { buildComponentsV2Flags } from "../functions/ComponentsV2Utils.js";
 import { announceNominationChange } from "../functions/NominationAdminHelpers.js";
-import {
-  formatGameTitleWithYear,
-  resolveExactTitleMatch,
-} from "../functions/GameTitleAutocompleteUtils.js";
+import { formatGameTitleWithYear } from "../functions/GameTitleAutocompleteUtils.js";
 import {
   areNominationsClosed,
   buildNominationsClosedText,
@@ -66,26 +68,36 @@ async function autocompleteNominationTitle(
   }
 
   const results = await GameSearchService.searchGamesAutocomplete(query);
-  await safeRespond(
-    interaction,
-    results.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
-      name: truncateLabel(formatGameTitleWithYear(game)),
-      value: String(game.id),
-    })),
-  );
+  await safeRespond(interaction, gotmNominationChoices(results));
 }
 
-async function resolveNominatedGameByTitle(
-  searchTerm: string,
-): Promise<{ game: IGame | null; candidates: IGame[] }> {
-  const numericId = Number(searchTerm);
-  if (isPositiveInt(numericId)) {
-    const byId = await Game.getGameById(numericId);
-    return { game: byId, candidates: byId ? [byId] : [] };
-  }
+/**
+ * The title option's choices. Each value is `gamedb:<id>`, as /goty nominate's, so a picked
+ * choice is told from a typed title and a title made of digits ("1942") is searched.
+ */
+export function gotmNominationChoices(
+  games: Pick<IGame, "id" | "title" | "initialReleaseDate">[],
+): { name: string; value: string }[] {
+  return games.slice(0, DISCORD_SELECT_OPTIONS_MAX).map((game) => ({
+    name: truncateLabel(formatGameTitleWithYear(game)),
+    value: gotyGameChoiceValue(game.id),
+  }));
+}
 
-  const existing = await GameSearchService.searchGames(searchTerm);
-  return { game: resolveExactTitleMatch(existing, searchTerm), candidates: existing };
+const GAME_LOOKUP: IGotyGameLookup = {
+  getGameById: (id) => Game.getGameById(id),
+  searchGames: (title) => GameSearchService.searchGames(title),
+};
+
+/**
+ * The game /gotm nominate names: a picked choice's id (checked in GameDB), else a typed
+ * title that matches one game exactly. Shares /goty nominate's resolution.
+ */
+export function resolveGotmNominatedGame(
+  input: string,
+  lookup: IGotyGameLookup = GAME_LOOKUP,
+): Promise<{ id: number | null; found: string[] }> {
+  return resolveGotyNominateGame(input, lookup);
 }
 
 @Discord()
@@ -160,10 +172,10 @@ export class NominateCommand {
         return;
       }
 
-      const { game, candidates } = await resolveNominatedGameByTitle(cleanedTitle);
-      if (!game) {
-        const candidateList = candidates.length
-          ? candidates.slice(0, 5).map((g) => `"${g.title}"`).join(", ")
+      const { id: gameId, found } = await resolveGotmNominatedGame(cleanedTitle);
+      if (gameId === null) {
+        const candidateList = found.length
+          ? found.map((title) => `"${title}"`).join(", ")
           : "no results";
         const notFoundMsg =
           `I could not find a unique GameDB match for "${cleanedTitle}" ` +
@@ -180,7 +192,7 @@ export class NominateCommand {
         selectedKind,
         window.targetRound,
         interaction.user.id,
-        game.id,
+        gameId,
         cleanedReason,
       );
 

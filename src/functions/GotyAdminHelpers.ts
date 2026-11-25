@@ -97,6 +97,11 @@ export const GOTY_DATE_LABELS: Readonly<Record<GotyDateField, string>> = {
   votingClosesAt: "voting-close",
 };
 
+/** "Nominations for GOTY Vote 2027 open <date>.", for a GOTY Vote still upcoming. */
+export function upcomingNominationsText(vote: IGotyVoteSchedule): string {
+  return `Nominations for ${vote.name} open <t:${toUnixTimestamp(vote.nominationsOpenAt)}:F>.`;
+}
+
 export function describeGotySchedule(vote: IGotyVoteSchedule): string {
   const at = (date: Date): string => `<t:${toUnixTimestamp(date)}:F>`;
   return [
@@ -110,21 +115,33 @@ export function describeGotySchedule(vote: IGotyVoteSchedule): string {
 // Which GOTY Vote
 // ---------------------------------------------------------------------------
 
-export const NO_GOTY_VOTE = "No GOTY Vote exists yet. The sweep creates each year's by " +
-  "December 1.";
+export const NO_GOTY_VOTE = "No GOTY Vote is under way. The sweep creates each year's on " +
+  "January 1. Name a year to act on a decided one.";
 
 /**
- * The year an admin action works on: the one given, else the newest GOTY Vote not yet
- * decided, else the newest. Null when there is none.
+ * The year an admin action works on: the one given, else the Current GOTY Vote's (the
+ * API's rule, so January works on last year's vote while it takes nominations or votes).
+ * Null when no GOTY Vote is undecided.
  */
 export async function resolveGotyYear(
   api: IGotyAdminApi,
   year: number | undefined,
 ): Promise<number | null> {
   if (year !== undefined) return year;
-  const votes = await api.listVotes();
-  const open = votes.find((vote) => vote.phase !== "decided");
-  return (open ?? votes[0])?.year ?? null;
+  return (await api.current())?.year ?? null;
+}
+
+/** Why there is no GOTY Vote to act on: none for the year given, or none undecided. */
+export function missingGotyVoteText(year: number | undefined): string {
+  return year === undefined ? NO_GOTY_VOTE : `There is no GOTY Vote ${year}.`;
+}
+
+/** The GOTY Vote an admin action shows: the year given (null on 404), else the Current one. */
+export function loadGotyVote(
+  api: IGotyAdminApi,
+  year: number | undefined,
+): Promise<IGotyVoteAdminView | null> {
+  return year === undefined ? api.current() : api.getVote(year);
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +193,7 @@ export function buildGotyTiePrompt(
     lines.push(vote.decidedAt
       ? `${vote.name} is decided. The results post on their own.`
       : `${vote.name} has no tie waiting for an admin (phase: ${vote.phase}).`);
+    if (vote.phase === "upcoming") lines.push(upcomingNominationsText(vote));
     if (vote.winners.length > 0) {
       lines.push(...vote.winners.map((winner) => `${winner.name}: ${winner.game.title}`));
     }

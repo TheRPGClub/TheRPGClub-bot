@@ -21,6 +21,8 @@ import {
   GOTY_DATE_LABELS,
   GOTY_NOM_DEL_REASON_INPUT_ID,
   GOTY_NOM_DEL_REASON_MAX,
+  loadGotyVote,
+  missingGotyVoteText,
   NO_GOTY_VOTE,
   parseGotyDateInput,
   parseGotyNomDeleteModalId,
@@ -100,28 +102,28 @@ export async function moveGotyDates(
     changes[field] = parsed;
   }
 
-  let year: number | null;
-  try {
-    year = await resolveGotyYear(api, yearOption);
-  } catch (err: unknown) {
-    return refusal(err, "Could not load the GOTY Votes");
-  }
-  if (year === null) return { ok: false, text: NO_GOTY_VOTE };
-
   if (Object.keys(changes).length === 0) {
     let vote: IGotyVoteAdminView | null;
     try {
-      vote = await api.getVote(year);
+      vote = await loadGotyVote(api, yearOption);
     } catch (err: unknown) {
-      return refusal(err, `Could not load GOTY Vote ${year}`);
+      return refusal(err, "Could not load the GOTY Vote");
     }
-    if (!vote) return { ok: false, text: `There is no GOTY Vote ${year}.` };
+    if (!vote) return { ok: false, text: missingGotyVoteText(yearOption) };
     return {
       ok: true,
       text: `No dates given, so nothing moved. ${vote.name} (${vote.phase}):\n` +
         describeGotySchedule(vote),
     };
   }
+
+  let year: number | null;
+  try {
+    year = await resolveGotyYear(api, yearOption);
+  } catch (err: unknown) {
+    return refusal(err, "Could not load the GOTY Vote");
+  }
+  if (year === null) return { ok: false, text: NO_GOTY_VOTE };
 
   try {
     const vote = await api.moveDates(year, changes);
@@ -155,11 +157,8 @@ export async function loadGotyTiePrompt(
   yearOption: number | undefined,
 ): Promise<{ vote: IGotyVoteAdminView } | IGotyAdminOutcome> {
   try {
-    const year = await resolveGotyYear(api, yearOption);
-    if (year === null) return { ok: false, text: NO_GOTY_VOTE };
-    const vote = await api.getVote(year);
-    if (!vote) return { ok: false, text: `There is no GOTY Vote ${year}.` };
-    return { vote };
+    const vote = await loadGotyVote(api, yearOption);
+    return vote ? { vote } : { ok: false, text: missingGotyVoteText(yearOption) };
   } catch (err: unknown) {
     return refusal(err, "Could not load the GOTY Vote");
   }
