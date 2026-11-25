@@ -20,6 +20,7 @@ import {
   pickCurrentGotyVote,
 } from "../services/GotyVotePanels.js";
 import { apiError, buttonsOf, selectsOf, textOf } from "./challengeFixtures.js";
+import { UNUSED_GOTY_API } from "./gotyFixtures.js";
 
 // /goty vote panels (bot#1581), against a fake API client.
 
@@ -81,6 +82,7 @@ function fakeApi(options: {
   const calls: string[] = [];
   let read = 0;
   return {
+    ...UNUSED_GOTY_API,
     calls,
     async listVotes() {
       calls.push("list");

@@ -116,3 +116,5 @@ export const GOTY_CUSTOM_ID_PREFIX = "goty-";
 export const GOTY_VOTE_PICK_PREFIX = "goty-vote-pick-v1";
 /** /goty vote: the select fallback on a large ballot (`<prefix>:<year>:<award>:<m|r>:<n>`). */
 export const GOTY_VOTE_SELECT_PREFIX = "goty-vote-sel-v1";
+/** /goty nominations: Withdraw one of your own (`<prefix>:<year>:<nominationId>:<a|m>`). */
+export const GOTY_NOMINATION_WITHDRAW_PREFIX = "goty-nom-withdraw-v1";

@@ -17,3 +17,6 @@ import { Discord, SlashGroup } from "discordx";
 export class GotyCommand {}
 
 export { GotyVoteCommand } from "./goty/goty-vote.command.js";
+export { GotyNominateCommand } from "./goty/goty-nominate.command.js";
+export { GotyNominationsCommand } from "./goty/goty-nominations.command.js";
+export { GotyResultsCommand } from "./goty/goty-results.command.js";

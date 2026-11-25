@@ -57,3 +57,8 @@ export function gamePageUrl(gameId: number): string {
 export function franchisePageUrl(franchiseId: number): string {
   return `${WEBSITE_BASE_URL}/franchises/${franchiseId}`;
 }
+
+/** The GOTY Vote page: the current vote and every year's winners. */
+export function gotyPageUrl(): string {
+  return `${WEBSITE_BASE_URL}/goty`;
+}
