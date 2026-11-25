@@ -174,7 +174,9 @@ test("the runoff panel shows only the tied games, with the runoff vote", () => {
   const vote = goty(
     { phase: "runoff", voting_open: false, runoff_open: true,
       runoff_closes_at: "2027-01-20T04:59:59.000Z" },
-    [award("gotm", { runoff_ballot: [1, 3], own_runoff_votes: [3], own_votes: [2] })],
+    [award("gotm", {
+      runoff_ballot: [1, 3], pending_tie: [1, 3], own_runoff_votes: [3], own_votes: [2],
+    })],
   );
   const view = buildGotyAwardPanel(vote, "gotm");
   const text = textOf(view.components);
@@ -223,7 +225,8 @@ test("/goty vote: a panel per Award while voting, read for the member", async ()
 
 test("/goty vote: in a runoff only the tied Awards; one Award when asked", async () => {
   const vote = goty({ phase: "runoff", voting_open: false, runoff_open: true }, [
-    award("gotm"), award("nr_gotm", { runoff_ballot: [1, 2] }), award("game_of_the_year"),
+    award("gotm"), award("nr_gotm", { runoff_ballot: [1, 2], pending_tie: [1, 2] }),
+    award("game_of_the_year"),
   ]);
   const runoff = await gotyVoteCommandReply(fakeApi({ reads: [vote] }), MEMBER, null);
   assert.ok("views" in runoff);
@@ -257,7 +260,9 @@ test("a press casts for the member and redraws the panel with the vote", async (
   const target = { year: 2026, award: "gotm" as const, ballot: "main" as const };
   const outcome = await gotyVoteCast(api, target, 2, MEMBER);
   assert.equal(outcome.error, null);
-  assert.deepEqual(api.calls, [`cast 2026 ${MEMBER} gotm 2`, `get 2026 ${MEMBER}`]);
+  assert.deepEqual(api.calls, [
+    `get 2026 ${MEMBER}`, `cast 2026 ${MEMBER} gotm 2`, `get 2026 ${MEMBER}`,
+  ]);
   const text = textOf(outcome.panel?.components);
   assert.match(text, /✅ Voted for \*\*Xenogears\*\*/);
   assert.equal(buttonsOf(outcome.panel?.components)[1].style, ButtonStyle.Success);
@@ -310,4 +315,39 @@ test("a refused press reports the API's message and request, and redraws the pan
   assert.match(outcome.error ?? "", /422/);
   assert.equal(buttonsOf(outcome.panel?.components).length, 0);
   assert.match(textOf(outcome.panel?.components), /has closed/);
+});
+
+test("an Award an admin settled early in the runoff has no runoff ballot", async () => {
+  const settled = award("gotm", {
+    runoff_ballot: [1, 3],
+    pending_tie: [],
+    winner: { gamedb_game_id: 3, decided_by: "admin", game: game(3, "Suikoden II") },
+  });
+  const vote = goty({ phase: "runoff", voting_open: false, runoff_open: true }, [
+    settled, award("nr_gotm", { runoff_ballot: [1, 2], pending_tie: [1, 2] }),
+    award("game_of_the_year"),
+  ]);
+  const panel = buildGotyAwardPanel(vote, "gotm");
+  assert.equal(buttonsOf(panel.components).length, 0);
+  assert.match(textOf(panel.components), /\*\*Suikoden II\*\* won GOTM of the Year 2026/);
+  const reply = await gotyVoteCommandReply(fakeApi({ reads: [vote] }), MEMBER, null);
+  assert.ok("views" in reply);
+  assert.equal(reply.views.length, 1);
+  assert.match(textOf(reply.views[0].components), /NR-GOTM of the Year Runoff/);
+});
+
+test("a main vote press from a stale panel during the runoff casts nothing", async () => {
+  const vote = goty({ phase: "runoff", voting_open: false, runoff_open: true }, [
+    award("gotm", { runoff_ballot: [1, 2], pending_tie: [1, 2] }),
+  ]);
+  const api = fakeApi({ reads: [vote], cast: castResult() });
+  const target = { year: 2026, award: "gotm" as const, ballot: "main" as const };
+  const outcome = await gotyVoteCast(api, target, 2, MEMBER);
+  assert.equal(outcome.error, null);
+  assert.deepEqual(api.calls, [`get 2026 ${MEMBER}`]);
+  const text = textOf(outcome.panel?.components);
+  assert.match(text, /That button was from the GOTM of the Year main vote.*nothing was cast/);
+  assert.match(text, /GOTM of the Year Runoff/);
+  assert.equal(buttonsOf(outcome.panel?.components)[0].customId,
+    "goty-vote-pick-v1:2026:gotm:r:1");
 });

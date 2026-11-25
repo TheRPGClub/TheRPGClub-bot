@@ -123,6 +123,15 @@ interface IOpenBallot {
   deadline: string | null;
 }
 
+/**
+ * Whether the Award's runoff is taking votes. The API keys this on `pending_tie`, not
+ * `runoff_ballot`: an admin who settles a tied Award early clears its pending tie (and
+ * sets its winner) while `runoff_ballot` keeps the runoff's games.
+ */
+function inOpenRunoff(vote: IGotyVote, award: IGotyAward): boolean {
+  return vote.runoff_open && award.pending_tie.length > 0 && !award.winner;
+}
+
 /** The open ballot for an Award, or the text that says why there is none. */
 function openBallotOf(vote: IGotyVote, award: IGotyAward): IOpenBallot | string {
   const target = { year: vote.year, award: award.award };
@@ -136,10 +145,10 @@ function openBallotOf(vote: IGotyVote, award: IGotyAward): IOpenBallot | string 
       deadline: vote.voting_closes_at,
     };
   }
-  if (vote.runoff_open && award.runoff_ballot.length) {
+  if (inOpenRunoff(vote, award)) {
     return {
       target: { ...target, ballot: "runoff" },
-      games: award.runoff_ballot.map((id) => ({
+      games: award.pending_tie.map((id) => ({
         game_id: id,
         title: gameTitle(award.ballot.find((game) => game.game_id === id), id),
       })),
@@ -377,7 +386,7 @@ export async function gotyVoteCommandReply(
     if (award) return { views: [buildGotyAwardPanel(vote, award)] };
     if (!vote.voting_open && !vote.runoff_open) return { views: [buildGotyStatusView(vote)] };
     const awards = vote.runoff_open
-      ? vote.awards.filter((entry) => entry.runoff_ballot.length).map((entry) => entry.award)
+      ? vote.awards.filter((entry) => inOpenRunoff(vote, entry)).map((entry) => entry.award)
       : GOTY_AWARDS;
     if (!awards.length) return { views: [buildGotyStatusView(vote)] };
     return { views: awards.map((key) => buildGotyAwardPanel(vote, key)) };
@@ -410,10 +419,27 @@ export interface IGotyCastOutcome {
   error: string | null;
 }
 
+/** The ballot taking votes in the Award right now, if any. */
+function openBallotKind(vote: IGotyVote, award: GotyAwardKey): GotyBallot | null {
+  const entry = awardOf(vote, award);
+  const open = entry ? openBallotOf(vote, entry) : null;
+  return open && typeof open !== "string" ? open.target.ballot : null;
+}
+
+export function staleBallotNotice(target: IGotyVoteTarget, open: GotyBallot): string {
+  const label = GOTY_AWARD_LABELS[target.award];
+  const pressed = target.ballot === "runoff" ? "runoff" : "main vote";
+  const now = open === "runoff" ? "runoff" : "main vote";
+  return `⚠️ That button was from the ${label} ${pressed}, which is not open, so nothing ` +
+    `was cast. Here is the ${now} open now.`;
+}
+
 /**
  * A press on a panel: casts or toggles the vote, then redraws the panel from a fresh read
  * with the outcome as its notice. A refused cast (voting closed, say) still redraws the
- * panel, so stale buttons go away.
+ * panel, so stale buttons go away. The cast call names no ballot (the API picks the one
+ * open now), so a press from a stale panel whose ballot is not the one open now (a main
+ * vote button during the runoff) is refused here and the panel redrawn.
  */
 export async function gotyVoteCast(
   api: IGotyVoteApi,
@@ -421,6 +447,20 @@ export async function gotyVoteCast(
   gameId: number,
   userId: string,
 ): Promise<IGotyCastOutcome> {
+  try {
+    const before = await api.getVote(target.year, userId);
+    if (!before) return { panel: null, error: `There is no GOTY Vote for ${target.year}.` };
+    const open = openBallotKind(before, target.award);
+    if (open && open !== target.ballot) {
+      return {
+        panel: buildGotyAwardPanel(before, target.award, staleBallotNotice(target, open)),
+        error: null,
+      };
+    }
+  } catch (err: unknown) {
+    return { panel: null, error: buildApiRefusalMessage(err, "Could not load the GOTY Vote") };
+  }
+
   let result: IGotyVoteCastResult | null = null;
   let error: string | null = null;
   try {
