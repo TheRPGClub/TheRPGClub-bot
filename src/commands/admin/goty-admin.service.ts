@@ -24,6 +24,7 @@ import {
   NO_GOTY_VOTE,
   parseGotyDateInput,
   parseGotyNomDeleteModalId,
+  parseGotyNominationChoiceValue,
   parseGotyTieSelectId,
   postGotyNominationChange,
   resolveGotyYear,
@@ -284,19 +285,21 @@ export async function findGotyNomination(
   }
 }
 
-/** Opens the reason modal. Not deferred: a modal must be the first response. */
+/**
+ * Opens the reason modal. Not deferred: a modal must be the first response, within
+ * Discord's 3 seconds, so it is shown straight from the picked choice (`<year>:<id>`)
+ * with no API call; the submit checks the nomination still exists.
+ */
 export async function handleGotyDeleteNomination(
   interaction: CommandInteraction,
-  year: number | undefined,
-  rawNominationId: string,
-  api: IGotyAdminApi = gotyAdminApi,
+  rawChoice: string,
 ): Promise<void> {
-  const found = await findGotyNomination(api, year, rawNominationId);
-  if (!("nomination" in found)) {
-    await safeReply(interaction, buildTextReply(found.text, true));
+  const picked = parseGotyNominationChoiceValue(rawChoice);
+  if (!picked) {
+    await safeReply(interaction, buildTextReply("Pick a nomination from the list.", true));
     return;
   }
-  await interaction.showModal(buildGotyNomDeleteModal(found.year, found.nomination))
+  await interaction.showModal(buildGotyNomDeleteModal(picked.year, picked.nominationId))
     .catch(async () => {
       await safeReply(
         interaction,
@@ -306,8 +309,11 @@ export async function handleGotyDeleteNomination(
 }
 
 export interface IGotyNominationRemoval extends IGotyAdminOutcome {
-  /** Set once removed: the public notice and the list to post with it. */
-  announcement?: { year: number; content: string; nominations: IGotyAdminNomination[] };
+  /**
+   * Set once removed: the public notice and the list to post with it (null when the list
+   * could not be read, so the notice posts alone).
+   */
+  announcement?: { year: number; content: string; nominations: IGotyAdminNomination[] | null };
 }
 
 /**
@@ -348,7 +354,7 @@ export async function removeGotyNomination(
     nomination.gameTitle,
     reason,
   );
-  let nominations: IGotyAdminNomination[] = [];
+  let nominations: IGotyAdminNomination[] | null = null;
   try {
     nominations = await api.listNominations(year);
   } catch (err: unknown) {

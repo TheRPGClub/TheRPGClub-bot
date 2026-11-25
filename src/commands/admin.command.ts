@@ -507,12 +507,13 @@ export class Admin {
       minValue: GOTY_YEAR_MIN,
       maxValue: GOTY_YEAR_MAX,
     })
-    year: number | undefined,
+    // Only steers the autocomplete: the picked value carries its own year.
+    _year: number | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     // Not deferred: the reason modal must be the first response.
     if (!(await isAdmin(interaction))) return;
-    await handleGotyDeleteNomination(interaction, year, nomination);
+    await handleGotyDeleteNomination(interaction, nomination);
   }
 
   @ModalComponent({ id: GOTY_NOM_DEL_MODAL_ID_PATTERN })

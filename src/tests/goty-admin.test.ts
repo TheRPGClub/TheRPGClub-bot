@@ -14,6 +14,7 @@ import {
   type IGotyVoteForAdmin,
 } from "../services/GotyVoteApi.js";
 import {
+  buildGotyNominationChangeComponents,
   buildGotyNominationListText,
   buildGotyTiePrompt,
   buildGotyTieSelectId,
@@ -23,10 +24,12 @@ import {
   buildGotyNomDeleteModalId,
   parseGotyDateInput,
   parseGotyNomDeleteModalId,
+  parseGotyNominationChoiceValue,
   parseGotyTieSelectId,
 } from "../functions/GotyAdminHelpers.js";
 import {
   findGotyNomination,
+  handleGotyDeleteNomination,
   loadGotyTiePrompt,
   moveGotyDates,
   removeGotyNomination,
@@ -325,7 +328,7 @@ test("a malformed tie select is refused without an API call", async () => {
 
 test("autocomplete choices name the game and nominator and filter by query", () => {
   assert.deepEqual(filterGotyNominationChoices(NOMINATIONS, "hades"), [
-    { name: "Hades II (Bo)", value: "13" },
+    { name: "Hades II (Bo)", value: "2026:13" },
   ]);
   assert.equal(filterGotyNominationChoices(NOMINATIONS, "").length, 3);
 });
@@ -355,7 +358,7 @@ test("removal deletes, words the notice like GOTM's and lists what is left", asy
     "<@admin-1> deleted <@u2>'s GOTY Vote 2026 Game of the Year nomination \"Hades II\". " +
       "Reason: Released in 2024",
   );
-  assert.deepEqual(removal.announcement?.nominations.map((entry) => entry.id), [11, 12]);
+  assert.deepEqual(removal.announcement?.nominations?.map((entry) => entry.id), [11, 12]);
 });
 
 test("removal needs a reason", async () => {
@@ -420,4 +423,48 @@ test("the admin view reads the one GOTY client; delete is the withdraw", async (
   assert.equal(vote?.ties[0]?.award, "game_of_the_year");
   assert.equal(await api.deleteNomination(2026, 11), false);
   assert.deepEqual(calls, [["getVote", 2026], ["withdrawNomination", 2026, 11]]);
+});
+
+test("a nomination choice carries its year and id, so the modal needs no API read", async () => {
+  assert.deepEqual(parseGotyNominationChoiceValue("2026:13"), { year: 2026, nominationId: 13 });
+  assert.equal(parseGotyNominationChoiceValue("13"), null);
+  assert.equal(parseGotyNominationChoiceValue("Hades II"), null);
+
+  const shown: string[] = [];
+  const replies: unknown[] = [];
+  const interaction = {
+    replied: false,
+    deferred: false,
+    showModal: async (modal: { toJSON: () => { custom_id: string } }) => {
+      shown.push(modal.toJSON().custom_id);
+    },
+    reply: async (payload: unknown) => {
+      replies.push(payload);
+    },
+  } as never;
+  await handleGotyDeleteNomination(interaction, "2026:13");
+  assert.deepEqual(shown, ["admin-goty-nom-del-reason-v1:2026:13"]);
+  await handleGotyDeleteNomination(interaction, "Hades II");
+  assert.equal(shown.length, 1);
+  assert.equal(replies.length, 1);
+});
+
+test("a removal whose list re-read failed posts the notice without a list", async () => {
+  const api = fakeApi();
+  let reads = 0;
+  const flaky = {
+    ...api,
+    listNominations: async (year: number) => {
+      reads += 1;
+      if (reads > 1) throw new Error("API down");
+      return api.listNominations(year);
+    },
+  };
+  const removal = await removeGotyNomination(flaky, 2026, 13, "admin-1", "Dupe");
+  assert.equal(removal.ok, true);
+  assert.equal(removal.announcement?.nominations, null);
+  const components = buildGotyNominationChangeComponents(2026, "notice", null);
+  assert.equal(components.length, 1);
+  assert.doesNotMatch(JSON.stringify(components[0].toJSON()), /No nominations yet/);
+  assert.equal(buildGotyNominationChangeComponents(2026, "notice", []).length, 2);
 });

@@ -206,21 +206,38 @@ export function parseGotyNomDeleteModalId(
   return { year: Number(year), nominationId };
 }
 
-export function buildGotyNomDeleteModal(
-  year: number,
-  nomination: IGotyAdminNomination,
-): ModalBuilder {
-  const title = nomination.gameTitle ?? `Game ${nomination.gameId}`;
+/**
+ * The reason modal. It is built from the picked choice alone (no API read), since a modal
+ * must be the interaction's first response within 3 seconds; the submit re-reads the
+ * nomination before removing it.
+ */
+export function buildGotyNomDeleteModal(year: number, nominationId: number): ModalBuilder {
   return new ModalBuilder()
-    .setCustomId(buildGotyNomDeleteModalId(year, nomination.id))
-    .setTitle("Delete GOTY nomination")
+    .setCustomId(buildGotyNomDeleteModalId(year, nominationId))
+    .setTitle(`Delete GOTY Vote ${year} nomination`)
     .addLabelComponents(buildTextInputLabel({
       customId: GOTY_NOM_DEL_REASON_INPUT_ID,
       label: "Deletion reason",
       style: TextInputStyle.Paragraph,
       maxLength: GOTY_NOM_DEL_REASON_MAX,
-      placeholder: truncateWithEllipsis(`Why should "${title}" be removed?`, 100),
+      placeholder: "Why should this nomination be removed?",
     }));
+}
+
+/** An autocomplete choice's value: the nomination's year and id, `<year>:<id>`. */
+export function buildGotyNominationChoiceValue(nomination: IGotyAdminNomination): string {
+  return `${nomination.year}:${nomination.id}`;
+}
+
+/** A picked choice back to its year and id; null for a value not picked from the list. */
+export function parseGotyNominationChoiceValue(
+  raw: string,
+): { year: number; nominationId: number } | null {
+  const match = /^(\d{4}):(\d+)$/.exec(raw.trim());
+  if (!match) return null;
+  const nominationId = Number(match[2]);
+  if (!Number.isSafeInteger(nominationId) || nominationId <= 0) return null;
+  return { year: Number(match[1]), nominationId };
 }
 
 /** An autocomplete choice for a nomination: the game and who nominated it. */
@@ -241,7 +258,7 @@ export function filterGotyNominationChoices(
     .slice(0, DISCORD_SELECT_OPTIONS_MAX)
     .map((nomination) => ({
       name: gotyNominationChoiceName(nomination),
-      value: String(nomination.id),
+      value: buildGotyNominationChoiceValue(nomination),
     }));
 }
 
@@ -277,16 +294,31 @@ export function buildGotyNominationListText(
   return [heading, ...lines].join("\n");
 }
 
+/** The removal post: the notice, then the year's list when it could be read. */
+export function buildGotyNominationChangeComponents(
+  year: number,
+  content: string,
+  nominations: IGotyAdminNomination[] | null,
+): ContainerBuilder[] {
+  return [
+    buildTextContainer(safeV2TextContent(content, 3500)),
+    ...(nominations
+      ? [buildTextContainer(safeV2TextContent(buildGotyNominationListText(year, nominations), 3500))]
+      : []),
+  ];
+}
+
 /**
  * Posts a removal notice and the refreshed list in the GOTM nomination channel, where the
  * GOTY Vote Feature routes it (the bot-dev channel in Preview, nowhere while Off). No
- * pings. `featureState` is a bot job's read; omitted, it is read here.
+ * pings. `featureState` is a bot job's read; omitted, it is read here. `nominations` null
+ * (the list could not be read) posts the notice alone, rather than a wrong empty list.
  */
 export async function postGotyNominationChange(
   client: Client,
   year: number,
   content: string,
-  nominations: IGotyAdminNomination[],
+  nominations: IGotyAdminNomination[] | null,
   featureState?: FeatureState | null,
 ): Promise<void> {
   const channelId = await routeFeaturePostFor(
@@ -300,10 +332,7 @@ export async function postGotyNominationChange(
     throw new Error(`Nomination channel ${channelId} is missing or the bot cannot post in it.`);
   }
   await channel.send({
-    components: [
-      buildTextContainer(safeV2TextContent(content, 3500)),
-      buildTextContainer(safeV2TextContent(buildGotyNominationListText(year, nominations), 3500)),
-    ],
+    components: buildGotyNominationChangeComponents(year, content, nominations),
     flags: buildComponentsV2Flags(false),
     allowedMentions: { parse: [] },
   });
