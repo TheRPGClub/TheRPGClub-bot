@@ -9,12 +9,12 @@ are optional. feat bumps the minor version, fix and perf the patch version, and
 
 -
 
-Patch note:
+Patch note: <!-- one sentence in members' words, or leave empty -->
 
 <!--
 Patch note (optional): one line in members' words for the next Patch, e.g.
-`Patch note: /patch-notes now shows any past Patch by its number.`
-Leave it empty when members won't notice the change.
+`Patch note: /patch-notes now shows any past Patch by its number.` Write it after the
+label or on the next line. Leave it empty when members won't notice the change.
 -->
 
 ## Testing

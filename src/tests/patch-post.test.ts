@@ -58,9 +58,12 @@ function postPayload(extra: Record<string, unknown> = {}): Record<string, unknow
   };
 }
 
+/** Where a Live post sits: #patch-notes, where the Feature routes when Live. */
+const LIVE_POST: IPatchMessage = { channelId: PATCH_NOTES_CHANNEL_ID, messageId: "777" };
+
 function editPayload(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return postPayload({
-    channel_id: STORED.channelId,
+    channel_id: LIVE_POST.channelId,
     message_id: STORED.messageId,
     ...extra,
   });
@@ -95,6 +98,19 @@ interface IFakeDeps extends IPatchPostDeps {
   cleared: { patchNumber: number; messageId: string }[];
 }
 
+function serverError(): DiscordAPIError {
+  return new DiscordAPIError(
+    { code: 0, message: "Service Unavailable" },
+    0,
+    503,
+    "POST",
+    "https://discord.com/api/v10/channels/1/messages",
+    { body: undefined, files: undefined },
+  );
+}
+
+const GUILD_ID = "191941851757019136";
+
 function fakeDeps(options: { missing?: boolean } = {}): IFakeDeps {
   const deps: IFakeDeps = {
     sent: [],
@@ -120,8 +136,13 @@ function fakeDeps(options: { missing?: boolean } = {}): IFakeDeps {
     clearPost: async (patchNumber, messageId) => {
       deps.cleared.push({ patchNumber, messageId });
     },
+    guildIdOf: async () => GUILD_ID,
   };
   return deps;
+}
+
+function errorOf(acks: Ack[]): string {
+  return acks[0]?.status === "failed" ? acks[0].error : "";
 }
 
 async function run(
@@ -253,6 +274,30 @@ test("patch_post whose record fails is failed for good, naming the message", asy
   assert.equal(deps.sent.length, 1);
 });
 
+test("patch_post whose send fails is failed for good, never left for a retry", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  t.mock.method(console, "log", () => undefined);
+  const deps = fakeDeps();
+  deps.sendPost = async () => {
+    throw serverError();
+  };
+  const acks = await run("patch_post", postPayload(), deps);
+
+  assert.equal(acks[0]?.status, "failed", JSON.stringify(acks));
+  assert.match(errorOf(acks), /Posting Patch 4 failed/);
+  assert.deepEqual(deps.recorded, []);
+});
+
+test("the result links the message in its channel's own guild", async () => {
+  const deps = fakeDeps();
+  deps.guildIdOf = async () => "424242";
+  const acks = await run("patch_post", postPayload(), deps);
+
+  assert.equal(acks[0]?.status, "done", JSON.stringify(acks));
+  assert.match(acks[0]?.status === "done" ? acks[0].resultText ?? "" : "",
+    new RegExp(`/channels/424242/${PATCH_NOTES_CHANNEL_ID}/888$`));
+});
+
 test("patch_post without cut_body fails the job", async (t) => {
   t.mock.method(console, "error", () => undefined);
   t.mock.method(console, "log", () => undefined);
@@ -267,17 +312,93 @@ for (const state of ["live", "preview"] as const) {
   test(`patch_edit (${state}) edits the message in its stored channel and records it`,
     async () => {
       const deps = fakeDeps();
-      const acks = await run("patch_edit", editPayload({ cut_body: "Edited." }), deps, state);
+      const stored = state === "live"
+        ? LIVE_POST
+        : { channelId: BOT_DEV_CHANNEL_ID, messageId: "777" };
+      const acks = await run("patch_edit",
+        editPayload({ channel_id: stored.channelId, cut_body: "Edited." }), deps, state);
 
       assert.equal(acks[0]?.status, "done", JSON.stringify(acks));
-      assert.deepEqual(deps.edited.map((e) => e.message), [STORED]);
+      assert.deepEqual(deps.edited.map((e) => e.message), [stored]);
       assert.deepEqual(textsOf(deps.edited[0]!.post).at(-1), "Edited.");
       assert.deepEqual(deps.edited[0]?.post.allowedMentions, { parse: [] });
       assert.equal(buttonsOf(deps.edited[0]!.post)[0]?.url, patchPageUrl(4));
-      assert.deepEqual(deps.recorded, [{ patchNumber: 4, message: STORED }]);
+      assert.deepEqual(deps.recorded, [{ patchNumber: 4, message: stored }]);
       assert.deepEqual(deps.sent, []);
     });
 }
+
+test("patch_edit of a Preview post once Live moves it to #patch-notes", async () => {
+  const deps = fakeDeps();
+  const inBotDev = { channelId: BOT_DEV_CHANNEL_ID, messageId: "777" };
+  const acks = await run("patch_edit",
+    editPayload({ channel_id: inBotDev.channelId, cut_body: "Edited." }), deps, "live");
+
+  assert.equal(acks[0]?.status, "done", JSON.stringify(acks));
+  assert.deepEqual(deps.edited, []);
+  assert.deepEqual(deps.sent.map((s) => s.channelId), [PATCH_NOTES_CHANNEL_ID]);
+  assert.deepEqual(textsOf(deps.sent[0]!.post).at(-1), "Edited.");
+  assert.deepEqual(deps.recorded, [{
+    patchNumber: 4,
+    message: { channelId: PATCH_NOTES_CHANNEL_ID, messageId: "888" },
+  }]);
+  assert.deepEqual(deps.deleted, [inBotDev]);
+  assert.match(acks[0]?.status === "done" ? acks[0].resultText ?? "" : "", /Moved Patch 4/);
+});
+
+test("moving a post whose old message is already gone still records the new one",
+  async () => {
+    const deps = fakeDeps();
+    deps.deletePost = async () => {
+      throw unknownMessage();
+    };
+    const acks = await run("patch_edit",
+      editPayload({ channel_id: BOT_DEV_CHANNEL_ID }), deps, "live");
+
+    assert.equal(acks[0]?.status, "done", JSON.stringify(acks));
+    assert.equal(deps.recorded[0]?.message.channelId, PATCH_NOTES_CHANNEL_ID);
+  });
+
+test("moving a post that can't send is failed for good and leaves the old one", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  t.mock.method(console, "log", () => undefined);
+  const deps = fakeDeps();
+  deps.sendPost = async () => {
+    throw serverError();
+  };
+  const acks = await run("patch_edit",
+    editPayload({ channel_id: BOT_DEV_CHANNEL_ID }), deps, "live");
+
+  assert.equal(acks[0]?.status, "failed", JSON.stringify(acks));
+  assert.deepEqual(deps.deleted, []);
+  assert.deepEqual(deps.recorded, []);
+});
+
+test("patch_edit whose record fails names the step", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  t.mock.method(console, "log", () => undefined);
+  const deps = fakeDeps();
+  deps.recordPost = async () => {
+    throw new Error("API down");
+  };
+  const acks = await run("patch_edit", editPayload(), deps);
+
+  assert.equal(acks[0]?.status, "failed");
+  assert.match(errorOf(acks), /Recording Patch 4's edited post failed/);
+});
+
+test("patch_edit of a gone message whose clear fails names the step", async (t) => {
+  t.mock.method(console, "error", () => undefined);
+  t.mock.method(console, "log", () => undefined);
+  const deps = fakeDeps({ missing: true });
+  deps.clearPost = async () => {
+    throw new Error("API down");
+  };
+  const acks = await run("patch_edit", editPayload(), deps);
+
+  assert.equal(acks[0]?.status, "failed");
+  assert.match(errorOf(acks), /Clearing Patch 4's gone post failed/);
+});
 
 test("patch_edit with the Feature Off edits nothing", async () => {
   const deps = fakeDeps();
@@ -320,13 +441,13 @@ test("patch_delete of a message already gone is done, and still clears it", asyn
   assert.deepEqual(deps.cleared, [{ patchNumber: 4, messageId: "777" }]);
 });
 
-test("patch_delete with the Feature Off deletes nothing", async () => {
+test("patch_delete with the Feature Off still deletes and clears: it is cleanup", async () => {
   const deps = fakeDeps();
   const acks = await run("patch_delete", deletePayload(), deps, "off");
 
-  assert.equal(acks[0]?.status, "done");
-  assert.deepEqual(deps.deleted, []);
-  assert.deepEqual(deps.cleared, []);
+  assert.equal(acks[0]?.status, "done", JSON.stringify(acks));
+  assert.deepEqual(deps.deleted, [STORED]);
+  assert.deepEqual(deps.cleared, [{ patchNumber: 4, messageId: "777" }]);
 });
 
 // The live adapter: which channel and message discord.js is asked for.

@@ -6,11 +6,7 @@ import {
 } from "@discordjs/builders";
 import { ButtonStyle, SeparatorSpacingSize } from "discord-api-types/v10";
 import type { Client } from "discord.js";
-import {
-  FUN_FACT_ANSWER_BY_MS,
-  FUN_FACT_DRAW_WAIT_MAX_MS,
-  FUN_FACT_INK,
-} from "../config/codex.js";
+import { FUN_FACT_INK } from "../config/codex.js";
 import { loreEntryPageUrl } from "../config/website.js";
 import { clubToday } from "../functions/ClubDate.js";
 import {
@@ -179,12 +175,11 @@ export async function drawFunFactReply(
 export type IFunFactAnswerIo = IPublicAnswerIo;
 
 /**
- * How long /funfact may wait on the draw before deferring: until `FUN_FACT_ANSWER_BY_MS`
- * after the member ran it (`ranAt`, Discord's time), and never over
- * `FUN_FACT_DRAW_WAIT_MAX_MS`, in case this clock runs behind Discord's.
+ * How long /funfact may wait on the draw before deferring: the shared public-answer timing
+ * (`PUBLIC_ANSWER_BY_MS`, `PUBLIC_ANSWER_WAIT_MAX_MS`), as /patch-notes uses.
  */
 export function funFactDrawWaitMs(ranAt: number, now: number): number {
-  return publicAnswerWaitMs(ranAt, now, FUN_FACT_ANSWER_BY_MS, FUN_FACT_DRAW_WAIT_MAX_MS);
+  return publicAnswerWaitMs(ranAt, now);
 }
 
 /**
