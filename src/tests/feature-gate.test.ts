@@ -70,6 +70,7 @@ const COMMANDS: Array<[string, string | null]> = [
   ["funfact", "club_codex"],
   ["list", "game_lists"],
   ["goty", "goty_vote"],
+  ["patch-notes", "patch_notes"],
   ["help", null],
   ["timestamp", null],
   ["profile", null],
