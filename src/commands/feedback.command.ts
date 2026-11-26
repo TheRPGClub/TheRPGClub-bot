@@ -1,4 +1,5 @@
 import type {
+  ButtonInteraction,
   CommandInteraction,
   ModalSubmitInteraction,
   StringSelectMenuInteraction,
@@ -12,7 +13,13 @@ import {
   TextDisplayBuilder,
 } from "@discordjs/builders";
 import { TextInputStyle } from "discord-api-types/v10";
-import { Discord, ModalComponent, SelectMenuComponent, Slash } from "discordx";
+import {
+  ButtonComponent,
+  Discord,
+  ModalComponent,
+  SelectMenuComponent,
+  Slash,
+} from "discordx";
 import {
   safeDeferReply,
   safeReply,
@@ -30,7 +37,7 @@ import {
   isFeedbackWhere,
   type FeedbackKind,
 } from "../config/feedback.js";
-import { feedbackBoardUrl } from "../config/website.js";
+import { feedbackBoardUrl, feedbackReviewUrl } from "../config/website.js";
 import { buildFeedbackSubmittedPing } from "../services/FeedbackNotices.js";
 import {
   buildComponentsV2Flags,
@@ -217,12 +224,25 @@ export function buildFeedbackDraft(
 
 /** The reply once Feedback is filed, linking to it on the Feedback Board. */
 export function buildFeedbackFiledText(kind: FeedbackKind, feedbackId: number): string {
-  const link = buildMaskedLink("View it on the Feedback Board", feedbackBoardUrl(feedbackId));
+  const link = buildMaskedLink("View it on the Feedback Board", feedbackBoardUrl(feedbackId, kind));
   const lines = [`Thanks! Your ${feedbackKindNoun(kind)} #${feedbackId} is filed.`, link];
   if (kind === "bug_report") {
     lines.push("You can add a screenshot there.");
   }
   return lines.join("\n");
+}
+
+/**
+ * Custom ids of the retired Suggestion review buttons (the /todo "Review Suggestions" button
+ * and the review session's buttons) still on old messages; they now point at the website.
+ */
+export const LEGACY_SUGGESTION_REVIEW_BUTTON_ID =
+  /^(todo-review-suggestions|suggestion-review:.+|suggestion-approve:\d+)$/;
+
+/** The reply to a retired Suggestion review button. */
+export function buildLegacySuggestionReviewText(): string {
+  return "Feedback is reviewed on the website now: " +
+    buildMaskedLink("Review Feedback", feedbackReviewUrl());
 }
 
 async function replyWithKindPicker(interaction: CommandInteraction): Promise<void> {
@@ -241,6 +261,11 @@ export class FeedbackCommand {
   @Slash({ description: "Send feedback (same as /feedback)", name: "suggestion" })
   async suggestion(interaction: CommandInteraction): Promise<void> {
     await replyWithKindPicker(interaction);
+  }
+
+  @ButtonComponent({ id: LEGACY_SUGGESTION_REVIEW_BUTTON_ID })
+  async legacySuggestionReview(interaction: ButtonInteraction): Promise<void> {
+    await safeReply(interaction, buildTextReply(buildLegacySuggestionReviewText(), true));
   }
 
   @SelectMenuComponent({ id: FEEDBACK_KIND_SELECT_ID })

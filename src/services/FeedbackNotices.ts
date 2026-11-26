@@ -55,7 +55,9 @@ export function buildFeedbackRejectedNotice(
 /**
  * The GameDB updates post telling the author their Feedback was marked a Duplicate, linking
  * the original on the Feedback Board. Authors never upvote their own Feedback, so it is the
- * Duplicate's upvotes, not theirs, that moved.
+ * Duplicate's upvotes, not theirs, that moved. The link opens the original's kind tab when
+ * that kind is known (the API's payload does not carry it yet; the Board finds the pinned
+ * Feedback's tab itself).
  */
 export function buildFeedbackDuplicateNotice(
   createdBy: string | null,
@@ -63,10 +65,11 @@ export function buildFeedbackDuplicateNotice(
   title: string,
   originalId: number,
   originalTitle: string,
+  originalKind: unknown = null,
 ): string {
   return `${authorMention(createdBy)} Your ${feedbackKindNoun(kind)} ${noticeTitle(title)} ` +
     `was marked a duplicate of ${noticeTitle(originalTitle)}. Its upvotes moved there. ` +
-    feedbackBoardUrl(originalId);
+    feedbackBoardUrl(originalId, isFeedbackKind(originalKind) ? originalKind : null);
 }
 
 /** The GameDB updates post telling the author their Feedback is Done (its issue closed). */

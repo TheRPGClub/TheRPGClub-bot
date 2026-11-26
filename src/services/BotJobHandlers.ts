@@ -626,10 +626,10 @@ export const handleFeedbackSubmitted: BotJobHandler = async (payload, surface, c
 
 /**
  * Payload: `{ feedback_id, kind, outcome, created_by, title, github_issue_number,
- * github_issue_url, rejection_reason }`, plus `{ duplicate_of_id, duplicate_of_title }` for
- * a Duplicate. Queued by the API for every review (approved, rejected, duplicate) and once
- * when an Approved Feedback's issue closes (done), so this is the only place the outcome is
- * announced. Each notice names the kind. Posted where the Feedback Feature's flag routes it
+ * github_issue_url, rejection_reason }`, plus `{ duplicate_of_id, duplicate_of_title }` (and
+ * an optional `duplicate_of_kind`) for a Duplicate. Queued by the API for every review
+ * (approved, rejected, duplicate) and once when an Approved Feedback's issue closes (done),
+ * so this is the only place the outcome is announced. Each notice names the kind. Posted where the Feedback Feature's flag routes it
  * (the bot-dev channel in Preview).
  */
 export const handleFeedbackOutcome: BotJobHandler = async (payload, surface, context) => {
@@ -659,6 +659,7 @@ export const handleFeedbackOutcome: BotJobHandler = async (payload, surface, con
       requireString(payload, "title"),
       payloadPositiveInt(payload, "duplicate_of_id"),
       requireString(payload, "duplicate_of_title"),
+      payload.duplicate_of_kind,
     );
   } else if (outcome === "done") {
     content = buildFeedbackDoneNotice(

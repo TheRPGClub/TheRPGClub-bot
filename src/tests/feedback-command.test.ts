@@ -6,7 +6,9 @@ import {
   buildFeedbackFiledText,
   buildFeedbackKindPrompt,
   buildFeedbackModalId,
+  buildLegacySuggestionReviewText,
   FEEDBACK_KIND_SELECT_ID,
+  LEGACY_SUGGESTION_REVIEW_BUTTON_ID,
   parseFeedbackModalId,
   readModalChoice,
 } from "../commands/feedback.command.js";
@@ -113,13 +115,14 @@ test("the create body sends kind and a Bug Report's fields, never labels", () =>
 });
 
 test("the filed reply links to the board; a Bug Report mentions screenshots", () => {
-  const url = `${WEBSITE_BASE_URL}/feedback?pinned=42`;
+  const url = `${WEBSITE_BASE_URL}/feedback?kind=bug_report&pinned=42`;
   const bug = buildFeedbackFiledText("bug_report", 42);
   assert.match(bug, /Your bug report #42 is filed/);
   assert.ok(bug.includes(url));
   assert.match(bug, /screenshot/);
   const idea = buildFeedbackFiledText("feature_request", 42);
   assert.match(idea, /Your feature request #42/);
+  assert.ok(idea.includes(`${WEBSITE_BASE_URL}/feedback?kind=feature_request&pinned=42`));
   assert.doesNotMatch(idea, /screenshot/);
 });
 
@@ -132,4 +135,13 @@ test("readModalChoice reads a radio group's value from a label", () => {
   assert.equal(readModalChoice([{ component: { customId: "feedback-where", values: ["website"] } }],
     "feedback-where"), "website");
   assert.equal(readModalChoice(components, "missing"), null);
+});
+
+test("retired Suggestion review buttons answer with the Feedback review link", () => {
+  const ids = ["todo-review-suggestions", "suggestion-review:s1:next", "suggestion-approve:3"];
+  for (const id of ids) {
+    assert.match(id, LEGACY_SUGGESTION_REVIEW_BUTTON_ID);
+  }
+  assert.doesNotMatch("suggestion-create-modal", LEGACY_SUGGESTION_REVIEW_BUTTON_ID);
+  assert.ok(buildLegacySuggestionReviewText().includes(`${WEBSITE_BASE_URL}/admin/feedback`));
 });

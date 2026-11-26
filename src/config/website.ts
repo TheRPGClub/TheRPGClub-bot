@@ -63,12 +63,16 @@ export function gotyPageUrl(): string {
   return `${WEBSITE_BASE_URL}/goty`;
 }
 
-/** A Feedback on the Feedback Board, pinned to the top (where a Bug Report's screenshot goes). */
-export function feedbackBoardUrl(feedbackId: number): string {
-  return `${WEBSITE_BASE_URL}/feedback?pinned=${feedbackId}`;
+/**
+ * A Feedback on the Feedback Board, pinned to the top (where a Bug Report's screenshot goes).
+ * With its kind, the Board opens on that kind's tab.
+ */
+export function feedbackBoardUrl(feedbackId: number, kind?: string | null): string {
+  const kindParam = kind ? `kind=${encodeURIComponent(kind)}&` : "";
+  return `${WEBSITE_BASE_URL}/feedback?${kindParam}pinned=${feedbackId}`;
 }
 
-/** The website's /admin desk, where Feedback is reviewed (spec api#498). */
+/** The website's Feedback review desk (spec api#498). */
 export function feedbackReviewUrl(): string {
-  return `${WEBSITE_BASE_URL}/admin`;
+  return `${WEBSITE_BASE_URL}/admin/feedback`;
 }

@@ -237,7 +237,8 @@ test("rejected outcome mentions the author with the title and reason", async () 
   await run(surface, [job(1, "feedback_outcome", rejectedPayload)]);
   assert.deepEqual(surface.posts, [{
     channelId: GAMEDB_UPDATES_CHANNEL_ID,
-    content: "<@author-1> Your feature request \"Dark mode\" was not accepted. Reason: Out of scope",
+    content: "<@author-1> Your feature request \"Dark mode\" was not accepted. " +
+      "Reason: Out of scope",
   }]);
 });
 
@@ -348,8 +349,14 @@ test("approved and rejected notices name each kind", async () => {
       job(1, "feedback_outcome", { ...approvedPayload, kind }),
       job(2, "feedback_outcome", { ...rejectedPayload, kind }),
     ]);
-    assert.match(surface.posts[0]?.content ?? "", new RegExp(`^<@author-1> Your ${noun} was accepted`));
-    assert.match(surface.posts[1]?.content ?? "", new RegExp(`^<@author-1> Your ${noun} "Dark mode"`));
+    assert.match(
+      surface.posts[0]?.content ?? "",
+      new RegExp(`^<@author-1> Your ${noun} was accepted`),
+    );
+    assert.match(
+      surface.posts[1]?.content ?? "",
+      new RegExp(`^<@author-1> Your ${noun} "Dark mode"`),
+    );
   }
 });
 
@@ -372,6 +379,19 @@ test("duplicate outcome names the original, its upvotes moved, and links the Boa
   assert.ok(feedbackBoardUrl(3).endsWith("/feedback?pinned=3"));
   assert.doesNotMatch(surface.posts[0]?.content ?? "", /Your upvote/);
   assert.deepEqual(surface.pings, [["author-1"]]);
+});
+
+test("duplicate outcome opens the original's kind tab when the payload names it", async () => {
+  const surface = fakeSurface();
+  await run(surface, [job(1, "feedback_outcome", {
+    ...duplicatePayload,
+    duplicate_of_kind: "suggestion",
+  })]);
+  assert.ok((surface.posts[0]?.content ?? "").endsWith("/feedback?kind=suggestion&pinned=3"));
+  assert.equal(feedbackBoardUrl(3, "suggestion"), feedbackBoardUrl(3).replace(
+    "/feedback?pinned=3",
+    "/feedback?kind=suggestion&pinned=3",
+  ));
 });
 
 test("duplicate outcome rejects a payload without the original", async () => {

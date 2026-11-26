@@ -137,6 +137,9 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
   ["giveaway-", "giveaways"],
 
   [FEEDBACK_CUSTOM_ID_PREFIX, FEEDBACK_FEATURE_KEY],
+  // Retired Suggestion review buttons on old messages, answered with the review link.
+  ["suggestion-", FEEDBACK_FEATURE_KEY],
+  ["todo-review-suggestions", FEEDBACK_FEATURE_KEY],
 
   [`${NEWS_CATEGORY_PICK_PREFIX}:`, "news_hub"],
 
