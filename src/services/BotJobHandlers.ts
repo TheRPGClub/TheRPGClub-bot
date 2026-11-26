@@ -10,7 +10,6 @@ import {
 } from "./GiveawayClaimService.js";
 import { getFeedbackById, type IFeedbackItem } from "../classes/Feedback.js";
 import {
-  ADMIN_CHANNEL_ID,
   ANNOUNCEMENT_CHANNEL_ID,
   BOT_DEV_CHANNEL_ID,
   GAMEDB_UPDATES_CHANNEL_ID,
@@ -1099,7 +1098,7 @@ function payloadFeatureState(payload: Record<string, unknown>, field: string): F
 
 /**
  * Payload: `{ key, name, from_state, to_state, changed_by, changed_by_name, reason }`.
- * Staff changed a Feature Flag (website or /flag set), so the admin channel hears who
+ * Staff changed a Feature Flag (website or /flag set), so the bot-dev channel hears who
  * changed what, from and to which state, and why. It carries no `feature_key`: the
  * announcement goes out whatever the Feature's own state. Nobody is pinged. Giveaways
  * leaving Preview also takes its Preview hub out of the bot-dev channel.
@@ -1119,7 +1118,7 @@ export const handleFeatureFlagChanged: BotJobHandler = async (payload, surface) 
     changedByName: optionalString(payload, "changed_by_name"),
     reason: optionalString(payload, "reason"),
   });
-  await surface.sendChannelMessage(ADMIN_CHANNEL_ID, content, []);
+  await surface.sendChannelMessage(BOT_DEV_CHANNEL_ID, content, []);
   // The Preview hub in bot-dev goes once Giveaways leaves Preview. The new state is passed
   // on, since the flag cache may not hold it yet.
   const leftPreview = fromState === "preview" && toState !== "preview";
