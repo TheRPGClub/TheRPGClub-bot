@@ -71,6 +71,7 @@ const COMMANDS: Array<[string, string | null]> = [
   ["funfact", "club_codex"],
   ["list", "game_lists"],
   ["goty", "goty_vote"],
+  ["patch-notes", "patch_notes"],
   ["help", null],
   ["timestamp", null],
   ["profile", null],
@@ -447,7 +448,7 @@ test("feature gate map: every mapped Feature is one of the API registry's keys",
   const registry = new Set([
     "game_index", "voting_gotm", "backlog", "collection", "now_playing", "game_completions",
     "reviews", "achievement_hub", "giveaways", "journals", "feedback", "news_hub", "challenges",
-    "club_codex", "game_lists", "goty_vote",
+    "club_codex", "game_lists", "goty_vote", "patch_notes",
   ]);
   const mapped = [
     ...Object.values(FEATURE_COMMANDS),

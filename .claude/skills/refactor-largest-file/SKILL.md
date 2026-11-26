@@ -157,7 +157,7 @@ and orchestration. Splitting it will improve readability and enable targeted ref
 ```bash
 gh issue create \
   --label refactor \
-  --title "Refactor: split <filename> (<N> lines) into focused modules" \
+  --title "refactor: split <filename> (<N> lines) into focused modules" \
   --body-file <scratchpad>/issue-body.md
 ```
 

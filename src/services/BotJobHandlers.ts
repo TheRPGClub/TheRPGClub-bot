@@ -17,6 +17,7 @@ import {
   FUN_FACT_CHANNEL_ID,
   GIVEAWAY_LOG_CHANNEL_ID,
   LIVE_EVENT_FORUM_ID,
+  PATCH_NOTES_CHANNEL_ID,
   WHATCHA_PLAYING_CHANNEL_ID,
 } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID, PSN_ALERT_DM_USER_ID } from "../config/users.js";
@@ -160,6 +161,15 @@ import {
   parsePsnAuthRestored,
   type IPsnAlertTargets,
 } from "./PsnAuthAlerts.js";
+import {
+  createPatchPostDeps,
+  deletePatchPost,
+  editPatch,
+  postPatch,
+  type IPatchMessage,
+  type IPatchPostDeps,
+  type IPatchPostText,
+} from "./PatchPost.js";
 
 /**
  * What the say handler asks the surface to post. allowedMentions is the payload's, passed
@@ -320,6 +330,11 @@ export interface IBotJobSurface {
    */
   conquests?: IConquestPostDeps;
   /**
+   * What the Patch posts send and record (spec api#510). Optional so fakes for other jobs
+   * need not build it.
+   */
+  patchNotes?: IPatchPostDeps;
+  /**
    * Posts a GOTY Vote nomination removal notice with the year's refreshed Game of the Year
    * nominations in the GOTM nomination channel, or where the GOTY Vote Feature's `state`
    * routes it. Throws when it could not. Optional so older test surfaces need not stub it.
@@ -406,6 +421,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     codex: createCodexJobDeps(client),
     birthdays: createBirthdayPostDeps(client),
     conquests: createConquestPostDeps(client),
+    patchNotes: createPatchPostDeps(client),
     announceGotyNominationChange: async (year, content, state) => {
       const nominations = await gotyAdminApi.listNominations(year);
       await postGotyNominationChange(client, year, content, nominations, state);
@@ -1342,6 +1358,82 @@ export const handlePsnAuthRestored: BotJobHandler = async (payload, surface) => 
   return deliverPsnAuthAlert(content, surface, psnAlertTargets());
 };
 
+function patchPostDeps(surface: IBotJobSurface): IPatchPostDeps {
+  if (!surface.patchNotes) throw new Error("This bot job surface cannot post Patches.");
+  return surface.patchNotes;
+}
+
+/** The Patch's text from a patch_post or patch_edit payload. */
+function payloadPatchText(payload: Record<string, unknown>): IPatchPostText {
+  const title = payload.title;
+  if (title !== null && title !== undefined && typeof title !== "string") {
+    throw new Error(`Invalid payload: title must be text or null, got ${JSON.stringify(title)}.`);
+  }
+  const cutBody = payload.cut_body;
+  if (typeof cutBody !== "string") {
+    throw new Error(`Invalid payload: missing cut_body, got ${JSON.stringify(cutBody)}.`);
+  }
+  return {
+    number: payloadPositiveInt(payload, "number"),
+    title: title ?? null,
+    cutBody,
+    publishedAt: optionalString(payload, "published_at"),
+  };
+}
+
+/** Where a posted Patch's message is, as the API stored it (patch_edit, patch_delete). */
+function payloadPatchMessage(payload: Record<string, unknown>): IPatchMessage {
+  return {
+    channelId: requireString(payload, "channel_id"),
+    messageId: requireString(payload, "message_id"),
+  };
+}
+
+/**
+ * Payload `{ number, title, cut_body, published_at, feature_key: "patch_notes" }` (api#513):
+ * staff posted a published Patch. It goes to #patch-notes, to the bot-dev channel while
+ * Patch Notes is in Preview, and nowhere while it is Off; the message is then recorded on
+ * the Patch (PUT discord_post). No pings.
+ */
+export const handlePatchPost: BotJobHandler = async (payload, surface, context) => {
+  const featureKey = POST_FEATURE_KEYS.patchNotes;
+  const channelId = routeFeaturePost(
+    await jobFeatureState(featureKey, surface, context),
+    PATCH_NOTES_CHANNEL_ID,
+  );
+  if (!channelId) return featureOffNotice(featureKey);
+  return postPatch(payloadPatchText(payload), channelId, patchPostDeps(surface));
+};
+
+/**
+ * Payload: patch_post's plus `channel_id`, `message_id`: staff pushed a posted Patch's
+ * edits. The message is edited in the channel it was posted in (stored) and recorded
+ * again. When the Feature now routes elsewhere (a Preview post in bot-dev once Patch Notes
+ * is Live), the Patch is posted where it now belongs, recorded, and the old message
+ * removed. Nothing while Off.
+ */
+export const handlePatchEdit: BotJobHandler = async (payload, surface, context) => {
+  const featureKey = POST_FEATURE_KEYS.patchNotes;
+  const channelId = routeFeaturePost(
+    await jobFeatureState(featureKey, surface, context),
+    PATCH_NOTES_CHANNEL_ID,
+  );
+  if (!channelId) return featureOffNotice(featureKey);
+  return editPatch(payloadPatchText(payload), payloadPatchMessage(payload), channelId,
+    patchPostDeps(surface));
+};
+
+/**
+ * Payload `{ number, channel_id, message_id, feature_key }`: the Patch was unpublished, so
+ * its message is removed from its stored channel and cleared on the Patch (DELETE
+ * discord_post). A message already gone is done, not failed. Runs whatever the Feature's
+ * state, Off included: it is cleanup of a post already made, not a new post.
+ */
+export const handlePatchDelete: BotJobHandler = async (payload, surface) => {
+  return deletePatchPost(payloadPositiveInt(payload, "number"), payloadPatchMessage(payload),
+    patchPostDeps(surface));
+};
+
 /** Job kind (BotJob::KINDS in the API) to handler. One line per kind. */
 export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
@@ -1370,4 +1462,7 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   franchise_conquest: handleFranchiseConquest,
   psn_auth_expired: handlePsnAuthExpired,
   psn_auth_restored: handlePsnAuthRestored,
+  patch_post: handlePatchPost,
+  patch_edit: handlePatchEdit,
+  patch_delete: handlePatchDelete,
 };

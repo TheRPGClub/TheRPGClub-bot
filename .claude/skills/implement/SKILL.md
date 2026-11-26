@@ -250,7 +250,11 @@ git push -u origin HEAD
 
 #### The pull request
 
-PR title: the issue title, prefixed with the commit type.
+PR title: typed, as CLAUDE.md "Pull requests and versions" requires (the required PR
+title check refuses anything else): `<type>: <description>`, where the description is the
+issue title with any type prefix it already has (`refactor:`, `Refactor:`, `Feat:`)
+dropped, e.g. `refactor: split BotJobHandlers.ts (1450 lines) into focused modules`. Add
+`!` only when the owner asked for a major version.
 
 Write the body to `<scratchpad>/pr-body.md`, following
 `.github/pull_request_template.md`:
@@ -258,6 +262,8 @@ Write the body to `<scratchpad>/pr-body.md`, following
 ```
 ## Summary
 - <1-3 bullets: what changed and why>
+
+Patch note: <one sentence in members' words, or leave empty when members won't notice>
 
 ## Testing
 <steps in the shape .github/pull-request-testing-format.md sets, or delete the
@@ -282,6 +288,9 @@ Closes #<N>
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
+- `Patch note:` is optional: one sentence in members' words for the next Patch (it
+  becomes the Pending Change's starting line), written on the label's line. Leave it
+  empty for a change members won't notice (tooling, refactors, tests).
 - `Judgment calls` lists every decision the issue did not settle: the reading taken
   over another, a scope line drawn, something left out. It is never dropped; an empty
   one reads "none".
