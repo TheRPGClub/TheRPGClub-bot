@@ -94,7 +94,7 @@ export const CHALLENGES_CHANNEL_ID = resolveId("CHALLENGES_CHANNEL_ID", "1000000
 export const FUN_FACT_CHANNEL_ID = resolveId("FUN_FACT_CHANNEL_ID", "100000000000000397");
 // #patch-notes (spec api#510): staff post each Patch here (members read, no posting).
 // PLACEHOLDER bot#1593: the owner creates the channel and sets its ID here.
-export const PATCH_NOTES_CHANNEL_ID = resolveId("PATCH_NOTES_CHANNEL_ID", "100000000000000510");
+export const PATCH_NOTES_CHANNEL_ID = resolveId("PATCH_NOTES_CHANNEL_ID", "1575567488505221241");
 // The Birthday channel (spec api#396). In production the API names it in each
 // birthday_post job (its general chat), so there is no production id here. A test-guild bot
 // posts in the test guild's own Birthday channel instead, never the job's, so it can never
