@@ -1385,29 +1385,29 @@ export const handlePatchPost: BotJobHandler = async (payload, surface, context) 
 
 /**
  * Payload: patch_post's plus `channel_id`, `message_id`: staff pushed a posted Patch's
- * edits. The message is edited in the channel it was posted in (stored, so a Preview post
- * in bot-dev is still found once the Feature is Live), then recorded again. Nothing while
- * Off.
+ * edits. The message is edited in the channel it was posted in (stored) and recorded
+ * again. When the Feature now routes elsewhere (a Preview post in bot-dev once Patch Notes
+ * is Live), the Patch is posted where it now belongs, recorded, and the old message
+ * removed. Nothing while Off.
  */
 export const handlePatchEdit: BotJobHandler = async (payload, surface, context) => {
   const featureKey = POST_FEATURE_KEYS.patchNotes;
-  if (isSuppressed(await jobFeatureState(featureKey, surface, context))) {
-    return featureOffNotice(featureKey);
-  }
-  return editPatch(payloadPatchText(payload), payloadPatchMessage(payload),
+  const channelId = routeFeaturePost(
+    await jobFeatureState(featureKey, surface, context),
+    PATCH_NOTES_CHANNEL_ID,
+  );
+  if (!channelId) return featureOffNotice(featureKey);
+  return editPatch(payloadPatchText(payload), payloadPatchMessage(payload), channelId,
     patchPostDeps(surface));
 };
 
 /**
  * Payload `{ number, channel_id, message_id, feature_key }`: the Patch was unpublished, so
  * its message is removed from its stored channel and cleared on the Patch (DELETE
- * discord_post). A message already gone is done, not failed. Nothing while Off.
+ * discord_post). A message already gone is done, not failed. Runs whatever the Feature's
+ * state, Off included: it is cleanup of a post already made, not a new post.
  */
-export const handlePatchDelete: BotJobHandler = async (payload, surface, context) => {
-  const featureKey = POST_FEATURE_KEYS.patchNotes;
-  if (isSuppressed(await jobFeatureState(featureKey, surface, context))) {
-    return featureOffNotice(featureKey);
-  }
+export const handlePatchDelete: BotJobHandler = async (payload, surface) => {
   return deletePatchPost(payloadPositiveInt(payload, "number"), payloadPatchMessage(payload),
     patchPostDeps(surface));
 };

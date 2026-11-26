@@ -107,6 +107,8 @@ export interface IPatchPostDeps {
   recordPost(patchNumber: number, message: IPatchMessage): Promise<void>;
   /** DELETE /patches/:number/discord_post?message_id=: that message is gone. */
   clearPost(patchNumber: number, messageId: string): Promise<void>;
+  /** The guild a channel is in, for message links; null when unknown. Never throws. */
+  guildIdOf(channelId: string): Promise<string | null>;
 }
 
 async function fetchTextChannel(client: Client, channelId: string) {
@@ -140,11 +142,24 @@ export function createPatchPostDeps(client: Client): IPatchPostDeps {
         params: { message_id: messageId },
       });
     },
+    guildIdOf: async (channelId) => {
+      try {
+        const channel = await client.channels.fetch(channelId);
+        return channel && "guildId" in channel ? channel.guildId : null;
+      } catch {
+        return null;
+      }
+    },
   };
 }
 
-function link(message: IPatchMessage): string {
-  return messageLink(message.channelId, message.messageId, HOME_GUILD_ID);
+/**
+ * A link to the message in its channel's own guild (bot-dev may sit in another guild than
+ * #patch-notes), or the home guild when the channel's guild can't be read.
+ */
+async function link(message: IPatchMessage, deps: IPatchPostDeps): Promise<string> {
+  const guildId = await deps.guildIdOf(message.channelId).catch(() => null);
+  return messageLink(message.channelId, message.messageId, guildId ?? HOME_GUILD_ID);
 }
 
 /**
@@ -160,12 +175,34 @@ async function recordPosted(
     await deps.recordPost(patchNumber, message);
   } catch (err) {
     throw new BotJobStepError(
-      `Recording Patch ${patchNumber}'s post failed (it is posted: ${link(message)}). The ` +
+      `Recording Patch ${patchNumber}'s post failed (it is posted: ` +
+        `${await link(message, deps)}). The ` +
         "job stopped rather than post it again",
       err,
       false,
     );
   }
+}
+
+/**
+ * Sends the Patch's post in `channelId` and records it. A failed send is never temporary:
+ * Discord may have posted the message before the request failed (a timeout), and a retry
+ * would post it twice.
+ */
+async function sendAndRecord(
+  patch: IPatchPostText,
+  channelId: string,
+  deps: IPatchPostDeps,
+): Promise<IPatchMessage> {
+  let messageId: string;
+  try {
+    messageId = await deps.sendPost(channelId, buildPatchPost(patch));
+  } catch (err) {
+    throw new BotJobStepError(`Posting Patch ${patch.number} failed`, err, false);
+  }
+  const message = { channelId, messageId };
+  await recordPosted(patch.number, message, deps);
+  return message;
 }
 
 /** patch_post: posts the Patch in `channelId` (already routed) and records the message. */
@@ -174,40 +211,72 @@ export async function postPatch(
   channelId: string,
   deps: IPatchPostDeps,
 ): Promise<string> {
-  let messageId: string;
-  try {
-    messageId = await deps.sendPost(channelId, buildPatchPost(patch));
-  } catch (err) {
-    throw stepFailed(`Posting Patch ${patch.number}`, err);
-  }
-  const message = { channelId, messageId };
-  await recordPosted(patch.number, message, deps);
-  return `Posted Patch ${patch.number}: ${link(message)}`;
+  const message = await sendAndRecord(patch, channelId, deps);
+  return `Posted Patch ${patch.number}: ${await link(message, deps)}`;
 }
 
 /**
- * patch_edit: edits the Patch's message where it was posted (its stored channel, even if
- * the Feature has moved since). A message deleted in Discord is cleared from the Patch, so
- * staff can post it again, and the job fails saying so.
+ * patch_edit of a post in the wrong channel (posted in bot-dev while Patch Notes was in
+ * Preview, and the Feature now routes to #patch-notes, or the other way): posts the Patch
+ * where it now belongs, records the new message, then removes the old one. A failure once
+ * the new message exists is never temporary, so a retry can't post it twice.
+ */
+async function movePatchPost(
+  patch: IPatchPostText,
+  old: IPatchMessage,
+  channelId: string,
+  deps: IPatchPostDeps,
+): Promise<string> {
+  const message = await sendAndRecord(patch, channelId, deps);
+  try {
+    await deps.deletePost(old);
+  } catch (err) {
+    if (!isGone(err)) {
+      throw new BotJobStepError(
+        `Moved Patch ${patch.number}'s post to ${await link(message, deps)}, but removing the ` +
+          `old one (${await link(old, deps)}) failed; delete it in Discord`,
+        err,
+        false,
+      );
+    }
+  }
+  return `Moved Patch ${patch.number}'s post to ${await link(message, deps)}.`;
+}
+
+/**
+ * patch_edit: edits the Patch's message where it was posted, when that is where the Feature
+ * now routes (`channelId`); a post in another channel is moved there (movePatchPost). A
+ * message deleted in Discord is cleared from the Patch, so staff can post it again, and the
+ * job fails saying so.
  */
 export async function editPatch(
   patch: IPatchPostText,
   message: IPatchMessage,
+  channelId: string,
   deps: IPatchPostDeps,
 ): Promise<string> {
+  if (message.channelId !== channelId) return movePatchPost(patch, message, channelId, deps);
   try {
     await deps.editPost(message, buildPatchPost(patch));
   } catch (err) {
     if (!isGone(err)) throw stepFailed(`Editing Patch ${patch.number}'s post`, err);
-    await deps.clearPost(patch.number, message.messageId);
+    try {
+      await deps.clearPost(patch.number, message.messageId);
+    } catch (clearErr) {
+      throw stepFailed(`Clearing Patch ${patch.number}'s gone post`, clearErr);
+    }
     throw new Error(
-      `Patch ${patch.number}'s post is gone from Discord (${link(message)}), so it was ` +
-        "cleared. Post it to #patch-notes again.",
+      `Patch ${patch.number}'s post is gone from Discord (${await link(message, deps)}), so ` +
+        "it was cleared. Post it to #patch-notes again.",
       { cause: err },
     );
   }
-  await deps.recordPost(patch.number, message);
-  return `Updated Patch ${patch.number}'s post: ${link(message)}`;
+  try {
+    await deps.recordPost(patch.number, message);
+  } catch (err) {
+    throw stepFailed(`Recording Patch ${patch.number}'s edited post`, err);
+  }
+  return `Updated Patch ${patch.number}'s post: ${await link(message, deps)}`;
 }
 
 /**
