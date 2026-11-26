@@ -17,6 +17,7 @@ import {
   NEWS_COMMAND,
   NEWS_IMPORT_COMMAND,
 } from "./newsHub.js";
+import { FEEDBACK_CUSTOM_ID_PREFIX, FEEDBACK_FEATURE_KEY } from "./feedback.js";
 
 /**
  * Challenges (spec api#376): `/challenge`, its components, and the #challenges posts. Its
@@ -75,7 +76,9 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   "game-journal": "journals",
   giveaway: "giveaways",
   gamegiveaway: "giveaways",
-  suggestion: "suggestions",
+  feedback: FEEDBACK_FEATURE_KEY,
+  // Kept as an alias of /feedback for now (spec api#498).
+  suggestion: FEEDBACK_FEATURE_KEY,
   // Admins and Superadmins in Preview and Live, nobody while Off: this gate refuses
   // everyone while Off, and the API refuses anyone but Admins and Superadmins.
   [NEWS_IMPORT_COMMAND]: "news_hub",
@@ -140,8 +143,10 @@ export const FEATURE_COMPONENT_PREFIXES: ReadonlyArray<readonly [string, string]
 
   ["giveaway-", "giveaways"],
 
-  ["suggestion-", "suggestions"],
-  ["todo-review-suggestions", "suggestions"],
+  [FEEDBACK_CUSTOM_ID_PREFIX, FEEDBACK_FEATURE_KEY],
+  // Retired Suggestion review buttons on old messages, answered with the review link.
+  ["suggestion-", FEEDBACK_FEATURE_KEY],
+  ["todo-review-suggestions", FEEDBACK_FEATURE_KEY],
 
   [`${NEWS_CATEGORY_PICK_PREFIX}:`, "news_hub"],
 
@@ -171,7 +176,7 @@ export const POST_FEATURE_KEYS = {
   completions: "game_completions",
   giveawayHub: "giveaways",
   giveawayClaimLog: "giveaways",
-  suggestions: "suggestions",
+  feedback: FEEDBACK_FEATURE_KEY,
   challenges: CHALLENGES_FEATURE_KEY,
   clubCodex: CLUB_CODEX_FEATURE_KEY,
   franchiseConquest: FRANCHISE_PROGRESS_FEATURE_KEY,

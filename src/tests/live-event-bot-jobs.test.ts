@@ -73,7 +73,7 @@ function fakeSurface(options: {
     runGiveawayClaimSideEffects: async () => "",
     sendDm: async () => {},
     refreshGiveawayHub: async () => {},
-    fetchSuggestion: async () => null,
+    fetchFeedback: async () => null,
     sendChannelMessage: async () => {},
     fetchCompletionForUser: async () => null,
     fetchGame: async () => null,

@@ -64,7 +64,8 @@ const COMMANDS: Array<[string, string | null]> = [
   ["game-journal", "journals"],
   ["giveaway", "giveaways"],
   ["gamegiveaway", "giveaways"],
-  ["suggestion", "suggestions"],
+  ["feedback", "feedback"],
+  ["suggestion", "feedback"],
   ["Change news category", "news_hub"],
   ["codex", "club_codex"],
   ["funfact", "club_codex"],
@@ -109,8 +110,11 @@ const COMPONENTS: Array<[string, string | null]> = [
   ["game-journal-hmenu-add:1:2", "journals"],
   ["journal-public-close:1", "journals"],
   ["giveaway-hub-claim:7", "giveaways"],
-  ["suggestion-approve:3", "suggestions"],
-  ["todo-review-suggestions", "suggestions"],
+  ["feedback-kind", "feedback"],
+  ["feedback-create:bug_report", "feedback"],
+  ["suggestion-review:abc:next", "feedback"],
+  ["suggestion-approve:3", "feedback"],
+  ["todo-review-suggestions", "feedback"],
   ["news-category-pick-v1:510000000000000001:610000000000000001", "news_hub"],
   ["codex-fun-fact:delete:5", "club_codex"],
   ["codex-lore:page:7:2:222:public", "club_codex"],
@@ -443,7 +447,7 @@ test("feature gate map: every mapped Feature is one of the API registry's keys",
   );
   const registry = new Set([
     "game_index", "voting_gotm", "backlog", "collection", "now_playing", "game_completions",
-    "reviews", "achievement_hub", "giveaways", "journals", "suggestions", "news_hub", "challenges",
+    "reviews", "achievement_hub", "giveaways", "journals", "feedback", "news_hub", "challenges",
     "club_codex", "game_lists", "goty_vote", "patch_notes",
   ]);
   const mapped = [

@@ -1,4 +1,4 @@
-import { DISCORD_MESSAGE_CONTENT_MAX } from "../config/suggestions.js";
+import { DISCORD_MESSAGE_CONTENT_MAX } from "../config/feedback.js";
 
 // The News Copy (spec api#367): the bot's copy of a News Item in its News Category's thread.
 // A plain message, not a Components V2 container, so Discord shows the link's preview as it

@@ -3,7 +3,7 @@ import test from "node:test";
 import { BOT_JOB_HANDLERS, type IBotJobSurface } from "../services/BotJobHandlers.js";
 import { processBotJobs } from "../services/BotJobService.js";
 import type { IBotJob, IBotJobApi } from "../classes/BotJobs.js";
-import { ADMIN_CHANNEL_ID } from "../config/channels.js";
+import { BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 
 type Ack = { id: number; status: "done" } | { id: number; status: "failed"; error: string };
 
@@ -35,7 +35,7 @@ function fakeSurface(): IPostingSurface {
     runGiveawayClaimSideEffects: async () => "",
     sendDm: async () => {},
     refreshGiveawayHub: async () => {},
-    fetchSuggestion: async () => null,
+    fetchFeedback: async () => null,
     sendChannelMessage: async (channelId, content, pings) => {
       surface.posts.push({ channelId, content, pings });
     },
@@ -85,12 +85,12 @@ const changedPayload = {
   reason: "Testing the new layout",
 };
 
-test("feature_flag_changed: posts who, from, to and reason in the admin channel", async () => {
+test("feature_flag_changed: posts who, from, to and reason in the bot-dev channel", async () => {
   const surface = fakeSurface();
   const acks = await run(surface, [job(1, changedPayload)]);
   assert.deepEqual(acks, [{ id: 1, status: "done" }]);
   assert.deepEqual(surface.posts, [{
-    channelId: ADMIN_CHANNEL_ID,
+    channelId: BOT_DEV_CHANNEL_ID,
     content: "**Feature Flag changed:** Reviews (`reviews`) is now **Preview** (was Live).\n" +
       "Changed by <@123> (Ada).\n" +
       "Reason: Testing the new layout",

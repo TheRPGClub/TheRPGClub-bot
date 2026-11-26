@@ -26,7 +26,7 @@ are tested only on their cancel, error, or permission paths.
 - `voting.md`: /vote and /generate-vote-image
 - `voting-sandbox-1.md`, `voting-sandbox-2.md`: /vote-sandbox
 - `giveaway.md`: /gamegiveaway
-- `suggestion.md`: /suggestion
+- `feedback.md`: /feedback and its /suggestion alias
 - `threads.md`: /thread create, link, and unlink
 - `help.md`, `help-2.md`: /help
 
