@@ -46,6 +46,8 @@ Write the body to `<scratchpad>/pr-body.md`:
 ## Summary
 <1-3 bullet points describing what changed and why>
 
+Patch note: <one sentence in members' words, or leave empty when members won't notice>
+
 ## Test plan
 <bulleted checklist of how to verify the change>
 
@@ -79,10 +81,15 @@ patch:
 npm run check:pr-testing -- <scratchpad>/pr-body.md
 ```
 
-Then open the PR:
+Then open the PR. The title must be typed, as CLAUDE.md "Pull requests and versions"
+requires (the required PR title check refuses anything else): `type(scope)!: description`,
+e.g. `fix(bot): keep the Patch post when the Feature goes Live`, with type one of `feat`,
+`fix`, `perf`, `refactor`, `chore`, `docs`, `test`, `ci`, and `!` only when the owner
+asked for a major version. The optional `Patch note:` line is one sentence in members'
+words; leave it empty when members won't notice the change.
 
 ```bash
-gh pr create --title "<title>" --body-file <scratchpad>/pr-body.md
+gh pr create --title "<type>(<scope>): <description>" --body-file <scratchpad>/pr-body.md
 ```
 
 ### 4. Verify closing-issue linkage
