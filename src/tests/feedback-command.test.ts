@@ -114,16 +114,18 @@ test("the create body sends kind and a Bug Report's fields, never labels", () =>
   );
 });
 
-test("the filed reply links to the board; a Bug Report mentions screenshots", () => {
+test("the filed reply links to the board; a Bug Report links to its edit dialog for a screenshot", () => {
   const url = `${WEBSITE_BASE_URL}/feedback?kind=bug_report&pinned=42`;
   const bug = buildFeedbackFiledText("bug_report", 42);
   assert.match(bug, /Your bug report #42 is filed/);
   assert.ok(bug.includes(url));
   assert.match(bug, /screenshot/);
+  assert.ok(bug.includes(`${WEBSITE_BASE_URL}/feedback?edit=42`));
   const idea = buildFeedbackFiledText("feature_request", 42);
   assert.match(idea, /Your feature request #42/);
   assert.ok(idea.includes(`${WEBSITE_BASE_URL}/feedback?kind=feature_request&pinned=42`));
   assert.doesNotMatch(idea, /screenshot/);
+  assert.ok(!idea.includes("edit="));
 });
 
 test("readModalChoice reads a radio group's value from a label", () => {

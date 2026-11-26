@@ -37,7 +37,7 @@ import {
   isFeedbackWhere,
   type FeedbackKind,
 } from "../config/feedback.js";
-import { feedbackBoardUrl, feedbackReviewUrl } from "../config/website.js";
+import { feedbackBoardUrl, feedbackEditUrl, feedbackReviewUrl } from "../config/website.js";
 import { buildFeedbackSubmittedPing } from "../services/FeedbackNotices.js";
 import {
   buildComponentsV2Flags,
@@ -227,7 +227,7 @@ export function buildFeedbackFiledText(kind: FeedbackKind, feedbackId: number): 
   const link = buildMaskedLink("View it on the Feedback Board", feedbackBoardUrl(feedbackId, kind));
   const lines = [`Thanks! Your ${feedbackKindNoun(kind)} #${feedbackId} is filed.`, link];
   if (kind === "bug_report") {
-    lines.push("You can add a screenshot there.");
+    lines.push(buildMaskedLink("Add a screenshot on the website", feedbackEditUrl(feedbackId)));
   }
   return lines.join("\n");
 }
