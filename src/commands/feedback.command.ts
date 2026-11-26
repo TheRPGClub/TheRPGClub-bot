@@ -301,7 +301,9 @@ export class FeedbackCommand {
     try {
       const channel = await interaction.client.channels.fetch(BOT_DEV_CHANNEL_ID);
       if (channel?.isSendable()) {
-        await channel.send({ content: buildFeedbackSubmittedPing(interaction.user.username) });
+        await channel.send({
+          content: buildFeedbackSubmittedPing(interaction.user.username, kind),
+        });
       }
     } catch {
       // ignore notification failures

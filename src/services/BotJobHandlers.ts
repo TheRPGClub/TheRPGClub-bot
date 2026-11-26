@@ -23,6 +23,8 @@ import {
 import { BOT_DEV_PING_USER_ID, PSN_ALERT_DM_USER_ID } from "../config/users.js";
 import {
   buildFeedbackApprovedNotice,
+  buildFeedbackDoneNotice,
+  buildFeedbackDuplicateNotice,
   buildFeedbackRejectedNotice,
   buildFeedbackSubmittedPing,
 } from "./FeedbackNotices.js";
@@ -598,7 +600,7 @@ function optionalString(payload: Record<string, unknown>, field: string): string
  * Payload: `{ feedback_id, kind, created_by }`. A member filed Feedback on the website
  * (the bot's own /feedback pings inline instead), so the bot dev is pinged as /feedback
  * does, in the bot-dev channel whether the Feedback Feature is Live or in Preview, and
- * not at all when it is Off. The name comes from the Feedback itself.
+ * not at all when it is Off. The name and kind come from the Feedback itself.
  */
 export const handleFeedbackSubmitted: BotJobHandler = async (payload, surface, context) => {
   const feedbackId = payloadPositiveInt(payload, "feedback_id");
@@ -617,38 +619,58 @@ export const handleFeedbackSubmitted: BotJobHandler = async (payload, surface, c
   const authorLabel = feedback.createdByName ?? (author ? userMention(author) : "Someone");
   await surface.sendChannelMessage(
     channelId,
-    buildFeedbackSubmittedPing(authorLabel),
+    buildFeedbackSubmittedPing(authorLabel, feedback.kind),
     author ? [BOT_DEV_PING_USER_ID, author] : [BOT_DEV_PING_USER_ID],
   );
 };
 
 /**
  * Payload: `{ feedback_id, kind, outcome, created_by, title, github_issue_number,
- * github_issue_url, rejection_reason }`. Queued by the API for every review, so this is the
- * only place the outcome is announced. Posted where the Feedback Feature's flag routes it
+ * github_issue_url, rejection_reason }`, plus `{ duplicate_of_id, duplicate_of_title }` for
+ * a Duplicate. Queued by the API for every review (approved, rejected, duplicate) and once
+ * when an Approved Feedback's issue closes (done), so this is the only place the outcome is
+ * announced. Each notice names the kind. Posted where the Feedback Feature's flag routes it
  * (the bot-dev channel in Preview).
  */
 export const handleFeedbackOutcome: BotJobHandler = async (payload, surface, context) => {
   payloadPositiveInt(payload, "feedback_id");
   const createdBy = optionalString(payload, "created_by");
+  const kind = payload.kind;
   const outcome = payload.outcome;
   let content: string;
   if (outcome === "approved") {
     content = buildFeedbackApprovedNotice(
       createdBy,
+      kind,
       payloadPositiveInt(payload, "github_issue_number"),
       requireString(payload, "github_issue_url"),
     );
   } else if (outcome === "rejected") {
     content = buildFeedbackRejectedNotice(
       createdBy,
+      kind,
       requireString(payload, "title"),
       requireString(payload, "rejection_reason"),
     );
+  } else if (outcome === "duplicate") {
+    content = buildFeedbackDuplicateNotice(
+      createdBy,
+      kind,
+      requireString(payload, "title"),
+      payloadPositiveInt(payload, "duplicate_of_id"),
+      requireString(payload, "duplicate_of_title"),
+    );
+  } else if (outcome === "done") {
+    content = buildFeedbackDoneNotice(
+      createdBy,
+      kind,
+      requireString(payload, "title"),
+      payloadPositiveInt(payload, "github_issue_number"),
+      requireString(payload, "github_issue_url"),
+    );
   } else {
-    throw new Error(`Invalid payload: outcome must be "approved" or "rejected", got ${
-      JSON.stringify(outcome)
-    }.`);
+    throw new Error("Invalid payload: outcome must be \"approved\", \"rejected\", " +
+      `"duplicate" or "done", got ${JSON.stringify(outcome)}.`);
   }
   const featureKey = POST_FEATURE_KEYS.feedback;
   const channelId = routeFeaturePost(

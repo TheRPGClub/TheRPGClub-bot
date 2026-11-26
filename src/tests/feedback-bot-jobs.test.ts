@@ -7,6 +7,7 @@ import { processBotJobs } from "../services/BotJobService.js";
 import type { IBotJob, IBotJobApi } from "../classes/BotJobs.js";
 import { BOT_DEV_CHANNEL_ID, GAMEDB_UPDATES_CHANNEL_ID } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
+import { feedbackBoardUrl } from "../config/website.js";
 
 type Ack = { id: number; status: "done" } | { id: number; status: "failed"; error: string };
 
@@ -120,6 +121,28 @@ const approvedPayload = {
   rejection_reason: null,
 };
 
+const duplicatePayload = {
+  feedback_id: 7, kind: "bug_report",
+  outcome: "duplicate",
+  created_by: "author-1",
+  title: "Login loops",
+  github_issue_number: null,
+  github_issue_url: null,
+  rejection_reason: null,
+  duplicate_of_id: 3,
+  duplicate_of_title: "Login redirects forever",
+};
+
+const donePayload = {
+  feedback_id: 7, kind: "suggestion",
+  outcome: "done",
+  created_by: "author-1",
+  title: "Bigger covers",
+  github_issue_number: 321,
+  github_issue_url: "https://github.com/TheRPGClub/TheRPGClub-www/issues/321",
+  rejection_reason: null,
+};
+
 const rejectedPayload = {
   feedback_id: 7, kind: "feature_request",
   outcome: "rejected",
@@ -141,7 +164,7 @@ test("submitted ping names the author and pings the bot dev in the bot dev chann
   assert.deepEqual(surface.feedbackFetches, [7]);
   assert.deepEqual(surface.posts, [{
     channelId: BOT_DEV_CHANNEL_ID,
-    content: `<@${BOT_DEV_PING_USER_ID}> Ayla has submitted a suggestion!`,
+    content: `<@${BOT_DEV_PING_USER_ID}> Ayla has submitted a feature request!`,
   }]);
 });
 
@@ -154,7 +177,7 @@ test("submitted ping mentions the author when the Feedback has no name", async (
   ]);
   assert.equal(
     surface.posts[0]?.content,
-    `<@${BOT_DEV_PING_USER_ID}> <@author-1> has submitted a suggestion!`,
+    `<@${BOT_DEV_PING_USER_ID}> <@author-1> has submitted a feature request!`,
   );
 });
 
@@ -204,7 +227,7 @@ test("approved outcome mentions the author with the GitHub issue", async () => {
   assert.deepEqual(acks, [{ id: 1, status: "done" }]);
   assert.deepEqual(surface.posts, [{
     channelId: GAMEDB_UPDATES_CHANNEL_ID,
-    content: "<@author-1> Your suggestion was accepted and logged as GitHub issue #321: " +
+    content: "<@author-1> Your feature request was accepted and logged as GitHub issue #321: " +
       "https://github.com/TheRPGClub/TheRPGClub-www/issues/321",
   }]);
 });
@@ -214,14 +237,14 @@ test("rejected outcome mentions the author with the title and reason", async () 
   await run(surface, [job(1, "feedback_outcome", rejectedPayload)]);
   assert.deepEqual(surface.posts, [{
     channelId: GAMEDB_UPDATES_CHANNEL_ID,
-    content: "<@author-1> Your suggestion \"Dark mode\" was not accepted. Reason: Out of scope",
+    content: "<@author-1> Your feature request \"Dark mode\" was not accepted. Reason: Out of scope",
   }]);
 });
 
 test("outcome without an author says Unknown user", async () => {
   const surface = fakeSurface();
   await run(surface, [job(1, "feedback_outcome", { ...rejectedPayload, created_by: null })]);
-  assert.match(surface.posts[0]?.content ?? "", /^Unknown user Your suggestion "Dark mode"/);
+  assert.match(surface.posts[0]?.content ?? "", /^Unknown user Your feature request "Dark mode"/);
 });
 
 test("outcome never fetches the Feedback: the payload carries everything", async () => {
@@ -235,7 +258,7 @@ test("outcome rejects an unknown outcome value", async () => {
   const acks = await run(surface, [
     job(1, "feedback_outcome", { ...approvedPayload, outcome: "withdrawn" }),
   ]);
-  assert.match(failure(acks), /outcome must be "approved" or "rejected"/);
+  assert.match(failure(acks), /outcome must be "approved", "rejected", "duplicate" or "done"/);
   assert.equal(surface.posts.length, 0);
 });
 
@@ -299,5 +322,100 @@ test("a rejected notice fits Discord's 2000 character limit", async () => {
   assert.deepEqual(acks, [{ id: 1, status: "done" }]);
   const content = surface.posts[0]?.content ?? "";
   assert.ok(content.length <= 2000, `posted ${content.length} characters`);
-  assert.match(content, /^<@author-1> Your suggestion "t+\.\.\." was not accepted\. Reason: r+/);
+  assert.match(content, /^<@author-1> Your feature request "t+\.\.\." was not accepted\. /);
+  assert.match(content, /Reason: r+/);
+});
+
+test("submitted ping names the Feedback's kind", async () => {
+  const surface = fakeSurface({ feedback: storedFeedback({ kind: "bug_report" }) });
+  await run(surface, [
+    job(1, "feedback_submitted", { feedback_id: 7, kind: "bug_report", created_by: "author-1" }),
+  ]);
+  assert.equal(
+    surface.posts[0]?.content,
+    `<@${BOT_DEV_PING_USER_ID}> Ayla has submitted a bug report!`,
+  );
+});
+
+test("approved and rejected notices name each kind", async () => {
+  for (const [kind, noun] of [
+    ["feature_request", "feature request"],
+    ["suggestion", "suggestion"],
+    ["bug_report", "bug report"],
+  ] as const) {
+    const surface = fakeSurface();
+    await run(surface, [
+      job(1, "feedback_outcome", { ...approvedPayload, kind }),
+      job(2, "feedback_outcome", { ...rejectedPayload, kind }),
+    ]);
+    assert.match(surface.posts[0]?.content ?? "", new RegExp(`^<@author-1> Your ${noun} was accepted`));
+    assert.match(surface.posts[1]?.content ?? "", new RegExp(`^<@author-1> Your ${noun} "Dark mode"`));
+  }
+});
+
+test("an outcome for an unknown kind says feedback", async () => {
+  const surface = fakeSurface();
+  await run(surface, [job(1, "feedback_outcome", { ...approvedPayload, kind: "praise" })]);
+  assert.match(surface.posts[0]?.content ?? "", /^<@author-1> Your feedback was accepted/);
+});
+
+test("duplicate outcome names the original, its upvotes moved, and links the Board", async () => {
+  const surface = fakeSurface();
+  const acks = await run(surface, [job(1, "feedback_outcome", duplicatePayload)]);
+  assert.deepEqual(acks, [{ id: 1, status: "done" }]);
+  assert.deepEqual(surface.posts, [{
+    channelId: GAMEDB_UPDATES_CHANNEL_ID,
+    content: "<@author-1> Your bug report \"Login loops\" was marked a duplicate of " +
+      "\"Login redirects forever\". Its upvotes moved there. " +
+      feedbackBoardUrl(3),
+  }]);
+  assert.ok(feedbackBoardUrl(3).endsWith("/feedback?pinned=3"));
+  assert.doesNotMatch(surface.posts[0]?.content ?? "", /Your upvote/);
+  assert.deepEqual(surface.pings, [["author-1"]]);
+});
+
+test("duplicate outcome rejects a payload without the original", async () => {
+  const surface = fakeSurface();
+  const noId = await run(surface, [
+    job(1, "feedback_outcome", { ...duplicatePayload, duplicate_of_id: null }),
+  ]);
+  assert.match(failure(noId), /duplicate_of_id must be a positive integer/);
+  const noTitle = await run(surface, [
+    job(2, "feedback_outcome", { ...duplicatePayload, duplicate_of_title: null }),
+  ]);
+  assert.match(failure(noTitle), /duplicate_of_title must be a non-empty string/);
+  assert.equal(surface.posts.length, 0);
+});
+
+test("done outcome celebrates with the GitHub issue", async () => {
+  const surface = fakeSurface();
+  const acks = await run(surface, [job(1, "feedback_outcome", donePayload)]);
+  assert.deepEqual(acks, [{ id: 1, status: "done" }]);
+  assert.deepEqual(surface.posts, [{
+    channelId: GAMEDB_UPDATES_CHANNEL_ID,
+    content: "<@author-1> Your suggestion \"Bigger covers\" is done! 🎉 GitHub issue #321: " +
+      "https://github.com/TheRPGClub/TheRPGClub-www/issues/321",
+  }]);
+});
+
+test("done outcome rejects a payload without the issue url", async () => {
+  const surface = fakeSurface();
+  const acks = await run(surface, [
+    job(1, "feedback_outcome", { ...donePayload, github_issue_url: null }),
+  ]);
+  assert.match(failure(acks), /github_issue_url must be a non-empty string/);
+});
+
+test("duplicate and done notices with long titles fit one Discord message", async () => {
+  const surface = fakeSurface();
+  const long = "t".repeat(3000);
+  const acks = await run(surface, [
+    job(1, "feedback_outcome", { ...duplicatePayload, title: long, duplicate_of_title: long }),
+    job(2, "feedback_outcome", { ...donePayload, title: long }),
+  ]);
+  assert.deepEqual(acks, [{ id: 1, status: "done" }, { id: 2, status: "done" }]);
+  for (const post of surface.posts) {
+    assert.ok(post.content.length <= 2000, `posted ${post.content.length} characters`);
+    assert.match(post.content, /"t+\.\.\."/);
+  }
 });
