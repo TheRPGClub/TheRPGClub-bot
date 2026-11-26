@@ -49,6 +49,12 @@ export const FRANCHISE_PROGRESS_FEATURE_KEY = "franchise_progress";
  */
 export const GOTY_VOTE_FEATURE_KEY = "goty_vote";
 
+/**
+ * Patch Notes (spec api#510): `/patch-notes` and the Patch posts in #patch-notes
+ * (`patch_post`, `patch_edit`, `patch_delete`).
+ */
+export const PATCH_NOTES_FEATURE_KEY = "patch_notes";
+
 /** Top-level slash command or context menu name -> Feature key. */
 export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   gamedb: "game_index",
@@ -83,6 +89,7 @@ export const FEATURE_COMMANDS: Readonly<Record<string, string>> = {
   funfact: CLUB_CODEX_FEATURE_KEY,
   list: GAME_LISTS_FEATURE_KEY,
   goty: GOTY_VOTE_FEATURE_KEY,
+  "patch-notes": PATCH_NOTES_FEATURE_KEY,
 };
 
 /**
@@ -169,4 +176,5 @@ export const POST_FEATURE_KEYS = {
   clubCodex: CLUB_CODEX_FEATURE_KEY,
   franchiseConquest: FRANCHISE_PROGRESS_FEATURE_KEY,
   gotyVote: GOTY_VOTE_FEATURE_KEY,
+  patchNotes: PATCH_NOTES_FEATURE_KEY,
 } as const;

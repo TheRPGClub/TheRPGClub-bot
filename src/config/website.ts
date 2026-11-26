@@ -62,3 +62,8 @@ export function franchisePageUrl(franchiseId: number): string {
 export function gotyPageUrl(): string {
   return `${WEBSITE_BASE_URL}/goty`;
 }
+
+/** A Patch's page (spec api#510), which the Patch's Discord post links to. */
+export function patchPageUrl(patchNumber: number): string {
+  return `${WEBSITE_BASE_URL}/patch-notes/${patchNumber}`;
+}

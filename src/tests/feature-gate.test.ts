@@ -443,7 +443,7 @@ test("feature gate map: every mapped Feature is one of the API registry's keys",
   const registry = new Set([
     "game_index", "voting_gotm", "backlog", "collection", "now_playing", "game_completions",
     "reviews", "achievement_hub", "giveaways", "journals", "suggestions", "news_hub", "challenges",
-    "club_codex", "game_lists", "goty_vote",
+    "club_codex", "game_lists", "goty_vote", "patch_notes",
   ]);
   const mapped = [
     ...Object.values(FEATURE_COMMANDS),
