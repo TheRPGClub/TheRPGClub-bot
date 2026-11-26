@@ -62,3 +62,13 @@ export function franchisePageUrl(franchiseId: number): string {
 export function gotyPageUrl(): string {
   return `${WEBSITE_BASE_URL}/goty`;
 }
+
+/** A Feedback on the Feedback Board, pinned to the top (where a Bug Report's screenshot goes). */
+export function feedbackBoardUrl(feedbackId: number): string {
+  return `${WEBSITE_BASE_URL}/feedback?pinned=${feedbackId}`;
+}
+
+/** The website's /admin desk, where Feedback is reviewed (spec api#498). */
+export function feedbackReviewUrl(): string {
+  return `${WEBSITE_BASE_URL}/admin`;
+}

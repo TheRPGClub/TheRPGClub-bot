@@ -2,12 +2,12 @@ import { userMention } from "discord.js";
 import { BOT_DEV_PING_USER_ID } from "../config/users.js";
 import {
   DISCORD_MESSAGE_CONTENT_MAX,
-  SUGGESTION_NOTICE_TITLE_MAX,
-} from "../config/suggestions.js";
+  FEEDBACK_NOTICE_TITLE_MAX,
+} from "../config/feedback.js";
 import { truncateWithEllipsis } from "../utilities/ValidationUtils.js";
 
-/** The bot dev channel ping for a new Suggestion, from /suggestion or the website. */
-export function buildSuggestionSubmittedPing(authorLabel: string): string {
+/** The bot dev channel ping for new Feedback, from /feedback or the website. */
+export function buildFeedbackSubmittedPing(authorLabel: string): string {
   return `${userMention(BOT_DEV_PING_USER_ID)} ${authorLabel} has submitted a suggestion!`;
 }
 
@@ -15,8 +15,8 @@ function authorMention(createdBy: string | null): string {
   return createdBy ? userMention(createdBy) : "Unknown user";
 }
 
-/** The GameDB updates post telling the author their Suggestion was approved. */
-export function buildSuggestionApprovedNotice(
+/** The GameDB updates post telling the author their Feedback was approved. */
+export function buildFeedbackApprovedNotice(
   createdBy: string | null,
   issueNumber: number,
   issueUrl: string,
@@ -26,15 +26,15 @@ export function buildSuggestionApprovedNotice(
 }
 
 /**
- * The GameDB updates post telling the author their Suggestion was rejected, and why. The
+ * The GameDB updates post telling the author their Feedback was rejected, and why. The
  * title and reason are cut to fit one Discord message.
  */
-export function buildSuggestionRejectedNotice(
+export function buildFeedbackRejectedNotice(
   createdBy: string | null,
   title: string,
   reason: string,
 ): string {
   const head = `${authorMention(createdBy)} Your suggestion ` +
-    `"${truncateWithEllipsis(title, SUGGESTION_NOTICE_TITLE_MAX)}" was not accepted. Reason: `;
+    `"${truncateWithEllipsis(title, FEEDBACK_NOTICE_TITLE_MAX)}" was not accepted. Reason: `;
   return head + truncateWithEllipsis(reason, DISCORD_MESSAGE_CONTENT_MAX - head.length);
 }

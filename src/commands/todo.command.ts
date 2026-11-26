@@ -28,7 +28,7 @@ import {
   safeReply,
   safeUpdate,
 } from "../functions/InteractionUtils.js";
-import { countSuggestions } from "../classes/Suggestion.js";
+import { countPendingFeedback } from "../classes/Feedback.js";
 import {
   addComment,
   closeIssue,
@@ -160,9 +160,9 @@ import {
 } from "./todo/todoPermissions.js";
 import { sanitizeTodoRichText } from "./todo/todoRenderers.js";
 
-async function getSuggestionReviewCount(): Promise<number> {
+async function getFeedbackReviewCount(): Promise<number> {
   try {
-    return await countSuggestions();
+    return await countPendingFeedback();
   } catch {
     return 0;
   }
@@ -297,14 +297,14 @@ export class TodoCommand {
       isPublic,
       repo: DEFAULT_TODO_REPO_CODE,
     };
-    const suggestionCount = await getSuggestionReviewCount();
+    const feedbackCount = await getFeedbackReviewCount();
     const payloadToken = buildTodoPayloadToken(payload, TODO_PAYLOAD_TOKEN_MAX_LENGTH);
     const listPayload = buildIssueListComponents(
       pageIssues,
       totalIssues,
       payload,
       payloadToken,
-      suggestionCount,
+      feedbackCount,
     );
 
     await safeReply(interaction, {
@@ -364,7 +364,7 @@ export class TodoCommand {
     const startIndex = (safePage - 1) * payload.perPage;
     const pageIssues = issues.slice(startIndex, startIndex + payload.perPage);
 
-    const suggestionCount = await getSuggestionReviewCount();
+    const feedbackCount = await getFeedbackReviewCount();
     const updatedPayload: TodoListPayload = { ...payload, page: safePage };
     const nextToken = buildTodoPayloadToken(updatedPayload, TODO_PAYLOAD_TOKEN_MAX_LENGTH);
     const listPayload = buildIssueListComponents(
@@ -372,7 +372,7 @@ export class TodoCommand {
       totalIssues,
       updatedPayload,
       nextToken,
-      suggestionCount,
+      feedbackCount,
     );
 
     return {

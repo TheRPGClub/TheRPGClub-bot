@@ -56,7 +56,6 @@ export const TODO_OPEN_SELECT_PREFIX = "todo-open-select";
 export const TODO_REPO_SELECT_PREFIX = "todo-repo-select";
 export const TODO_FILTER_LABEL_ALL = "__all__";
 export const TODO_FILTER_LABEL_NOT_BLOCKED = "__not_blocked__";
-export const TODO_REVIEW_SUGGESTIONS_BUTTON_ID = "todo-review-suggestions";
 export const TODO_CREATE_TITLE_ID = "todo-create-title";
 export const TODO_CREATE_BODY_ID = "todo-create-body";
 export const TODO_CREATE_TYPE_ID = "todo-create-type";

@@ -7,10 +7,7 @@ import NrGotm from "../classes/NrGotm.js";
 import { buildLiveStreamModal } from "../commands/admin/live-stream-admin.service.js";
 import { buildNowPlayingAddModal } from "../commands/now-playing/nowPlayingModals.js";
 import { buildRoundHistoryModal } from "../commands/round-history.command.js";
-import {
-  buildSuggestionCreateModal,
-  buildSuggestionReviewDecisionModal,
-} from "../commands/suggestion.command.js";
+import { buildFeedbackModal } from "../commands/feedback.command.js";
 import { buildTextInputLabel } from "../functions/uiComponents.js";
 
 test("round history modal serializes label-based discord.js components", () => {
@@ -31,36 +28,27 @@ test("round history modal serializes label-based discord.js components", () => {
   }
 });
 
-test("suggestion modals serialize checkbox and radio label components", () => {
-  const createModal = buildSuggestionCreateModal();
-  const reviewModal = buildSuggestionReviewDecisionModal(
-    "suggestion-review-decision:123456789012345678:42",
-    "Suggestion: #42 - Test\n\nDetails:\nTry the new modal.",
-  );
-
-  assert.doesNotThrow(() => createModal.toJSON());
-  assert.doesNotThrow(() => reviewModal.toJSON());
-  assert.equal(JSON.stringify(createModal.toJSON()).includes("\"type\":22"), true);
-  assert.equal(JSON.stringify(reviewModal.toJSON()).includes("\"type\":21"), true);
-});
-
-test("suggestion review modal offers the three repos, the bot repo preselected", () => {
-  const json = buildSuggestionReviewDecisionModal(
-    "suggestion-review-decision:123456789012345678:42",
-    "Suggestion: #42 - Test",
-  ).toJSON();
-  const repoGroup = json.components
+test("feedback modals serialize: title + details, or a Bug Report's five inputs", () => {
+  for (const kind of ["feature_request", "suggestion"] as const) {
+    const json = buildFeedbackModal(kind).toJSON();
+    assert.equal(json.custom_id, `feedback-create:${kind}`);
+    assert.deepEqual(
+      json.components.map((label: any) => label.component.custom_id),
+      ["feedback-title", "feedback-details"],
+    );
+  }
+  const bug = buildFeedbackModal("bug_report").toJSON();
+  assert.equal(bug.custom_id, "feedback-create:bug_report");
+  assert.equal(bug.components.length, 5);
+  assert.equal(JSON.stringify(bug).includes("\"type\":21"), true);
+  const where = bug.components
     .map((label: any) => label.component)
-    .find((component: any) => component?.custom_id === "suggestion-review-decision-repo");
-  assert.ok(repoGroup, "repo radio group missing");
-  assert.deepEqual(
-    repoGroup.options.map((option: any) => [option.value, option.default === true]),
-    [
-      ["TheRPGClub/TheRPGClub-bot", true],
-      ["TheRPGClub/TheRPGClub-api", false],
-      ["TheRPGClub/TheRPGClub-www", false],
-    ],
-  );
+    .find((component: any) => component?.custom_id === "feedback-where");
+  assert.deepEqual(where.options.map((option: any) => option.value), ["bot", "website"]);
+  const steps = bug.components
+    .map((label: any) => label.component)
+    .find((component: any) => component?.custom_id === "feedback-steps");
+  assert.equal(steps.required, false);
 });
 
 test("buildTextInputLabel puts the label on a Label wrapping the text input", () => {

@@ -35,7 +35,7 @@ function fakeSurface(): IPostingSurface {
     runGiveawayClaimSideEffects: async () => "",
     sendDm: async () => {},
     refreshGiveawayHub: async () => {},
-    fetchSuggestion: async () => null,
+    fetchFeedback: async () => null,
     sendChannelMessage: async (channelId, content, pings) => {
       surface.posts.push({ channelId, content, pings });
     },

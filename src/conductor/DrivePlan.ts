@@ -20,7 +20,7 @@ export type DriveActionKind = "slash" | "slash-modal" | "click" | "modal" | "sel
  * steps, and the component steps that follow them, are always done by the tester. Other
  * real-data writes are marked per step with `Changes data: yes` in the PR body.
  */
-export const EXTERNAL_EFFECT_COMMANDS: readonly string[] = ["todo", "suggestion"];
+export const EXTERNAL_EFFECT_COMMANDS: readonly string[] = ["todo", "feedback", "suggestion"];
 
 export interface IDriveStep {
   number: number;

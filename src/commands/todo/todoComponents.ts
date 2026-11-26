@@ -1,5 +1,6 @@
-import type { ActionRowBuilder, ButtonBuilder } from "discord.js";
+import type { ActionRowBuilder } from "discord.js";
 import {
+  ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
 } from "discord.js";
@@ -20,10 +21,8 @@ import {
 } from "../../functions/PaginationUtils.js";
 import { formatDiscordTimestamp } from "../../functions/DateFormatUtils.js";
 import { DISCORD_TEXT_INPUT_MAX } from "../../config/textLimits.js";
-import {
-  TODO_REVIEW_SUGGESTIONS_BUTTON_ID,
-  type TodoListPayload,
-} from "./todoTypes.js";
+import { type TodoListPayload } from "./todoTypes.js";
+import { feedbackReviewUrl } from "../../config/website.js";
 import {
   buildTodoFilterButtonId,
   buildTodoCreateButtonId,
@@ -84,7 +83,7 @@ export function buildIssueListComponents(
   totalIssues: number,
   payload: TodoListPayload,
   payloadToken: string,
-  suggestionCount: number,
+  feedbackCount: number,
 ): { components: Array<ContainerBuilder | ActionRowBuilder<any>> } {
   const totalPages = Math.max(1, Math.ceil(totalIssues / payload.perPage));
   const labelSummary = payload.excludeBlocked
@@ -100,8 +99,8 @@ export function buildIssueListComponents(
     `Sort: # ${payload.direction}`,
     buildPageFooterText(payload.page - 1, totalPages),
   ];
-  if (suggestionCount > 0) {
-    summaryParts.push(`${suggestionCount} suggestions awaiting review`);
+  if (feedbackCount > 0) {
+    summaryParts.push(`${feedbackCount} Feedback awaiting review`);
   }
 
   const container = new ContainerBuilder()
@@ -156,13 +155,13 @@ export function buildIssueListComponents(
   });
 
   const actionRowButtons: ButtonBuilder[] = [createButton, closeButton, filterButton];
-  if (suggestionCount > 0) {
+  // Feedback is reviewed on the website only (spec api#498).
+  if (feedbackCount > 0) {
     actionRowButtons.push(
-      buildActionButton({
-        customId: TODO_REVIEW_SUGGESTIONS_BUTTON_ID,
-        label: "Review Suggestions",
-        style: ButtonStyle.Primary,
-      }),
+      new ButtonBuilder()
+        .setLabel("Review Feedback")
+        .setURL(feedbackReviewUrl())
+        .setStyle(ButtonStyle.Link),
     );
   }
   const actionRow = buildButtonRow(...actionRowButtons);

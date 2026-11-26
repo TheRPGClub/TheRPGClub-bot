@@ -158,7 +158,7 @@ function fakeSurface(posts: { channelId: string; content: string }[]): IBotJobSu
     runGiveawayClaimSideEffects: async () => "",
     sendDm: async () => {},
     refreshGiveawayHub: async () => {},
-    fetchSuggestion: async () => null,
+    fetchFeedback: async () => null,
     sendChannelMessage: async (channelId, content) => {
       posts.push({ channelId, content });
     },
