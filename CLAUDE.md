@@ -37,6 +37,16 @@ Every pull request a session opens is watched for its merge, whether a skill ope
 not: record it with `scripts/catchup.py add-pr` and keep one `wait` running, per
 `.claude/skills/_shared/run-watch.md`.
 
+## Pull requests and versions
+
+Each merge to main versions this repo (spec TheRPGClub-api#510, ADR 0016 in the api repo; `.github/workflows/versioning.yml`), so a pull request title must be typed. The required PR title check (`.github/workflows/pr-title.yml`) refuses anything else.
+
+- **Title:** `type(scope)!: description`, e.g. `feat(bot): add the /patch-notes command`. `type` is one of `feat`, `fix`, `perf`, `refactor`, `chore`, `docs`, `test`, `ci`. `(scope)` is optional; `description` follows a colon and a space.
+- **Bump:** `feat` bumps the minor version; `fix` and `perf` the patch version; `refactor`, `chore`, `docs`, `test` and `ci` make no version.
+- **`!` means breaking:** `feat!:` or `fix(bot)!:` (any type) bumps the major version, as does a body line starting `BREAKING CHANGE:`. Use it only when the owner asks for a major; majors are deliberate.
+- **Patch note:** the PR template's optional `Patch note:` line is one sentence in members' words. Each version becomes a Pending Change, and staff start that change's Patch line from it (else from the title). Leave it empty when members won't notice.
+- Versioning does nothing until the repo has a `v*` tag. The shared workflows and their rules live in TheRPGClub-api (`versioning-reusable.yml`, `pr-title-reusable.yml`, `script/versioning/`); this repo only calls them.
+
 ## Agent skills
 
 ### Issue tracker
