@@ -217,9 +217,9 @@ test("bot jobs: a Live Feature's job runs as before", async () => {
   const api = fakeJobApi();
   const { handlers, runs } = countingHandlers();
   await processBotJobs(
-    [job(3, { n: 3, feature_key: "suggestions" })],
+    [job(3, { n: 3, feature_key: "feedback" })],
     handlers,
-    stateSurface({ suggestions: "live" }),
+    stateSurface({ feedback: "live" }),
     api,
     createBotJobDeliveryState(),
   );
@@ -239,12 +239,13 @@ test("bot jobs: a job without a feature_key never asks for a Feature's state", a
 });
 
 const REJECTED_OUTCOME = {
-  suggestion_id: 7,
+  feedback_id: 7,
+  kind: "suggestion",
   outcome: "rejected",
   created_by: "author-1",
   title: "Dark mode",
   rejection_reason: "Out of scope",
-  feature_key: "suggestions",
+  feature_key: "feedback",
 };
 
 function postingSurface(): IBotJobSurface & { posts: string[]; asked: number } {
@@ -268,11 +269,11 @@ for (const [state, expected] of [
   ["preview", BOT_DEV_CHANNEL_ID],
   [null, GAMEDB_UPDATES_CHANNEL_ID],
 ] as const) {
-  test(`suggestion_outcome: a ${state ?? "unknown"} Suggestions Feature posts to ${expected}` +
+  test(`feedback_outcome: a ${state ?? "unknown"} Feedback Feature posts to ${expected}` +
     " (the dispatcher's read, not a second one)", async () => {
     const surface = postingSurface();
-    const context = { feature: { key: "suggestions", state } };
-    await BOT_JOB_HANDLERS.suggestion_outcome(REJECTED_OUTCOME, surface, context);
+    const context = { feature: { key: "feedback", state } };
+    await BOT_JOB_HANDLERS.feedback_outcome(REJECTED_OUTCOME, surface, context);
     assert.deepEqual(surface.posts, [expected]);
     assert.equal(surface.asked, 0);
   });
@@ -282,16 +283,16 @@ test("bot jobs: the dispatcher reads a job's Feature once and hands it to the ha
   async () => {
     const api = fakeJobApi();
     const seen: unknown[] = [];
-    const surface = stateSurface({ suggestions: "preview" });
+    const surface = stateSurface({ feedback: "preview" });
     await processBotJobs(
-      [job(5, { feature_key: "suggestions" })],
+      [job(5, { feature_key: "feedback" })],
       { announce: async (_payload, _surface, context) => { seen.push(context); } },
       surface,
       api,
       createBotJobDeliveryState(),
     );
-    assert.deepEqual(surface.asked, ["suggestions"]);
-    assert.deepEqual(seen, [{ feature: { key: "suggestions", state: "preview" } }]);
+    assert.deepEqual(surface.asked, ["feedback"]);
+    assert.deepEqual(seen, [{ feature: { key: "feedback", state: "preview" } }]);
   });
 
 function votingSurface(): IBotJobSurface & { targets: unknown[] } {
@@ -425,7 +426,7 @@ test("post Features: every post kind belongs to one of the API registry's 18 key
   const { POST_FEATURE_KEYS } = await import("../config/featureGate.js");
   const registry = new Set([
     "game_index", "voting_gotm", "backlog", "collection", "now_playing", "game_completions",
-    "reviews", "achievement_hub", "giveaways", "journals", "suggestions", "news_hub",
+    "reviews", "achievement_hub", "giveaways", "journals", "feedback", "news_hub",
     "challenges", "release_calendar", "club_codex", "game_lists", "franchise_progress",
     "goty_vote",
   ]);

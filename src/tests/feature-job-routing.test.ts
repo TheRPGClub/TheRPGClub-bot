@@ -42,7 +42,7 @@ function recordingSurface(): IBotJobSurface & { calls: Call[] } {
     runGiveawayClaimSideEffects: record("runGiveawayClaimSideEffects", "Donor"),
     sendDm: record("sendDm"),
     refreshGiveawayHub: record("refreshGiveawayHub"),
-    fetchSuggestion: async () => ({ createdBy: "author-1", createdByName: "Ada" }),
+    fetchFeedback: async () => ({ createdBy: "author-1", createdByName: "Ada" }),
     sendChannelMessage: record("sendChannelMessage"),
     announceNominationChange: record("announceNominationChange"),
     announceGotyNominationChange: record("announceGotyNominationChange"),
@@ -140,13 +140,13 @@ for (const [state, channelId] of [
   ["preview", BOT_DEV_CHANNEL_ID],
   [null, BOT_DEV_CHANNEL_ID],
 ] as const) {
-  test(`suggestion_submitted: a ${state ?? "unknown"} Suggestions Feature pings in bot-dev`,
+  test(`feedback_submitted: a ${state ?? "unknown"} Feedback Feature pings in bot-dev`,
     async () => {
       const surface = recordingSurface();
-      await BOT_JOB_HANDLERS.suggestion_submitted(
-        { suggestion_id: 7, created_by: "author-1", feature_key: "suggestions" },
+      await BOT_JOB_HANDLERS.feedback_submitted(
+        { feedback_id: 7, kind: "bug_report", created_by: "author-1", feature_key: "feedback" },
         surface,
-        context("suggestions", state),
+        context("feedback", state),
       );
       assert.deepEqual(surface.calls.map(([name, id]) => [name, id]), [
         ["sendChannelMessage", channelId],
@@ -173,7 +173,10 @@ const GOTY_NOMINATION_DELETED = {
 };
 
 const STATE_PASSING_JOBS = [
-  ["suggestion_submitted", "suggestions", { suggestion_id: 7, created_by: null }, null],
+  [
+    "feedback_submitted", "feedback",
+    { feedback_id: 7, kind: "suggestion", created_by: null }, null,
+  ],
   ["completion_announce", "game_completions", COMPLETION, "announceCompletion"],
   ["nomination_deleted", "voting_gotm", NOMINATION_DELETED, "announceNominationChange"],
   [

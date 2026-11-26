@@ -77,7 +77,7 @@ function fakeSurface(options: {
       if (options.hubError) throw options.hubError;
       surface.hubRefreshes++;
     },
-    fetchSuggestion: async () => null,
+    fetchFeedback: async () => null,
     sendChannelMessage: async () => {},
     reloadGotmRound: async () => {},
     announceNominationChange: async () => {},

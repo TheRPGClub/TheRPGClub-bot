@@ -62,3 +62,22 @@ export function franchisePageUrl(franchiseId: number): string {
 export function gotyPageUrl(): string {
   return `${WEBSITE_BASE_URL}/goty`;
 }
+
+/**
+ * A Feedback on the Feedback Board, pinned to the top.
+ * With its kind, the Board opens on that kind's tab.
+ */
+export function feedbackBoardUrl(feedbackId: number, kind?: string | null): string {
+  const kindParam = kind ? `kind=${encodeURIComponent(kind)}&` : "";
+  return `${WEBSITE_BASE_URL}/feedback?${kindParam}pinned=${feedbackId}`;
+}
+
+/** A Feedback's edit dialog on the Feedback Board (where a Bug Report's screenshot is added). */
+export function feedbackEditUrl(feedbackId: number): string {
+  return `${WEBSITE_BASE_URL}/feedback?edit=${feedbackId}`;
+}
+
+/** The website's Feedback review desk (spec api#498). */
+export function feedbackReviewUrl(): string {
+  return `${WEBSITE_BASE_URL}/admin/feedback`;
+}

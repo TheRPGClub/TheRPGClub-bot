@@ -8,7 +8,7 @@ import {
   runGiveawayClaimSideEffects,
   type IClaimedGiveawayKey,
 } from "./GiveawayClaimService.js";
-import { getSuggestionById, type ISuggestionItem } from "../classes/Suggestion.js";
+import { getFeedbackById, type IFeedbackItem } from "../classes/Feedback.js";
 import {
   ADMIN_CHANNEL_ID,
   ANNOUNCEMENT_CHANNEL_ID,
@@ -22,10 +22,12 @@ import {
 } from "../config/channels.js";
 import { BOT_DEV_PING_USER_ID, PSN_ALERT_DM_USER_ID } from "../config/users.js";
 import {
-  buildSuggestionApprovedNotice,
-  buildSuggestionRejectedNotice,
-  buildSuggestionSubmittedPing,
-} from "./SuggestionNotices.js";
+  buildFeedbackApprovedNotice,
+  buildFeedbackDoneNotice,
+  buildFeedbackDuplicateNotice,
+  buildFeedbackRejectedNotice,
+  buildFeedbackSubmittedPing,
+} from "./FeedbackNotices.js";
 import type { NominationKind } from "../classes/Nomination.js";
 import { reloadGotmRoundFromDb } from "../classes/Gotm.js";
 import { reloadNrGotmRoundFromDb } from "../classes/NrGotm.js";
@@ -197,8 +199,8 @@ export interface IBotJobSurface {
    * `state` routes it. Throws when it could not.
    */
   refreshGiveawayHub(state: FeatureState | null): Promise<void>;
-  /** GET /suggestions/:id with the service token; null on 404. */
-  fetchSuggestion(suggestionId: number): Promise<ISuggestionItem | null>;
+  /** GET /feedback/:id with the service token; null on 404. */
+  fetchFeedback(feedbackId: number): Promise<IFeedbackItem | null>;
   /**
    * Posts to a text channel; only the listed users' mentions ping (never @everyone or a
    * role, which website text could hold). Throws the discord.js error, or when the channel
@@ -342,7 +344,7 @@ export function createBotJobSurface(client: Client): IBotJobSurface {
     },
     refreshGiveawayHub: (state) =>
       refreshGiveawayHubMessage(client, 0, { throwOnFailure: true, featureState: state }),
-    fetchSuggestion: getSuggestionById,
+    fetchFeedback: getFeedbackById,
     sendChannelMessage: async (channelId, content, pingUserIds) => {
       const channel = await client.channels.fetch(channelId);
       if (!channel || !channel.isSendable()) {
@@ -595,62 +597,83 @@ function optionalString(payload: Record<string, unknown>, field: string): string
 }
 
 /**
- * Payload: `{ suggestion_id, created_by }`. A member submitted a Suggestion on the website
- * (the bot's own /suggestion pings inline instead), so the bot dev is pinged as /suggestion
- * does, in the bot-dev channel whether the Suggestions Feature is Live or in Preview, and
- * not at all when it is Off. The name comes from the Suggestion itself.
+ * Payload: `{ feedback_id, kind, created_by }`. A member filed Feedback on the website
+ * (the bot's own /feedback pings inline instead), so the bot dev is pinged as /feedback
+ * does, in the bot-dev channel whether the Feedback Feature is Live or in Preview, and
+ * not at all when it is Off. The name and kind come from the Feedback itself.
  */
-export const handleSuggestionSubmitted: BotJobHandler = async (payload, surface, context) => {
-  const suggestionId = payloadPositiveInt(payload, "suggestion_id");
+export const handleFeedbackSubmitted: BotJobHandler = async (payload, surface, context) => {
+  const feedbackId = payloadPositiveInt(payload, "feedback_id");
   const createdBy = optionalString(payload, "created_by");
-  const featureKey = POST_FEATURE_KEYS.suggestions;
+  const featureKey = POST_FEATURE_KEYS.feedback;
   const channelId = routeFeaturePost(
     await jobFeatureState(featureKey, surface, context),
     BOT_DEV_CHANNEL_ID,
   );
   if (!channelId) return featureOffNotice(featureKey);
-  const suggestion = await surface.fetchSuggestion(suggestionId);
-  if (!suggestion) {
-    throw new Error(`Suggestion ${suggestionId} no longer exists, so no ping was sent.`);
+  const feedback = await surface.fetchFeedback(feedbackId);
+  if (!feedback) {
+    throw new Error(`Feedback ${feedbackId} no longer exists, so no ping was sent.`);
   }
-  const author = suggestion.createdBy ?? createdBy;
-  const authorLabel = suggestion.createdByName ?? (author ? userMention(author) : "Someone");
+  const author = feedback.createdBy ?? createdBy;
+  const authorLabel = feedback.createdByName ?? (author ? userMention(author) : "Someone");
   await surface.sendChannelMessage(
     channelId,
-    buildSuggestionSubmittedPing(authorLabel),
+    buildFeedbackSubmittedPing(authorLabel, feedback.kind),
     author ? [BOT_DEV_PING_USER_ID, author] : [BOT_DEV_PING_USER_ID],
   );
 };
 
 /**
- * Payload: `{ suggestion_id, outcome, created_by, title, github_issue_number,
- * github_issue_url, rejection_reason }`. Queued by the API for every review, the bot's own
- * Discord reviews included, so this is the only place the outcome is announced. Posted where
- * the Suggestions Feature's flag routes it (the bot-dev channel in Preview).
+ * Payload: `{ feedback_id, kind, outcome, created_by, title, github_issue_number,
+ * github_issue_url, rejection_reason }`, plus `{ duplicate_of_id, duplicate_of_title }` (and
+ * an optional `duplicate_of_kind`) for a Duplicate. Queued by the API for every review
+ * (approved, rejected, duplicate) and once when an Approved Feedback's issue closes (done),
+ * so this is the only place the outcome is announced. Each notice names the kind. Posted where the Feedback Feature's flag routes it
+ * (the bot-dev channel in Preview).
  */
-export const handleSuggestionOutcome: BotJobHandler = async (payload, surface, context) => {
-  payloadPositiveInt(payload, "suggestion_id");
+export const handleFeedbackOutcome: BotJobHandler = async (payload, surface, context) => {
+  payloadPositiveInt(payload, "feedback_id");
   const createdBy = optionalString(payload, "created_by");
+  const kind = payload.kind;
   const outcome = payload.outcome;
   let content: string;
   if (outcome === "approved") {
-    content = buildSuggestionApprovedNotice(
+    content = buildFeedbackApprovedNotice(
       createdBy,
+      kind,
       payloadPositiveInt(payload, "github_issue_number"),
       requireString(payload, "github_issue_url"),
     );
   } else if (outcome === "rejected") {
-    content = buildSuggestionRejectedNotice(
+    content = buildFeedbackRejectedNotice(
       createdBy,
+      kind,
       requireString(payload, "title"),
       requireString(payload, "rejection_reason"),
     );
+  } else if (outcome === "duplicate") {
+    content = buildFeedbackDuplicateNotice(
+      createdBy,
+      kind,
+      requireString(payload, "title"),
+      payloadPositiveInt(payload, "duplicate_of_id"),
+      requireString(payload, "duplicate_of_title"),
+      payload.duplicate_of_kind,
+    );
+  } else if (outcome === "done") {
+    content = buildFeedbackDoneNotice(
+      createdBy,
+      kind,
+      requireString(payload, "title"),
+      payloadPositiveInt(payload, "github_issue_number"),
+      requireString(payload, "github_issue_url"),
+    );
   } else {
-    throw new Error(`Invalid payload: outcome must be "approved" or "rejected", got ${
-      JSON.stringify(outcome)
-    }.`);
+    throw new Error("Invalid payload: outcome must be \"approved\", \"rejected\", " +
+      `"duplicate" or "done", got ${JSON.stringify(outcome)}.`);
   }
-  const featureKey = POST_FEATURE_KEYS.suggestions;
+  const featureKey = POST_FEATURE_KEYS.feedback;
   const channelId = routeFeaturePost(
     await jobFeatureState(featureKey, surface, context),
     GAMEDB_UPDATES_CHANNEL_ID,
@@ -1203,7 +1226,7 @@ const CHALLENGE_DMS: Readonly<Record<
  * Off. A member with DMs closed can never get it, so that is acked done with the reason
  * rather than failed and retried. An event this bot has no DM for fails the job. A
  * club-hosted `pool_proposal` (`club_hosted: true`, no `user_id`) is posted in #dev
- * instead, as suggestions are (spec api#442).
+ * instead, as Feedback is (spec api#442).
  */
 export const handleChallengeDm: BotJobHandler = dmOnly(async (payload, surface, context) => {
   const event = requireString(payload, "event");
@@ -1325,8 +1348,8 @@ export const BOT_JOB_HANDLERS: BotJobHandlers = {
   voting_poll_wakeup: handleVotingPollWakeup,
   giveaway_claim_notice: handleGiveawayClaimNotice,
   giveaway_hub_refresh: handleGiveawayHubRefresh,
-  suggestion_submitted: handleSuggestionSubmitted,
-  suggestion_outcome: handleSuggestionOutcome,
+  feedback_submitted: handleFeedbackSubmitted,
+  feedback_outcome: handleFeedbackOutcome,
   gotm_cache_reload: handleGotmCacheReload,
   nomination_deleted: handleNominationDeleted,
   goty_nomination_deleted: handleGotyNominationDeleted,

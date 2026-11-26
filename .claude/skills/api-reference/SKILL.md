@@ -576,30 +576,16 @@ GET     /api/v1/steam_collection_imports/{id}/items/next_pending  # Get the next
 GET     /api/v1/users/{user_id}/steam_collection_imports/active  # Get the user's active or paused Steam import
 ```
 
-### Suggestion Review Sessions
+### Feedback
 
 ```
-GET     /api/v1/suggestions/review_sessions  # List suggestion review sessions (reviewer_id, page, per, limit, offset)
-POST    /api/v1/suggestions/review_sessions  # Create a review session
-  data: { session_id*, reviewer_id*, suggestion_ids*, current_index, total_count }
-DELETE  /api/v1/suggestions/review_sessions  # Delete all review sessions for a reviewer (reviewer_id)
-DELETE  /api/v1/suggestions/review_sessions/expired  # Prune expired review sessions (before)
-GET     /api/v1/suggestions/review_sessions/{id}  # Show a review session
-PATCH   /api/v1/suggestions/review_sessions/{id}  # Update a review session
-  data: { session_id, reviewer_id, suggestion_ids, current_index, total_count }
-PUT     /api/v1/suggestions/review_sessions/{id}  # Replace a review session (alias)
-  data: { session_id, reviewer_id, suggestion_ids, current_index, total_count }
-DELETE  /api/v1/suggestions/review_sessions/{id}  # Delete a review session
-```
-
-### Suggestions
-
-```
-GET     /api/v1/suggestions  # List suggestions (page, per, limit, offset)
-POST    /api/v1/suggestions  # Create a suggestion
-  data: { title*, details, labels, created_by, created_by_name }
-GET     /api/v1/suggestions/{id}  # Show a suggestion
-DELETE  /api/v1/suggestions/{id}  # Delete a suggestion
+GET     /api/v1/feedback  # List Feedback (kind, status, sort=board|recent, page, per); meta.totals
+POST    /api/v1/feedback  # File Feedback
+  data: { kind* (feature_request|suggestion|bug_report), title*, details, created_by,
+          created_by_name, where (bot|website), what_happened, expected, steps }
+  # bug_report requires where, what_happened and expected
+GET     /api/v1/feedback/{id}  # Show Feedback
+PATCH   /api/v1/feedback/{id}  # Author edit while Pending
 ```
 
 ### Themes

@@ -24,7 +24,7 @@ Expected: a private help menu, title: "RPGClubUtils Commands", with
 option: "/noms", option: "/nominate", option: "/nominate-delete", option: "/vote",
 option: "/round", option: "/round-history", option: "/profile", option: "/mp-info",
 option: "/gamedb", option: "/collection", option: "/now-playing",
-option: "/game-completion", option: "/hltb", option: "/suggestion",
+option: "/game-completion", option: "/hltb", option: "/feedback",
 option: "/gamegiveaway", option: "/avatar-history", option: "/mod", option: "/admin",
 option: "/superadmin", option: "/todo", option: "/publicreminder", option: "/thread",
 option: "/rss".
@@ -205,12 +205,12 @@ Expected: the help message changes to title: "/hltb help", with "Parameters" and
 "Title autocompletes from GameDB".
 Ephemeral: yes
 
-### Step 23: Open the /suggestion topic
+### Step 23: Open the /feedback topic
 ```
-select "/suggestion" from "Utilities commands"
+select "/feedback" from "Utilities commands"
 ```
-Expected: the help message changes to title: "/suggestion help", with
-"Review Suggestions button".
+Expected: the help message changes to title: "/feedback help", with
+"pick a kind".
 Ephemeral: yes
 
 ### Step 24: Open the /gamegiveaway topic

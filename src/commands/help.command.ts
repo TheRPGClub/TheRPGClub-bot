@@ -79,7 +79,7 @@ type HelpTopicId =
   | "mod"
   | "superadmin"
   | "todo"
-  | "suggestion";
+  | "feedback";
 
 type HelpMenuView =
   | "main"
@@ -503,11 +503,16 @@ const HELP_TOPICS: HelpTopic[] = [
       "Issue descriptions and comments support image links, including HTML <img src=\"...\">.",
   },
   {
-    id: "suggestion",
-    label: "/suggestion",
-    summary: "Submit a bot suggestion for review.",
-    syntax: "Syntax: /suggestion (opens modal for title, description, and type selection)",
-    notes: "Suggestions are approved from the Review Suggestions button in /todo by the server owner or bot dev.",
+    id: "feedback",
+    label: "/feedback",
+    summary: "Send feedback: a Feature Request, Suggestion or Bug Report.",
+    syntax:
+      "Syntax: /feedback (pick a kind, then fill in its form). " +
+      "/suggestion does the same for now.",
+    notes:
+      "Feature Requests and Suggestions take a title and details. Bug Reports take where " +
+      "it happened, what happened, what you expected and optional steps; add a screenshot " +
+      "on the website. Feedback is reviewed on the website's Feedback Board.",
   },
 ];
 
@@ -533,7 +538,7 @@ const HELP_CATEGORIES: { id: string; name: string; topicIds: HelpTopicId[] }[] =
     topicIds: [
       "hltb",
       "news",
-      "suggestion",
+      "feedback",
       "giveaway",
       "avatar-history",
     ],
@@ -1066,7 +1071,7 @@ const MAIN_MENU_SUMMARIES: Record<HelpTopicId, string> = {
   "game-completion": "Log and manage your completed games.",
   hltb: "Look up HowLongToBeat playtimes.",
   news: "Share game news in the News Channel.",
-  suggestion: "Submit a bot suggestion.",
+  feedback: "Send a Feature Request, Suggestion or Bug Report.",
   giveaway: "Claim or donate game keys.",
   challenge: "Create, browse and take part in club Challenges.",
   "avatar-history": "View a member’s avatar history.",
