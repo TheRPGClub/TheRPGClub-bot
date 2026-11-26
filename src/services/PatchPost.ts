@@ -61,18 +61,27 @@ export function patchPostHeading(patch: IPatchPostText): string {
 }
 
 /**
- * The Patch post: its heading, the cut markdown, a divider and the link button. Discord
- * counts every text display of a message against one 4000 limit, and the website cuts the
- * body alone against it, so the heading is left out when it would not fit beside a long
- * body (the body is never cut a second time).
+ * The Patch post: its heading, the cut markdown, a divider and the link button, then
+ * `footnote` if given (/patch-notes adds the versions line there). Discord counts every
+ * text display of a message against one 4000 limit, and the website cuts the body alone
+ * against it, so the heading, then the footnote, is left out when it would not fit beside
+ * a long body (the body is never cut a second time).
  */
-export function buildPatchPost(patch: IPatchPostText): IComponentsV2View {
+export function buildPatchPost(
+  patch: IPatchPostText,
+  options: { footnote?: string | null } = {},
+): IComponentsV2View {
   const body = safeV2TextContent(patch.cutBody, DISCORD_V2_TEXT_MAX);
+  let room = DISCORD_V2_TEXT_MAX - body.length;
   const heading = patchPostHeading(patch);
-  const texts = heading.length + body.length <= DISCORD_V2_TEXT_MAX ? [heading, body] : [body];
+  const showHeading = heading.length <= room;
+  if (showHeading) room -= heading.length;
+  const footnote = options.footnote?.trim();
+  const texts = (showHeading ? [heading, body] : [body]).filter(Boolean);
+  const textDisplay = (text: string) =>
+    new TextDisplayBuilder().setContent(safeV2TextContent(text, DISCORD_V2_TEXT_MAX)).toJSON();
   return buildComponentsV2View([
-    ...texts.filter(Boolean).map((text) =>
-      new TextDisplayBuilder().setContent(safeV2TextContent(text, DISCORD_V2_TEXT_MAX)).toJSON()),
+    ...texts.map(textDisplay),
     new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small).toJSON(),
     new ActionRowBuilder<ButtonBuilder>()
       .addComponents(
@@ -82,6 +91,7 @@ export function buildPatchPost(patch: IPatchPostText): IComponentsV2View {
           .setURL(patchPageUrl(patch.number)),
       )
       .toJSON(),
+    ...(footnote && footnote.length <= room ? [textDisplay(footnote)] : []),
   ]);
 }
 

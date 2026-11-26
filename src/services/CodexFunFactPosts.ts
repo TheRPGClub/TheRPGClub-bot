@@ -19,6 +19,12 @@ import {
   buildTextDisplay,
   type IComponentsV2View,
 } from "../functions/ComponentsV2Utils.js";
+import {
+  answerPublicOrPrivate,
+  publicAnswerWaitMs,
+  type IPublicAnswerIo,
+  type PublicOrPrivateAnswer,
+} from "../functions/PublicAnswer.js";
 import { buildApiRefusalMessage } from "../utilities/ApiErrorUtils.js";
 import { commandMention } from "./CommandMentionService.js";
 import {
@@ -170,18 +176,7 @@ export async function drawFunFactReply(
 }
 
 /** How /funfact answers its interaction (the command wires these to discord.js). */
-export interface IFunFactAnswerIo {
-  /** Answers at once, before any defer: the card publicly, or a private reply. */
-  reply(payload: object): Promise<void>;
-  /** Defers publicly, which shows "is thinking…" in the channel. */
-  deferPublicly(): Promise<void>;
-  /** Fills the public deferred reply. */
-  editReply(payload: object): Promise<void>;
-  /** Deletes the public deferred reply and answers the member privately instead. */
-  replaceWithPrivate(payload: object): Promise<void>;
-  /** Resolves after `ms`. */
-  wait(ms: number): Promise<void>;
-}
+export type IFunFactAnswerIo = IPublicAnswerIo;
 
 /**
  * How long /funfact may wait on the draw before deferring: until `FUN_FACT_ANSWER_BY_MS`
@@ -189,8 +184,7 @@ export interface IFunFactAnswerIo {
  * `FUN_FACT_DRAW_WAIT_MAX_MS`, in case this clock runs behind Discord's.
  */
 export function funFactDrawWaitMs(ranAt: number, now: number): number {
-  const left = FUN_FACT_ANSWER_BY_MS - (now - ranAt);
-  return Math.min(FUN_FACT_DRAW_WAIT_MAX_MS, Math.max(0, left));
+  return publicAnswerWaitMs(ranAt, now, FUN_FACT_ANSWER_BY_MS, FUN_FACT_DRAW_WAIT_MAX_MS);
 }
 
 /**
@@ -204,18 +198,9 @@ export async function answerFunFact(
   io: IFunFactAnswerIo,
   waitMs: number,
 ): Promise<void> {
-  const quick = await Promise.race([draw, io.wait(waitMs).then(() => null)]);
-  if (quick) {
-    await io.reply("post" in quick ? quick.post : privateDrawReply(quick));
-    return;
-  }
-  await io.deferPublicly();
-  const reply = await draw;
-  if ("post" in reply) {
-    await io.editReply(reply.post);
-    return;
-  }
-  await io.replaceWithPrivate(privateDrawReply(reply));
+  const answer = draw.then((reply): PublicOrPrivateAnswer =>
+    "post" in reply ? { public: reply.post } : { private: privateDrawReply(reply) });
+  await answerPublicOrPrivate(answer, io, waitMs);
 }
 
 function privateDrawReply(reply: Exclude<FunFactDrawReply, { post: unknown }>): object {
