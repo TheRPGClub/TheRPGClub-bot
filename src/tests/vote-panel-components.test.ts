@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { AttachmentBuilder, ComponentType, type Client } from "discord.js";
+import test, { type TestContext } from "node:test";
+import {
+  AttachmentBuilder,
+  ComponentType,
+  PermissionFlagsBits,
+  PermissionsBitField,
+  type Client,
+} from "discord.js";
 import Member from "../classes/Member.js";
 import type { INominationEntry } from "../classes/Nomination.js";
 import type { IVoteEntry } from "../classes/Vote.js";
@@ -295,4 +301,61 @@ test("postVotePanels sends the vote image and nominator names with the panel", a
   const children = containerChildren(json);
   assert.equal(children[0]?.type, GALLERY_TYPE);
   assert.equal(children[2]?.accessory?.label, "Weasel");
+});
+
+/** Posts one GOTM panel to a channel that grants the bot only `granted`. */
+async function postPanelGranting(
+  t: TestContext,
+  granted: bigint[],
+  imageFiles: AttachmentBuilder[],
+): Promise<{ lines: string[]; posted: number; failed: number; sends: number }> {
+  t.mock.method(Member, "getByUserId", async () => ({ globalName: "Weasel" }));
+  let sends = 0;
+  const client = {
+    user: { id: "9" },
+    channels: {
+      fetch: async () => ({
+        isTextBased: () => true,
+        permissionsFor: () => new PermissionsBitField(granted),
+        send: async () => {
+          sends += 1;
+        },
+      }),
+    },
+  } as unknown as Client;
+  const source = {
+    getTally: async () => ({ rows: [], cap: 2 }),
+    buildVoteImage: async () => ({
+      files: imageFiles,
+      voteImageUrl: imageFiles.length ? "attachment://vote.png" : null,
+    }),
+  } as unknown as IVotingDataSource;
+  const result = await postVotePanels({
+    client,
+    channelId: "1",
+    roundNumber: 143,
+    voteDeadline: null,
+    nominationsByKind: new Map([["gotm", makeNominations(4)]]),
+    source,
+  });
+  return { ...result, sends };
+}
+
+test("postVotePanels names the permissions the bot lacks and sends nothing", async (t) => {
+  const image = new AttachmentBuilder(Buffer.from([1]), { name: "vote.png" });
+  const result = await postPanelGranting(t, [PermissionFlagsBits.ViewChannel], [image]);
+  assert.equal(result.sends, 0);
+  assert.equal(result.failed, 1);
+  assert.equal(
+    result.lines[0],
+    "GOTM: failed to post the voting panel in <#1>: " +
+      "the bot lacks Send Messages and Attach Files there",
+  );
+});
+
+test("postVotePanels asks for Attach Files only when the panel has an image", async (t) => {
+  const granted = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages];
+  const result = await postPanelGranting(t, granted, []);
+  assert.equal(result.sends, 1);
+  assert.equal(result.posted, 1);
 });

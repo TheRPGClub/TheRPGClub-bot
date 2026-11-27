@@ -50,7 +50,8 @@ async function sendPanelToChannel(
       ...(files.length ? [ATTACH_FILES_PERMISSION] : []),
     ]);
     if (missing?.length) {
-      return `the bot lacks ${joinWithAnd(missing)} in that channel`;
+      // Every caller's line already names the channel.
+      return `the bot lacks ${joinWithAnd(missing)} there`;
     }
     await sendable.send({
       components,
