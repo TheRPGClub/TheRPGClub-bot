@@ -1,7 +1,6 @@
 import {
   channelMention,
   DiscordAPIError,
-  PermissionFlagsBits,
   RESTJSONErrorCodes,
   userMention,
   type Client,
@@ -10,6 +9,12 @@ import { DateTime } from "luxon";
 import { BIRTHDAY_TIME_ZONE } from "../config/birthdays.js";
 import { BIRTHDAY_TEST_CHANNEL_ID, BOT_DEV_CHANNEL_ID } from "../config/channels.js";
 import { HOME_GUILD_ID } from "../config/guilds.js";
+import {
+  listMissingBotPermissions,
+  READ_HISTORY_PERMISSION,
+  VIEW_CHANNEL_PERMISSION,
+  type NamedPermission,
+} from "../functions/ChannelUtils.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
 import { logError } from "../utilities/LogUtils.js";
 import { joinWithAnd } from "../utilities/TextUtils.js";
@@ -103,9 +108,9 @@ function isUnknownMember(err: unknown): boolean {
 }
 
 /** The permissions the redelivery guard needs to see the channel's earlier messages. */
-const HISTORY_PERMISSIONS: readonly [bigint, string][] = [
-  [PermissionFlagsBits.ViewChannel, "View Channel"],
-  [PermissionFlagsBits.ReadMessageHistory, "Read Message History"],
+const HISTORY_PERMISSIONS: readonly NamedPermission[] = [
+  VIEW_CHANNEL_PERMISSION,
+  READ_HISTORY_PERMISSION,
 ];
 
 /** What the live deps read besides Discord; tests pass fakes. */
@@ -166,10 +171,9 @@ export function createBirthdayPostDeps(
       // A missing channel is postMessage's to report.
       if (!channel || !channel.isTextBased()) return greeted;
       if (!channel.isDMBased() && client.user) {
-        const permissions = channel.permissionsFor(client.user);
-        const missing = HISTORY_PERMISSIONS
-          .filter(([flag]) => !permissions?.has(flag))
-          .map(([, name]) => name);
+        // An unreadable permission set counts as lacking them all, as it always has.
+        const missing = listMissingBotPermissions(client, channel, HISTORY_PERMISSIONS) ??
+          HISTORY_PERMISSIONS.map(([, name]) => name);
         if (missing.length) {
           throw new Error(
             `The bot lacks ${joinWithAnd(missing)} in ${channelMention(channelId)}.`,
