@@ -6,7 +6,13 @@ import {
   apiVotingDataSource,
   type IVotingDataSource,
 } from "../services/VotingDataSource.js";
-import { fetchSendableChannel } from "./ChannelUtils.js";
+import {
+  ATTACH_FILES_PERMISSION,
+  fetchSendableChannel,
+  listMissingBotPermissions,
+  sendPermissionFor,
+  VIEW_CHANNEL_PERMISSION,
+} from "./ChannelUtils.js";
 import { buildComponentsV2Flags } from "./ComponentsV2Utils.js";
 import {
   buildVotePanelComponents,
@@ -20,6 +26,7 @@ import { buildTestPanelNoticeText, dedupeNominationsByGame } from "./VoteResults
 import { buildNominatorDisplayNames } from "./NominationListComponents.js";
 import { logError } from "../utilities/LogUtils.js";
 import { describeRequestError } from "../utilities/ApiErrorUtils.js";
+import { joinWithAnd } from "../utilities/TextUtils.js";
 
 // Posting a round's voting panels, shared by /admin voting-open and the
 // voting_opened voting event (VotingEventService), which has no interaction.
@@ -35,6 +42,16 @@ async function sendPanelToChannel(
     const sendable = await fetchSendableChannel(client, channelId);
     if (!sendable) {
       return "the channel was not found or is not a text channel";
+    }
+    // Discord's refusal is a bare "Missing Permissions", so name them before it can refuse.
+    const missing = listMissingBotPermissions(client, sendable, [
+      VIEW_CHANNEL_PERMISSION,
+      sendPermissionFor(sendable),
+      ...(files.length ? [ATTACH_FILES_PERMISSION] : []),
+    ]);
+    if (missing?.length) {
+      // Every caller's line already names the channel.
+      return `the bot lacks ${joinWithAnd(missing)} there`;
     }
     await sendable.send({
       components,
